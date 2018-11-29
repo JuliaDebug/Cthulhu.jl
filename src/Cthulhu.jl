@@ -51,7 +51,12 @@ explore_code_typed(foo, Tuple{})
 function explore_code_typed(f, @nospecialize(tt))
     try
         _explore_code_typed(f, tt)
-    catch InterruptException
+    catch x
+        if x isa InterruptException
+            return nothing
+        else
+            rethrow(x)
+        end
     end
     return nothing
 end
