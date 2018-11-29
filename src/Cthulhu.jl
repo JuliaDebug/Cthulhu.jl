@@ -3,10 +3,10 @@ module Cthulhu
 using TerminalMenus
 using InteractiveUtils
 
-export descent
+export explore_code_typed, @explore_code_typed
 
 struct Callsite
-    f 
+    f
     tt
 end
 
@@ -21,31 +21,68 @@ function Callsite(mi)
 end
 
 """
-    descent(f, tt)
+  @explore_code_typed
 
-Given a function and a tuple-type allows to iterativly descent through
-invoke statements.
+  Evaluates the arguments to the function or macro call, determines their
+types, and calls `code_typed on the resulting expression.
+"""
+macro explore_code_typed(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :explore_code_typed, ex0)
+end
+
+"""
+    explore_code_typed(f, tt)
+
+Given a function and a tuple-type, interactively explore the output of
+`code_typed` by descending into `invoke` statements. Type enter to select an
+`invoke` to descend into, select ↩  to ascend, and press q or control-c to
+quit.
 
 # Usage:
 ```julia
-function test()
+function foo()
     T = rand() > 0.5 ? Int64 : Float64
     sum(rand(T, 100))
 end
 
-descent(test, Tuple{})
+explore_code_typed(foo, Tuple{})
 ```
 """
-function descent(f, @nospecialize(tt))
+function explore_code_typed(f, @nospecialize(tt))
+    try
+        _explore_code_typed(f, tt)
+    catch x
+        if x isa InterruptException
+            return nothing
+        else
+            rethrow(x)
+        end
+    end
+    return nothing
+end
+
+function _explore_code_typed(f, @nospecialize(tt))
     CI, rt = code_typed(f, tt)[1]
     callsites = collect(Callsite(c.args[1])
         for c in CI.code if c isa Expr &&
                             c.head === :invoke)
-    display(CI=>rt)
-    menu = RadioMenu(map(string, callsites))
-    cid = request(menu)
-    callsite = callsites[cid]
-    descent(callsite.f, callsite.tt)
+    while true
+        println()
+        println("│ ─ $(string(Callsite(f, tt)))")
+        display(CI=>rt)
+        println()
+        TerminalMenus.config(cursor = '•', scroll = :wrap)
+        menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
+        cid = request(menu)
+        if cid == length(callsites) + 1
+            break
+        end
+        if cid == -1
+            throw(InterruptException())
+        end
+        callsite = callsites[cid]
+        _explore_code_typed(callsite.f, callsite.tt)
+    end
 end
 
 end
