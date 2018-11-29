@@ -96,9 +96,36 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
     CI, rt = first(methods)
     callsites = Callsite[]
     for (id, c) in enumerate(CI.code)
-        if c isa Expr && c.head === :invoke
-            rt = CI.ssavaluetypes[id]
-            push!(callsites, Callsite(id, c.args[1], rt))
+        if c isa Expr
+            if c.head === :invoke
+                rt = CI.ssavaluetypes[id]
+                push!(callsites, Callsite(id, c.args[1], rt))
+            elseif c.head === :call
+                rt = CI.ssavaluetypes[id]
+                @assert c.args[1] isa GlobalRef
+                mod = c.args[1].mod
+                name = c.args[1].name
+                f = getfield(mod, name)
+                args = c.args[2:end]
+                types = Any[]
+                for arg in args
+                    if arg isa Core.SSAValue
+                        T = CI.ssavaluetypes[arg.id]
+                    elseif arg isa Core.SlotNumber
+                        T = tt.parameters[arg.id - 1]
+                    elseif arg isa Expr # arrrgh
+                        @assert arg.head === :static_parameter
+                        T = typeof(args.args[1])
+                    else
+                        T = typeof(arg)
+                    end
+                    if T isa Core.Compiler.Const
+                        T = typeof(T.val)
+                    end
+                    push!(types, T)
+                end
+                push!(callsites, Callsite(id, f, Tuple{types...}, rt))
+            end
         end
     end
     while true
