@@ -1,8 +1,9 @@
 # Cthulhu.jl
-**The slow descent into madness**
+*The slow descent into madness*
 
-```
-explore_code_typed(f, tt)
+```julia
+descend(f, tt)
+@descend f()
 ```
 
 Given a function and a tuple-type, interactively explore the output of
@@ -10,12 +11,21 @@ Given a function and a tuple-type, interactively explore the output of
 `invoke` to descend into, select ↩  to ascend, and press q or control-c to
 quit.
 
-# Usage:
+## Usage
+
 ```julia
 function foo()
     T = rand() > 0.5 ? Int64 : Float64
     sum(rand(T, 100))
 end
 
-explore_code_typed(foo, Tuple{})
+descend(foo, Tuple{})
+@descend foo()
 ```
+
+## Methods
+
+- `@descend_code_typed`
+- `descend_code_typed`
+- `@descend`: Shortcut for `@descend_code_typed`
+- `descend`: Shortcut for `descend_code_typed`

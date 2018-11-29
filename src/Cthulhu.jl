@@ -3,35 +3,54 @@ module Cthulhu
 using TerminalMenus
 using InteractiveUtils
 
-export explore_code_typed, @explore_code_typed
+export descend, @descend, descend_code_typed, @descend_code_typed
 
 struct Callsite
+    id::Int # ssa-id
     f
     tt
+    rt
 end
 
 function Base.string(c::Callsite)
-    "invoke($(c.f), $(c.tt))"
+    io = IOBuffer()
+    print(io, "%", c.id, " = invoke ", c.f, "(")
+    TT = c.tt.parameters
+    for T in TT
+        print(io, "::", T, ",")
+    end
+    !isempty(TT) && seek(io, position(io)-1)
+    print(io, ")", "::", c.rt)
+    String(take!(io))
 end
 
-function Callsite(mi)
+function Callsite(id, mi, rt)
     f = getfield(mi.def.module, mi.def.name)
     tt = Tuple{mi.specTypes.parameters[2:end]...}
-    return Callsite(f, tt)
+    return Callsite(id, f, tt, rt)
 end
 
 """
-  @explore_code_typed
+  @descend_code_typed
 
   Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_typed on the resulting expression.
 """
-macro explore_code_typed(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :explore_code_typed, ex0)
+macro descend_code_typed(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
 end
 
 """
-    explore_code_typed(f, tt)
+  @descend
+
+  Shortcut for [`@descend_code_typed`](@ref).
+"""
+macro descend(ex0...)
+    esc(:(@descend_code_typed($(ex0...))))
+end
+
+"""
+    descend_code_typed(f, tt; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
 `code_typed` by descending into `invoke` statements. Type enter to select an
@@ -45,12 +64,12 @@ function foo()
     sum(rand(T, 100))
 end
 
-explore_code_typed(foo, Tuple{})
+descend_code_typed(foo, Tuple{})
 ```
 """
-function explore_code_typed(f, @nospecialize(tt))
+function descend_code_typed(f, @nospecialize(tt); kwargs...)
     try
-        _explore_code_typed(f, tt)
+        _descend(f, tt; kwargs...)
     catch x
         if x isa InterruptException
             return nothing
@@ -61,18 +80,35 @@ function explore_code_typed(f, @nospecialize(tt))
     return nothing
 end
 
-function _explore_code_typed(f, @nospecialize(tt))
-    CI, rt = code_typed(f, tt)[1]
-    callsites = collect(Callsite(c.args[1])
-        for c in CI.code if c isa Expr &&
-                            c.head === :invoke)
+"""
+  descend
+
+  Shortcut for [`descend_code_typed`](@ref).
+"""
+const descend = descend_code_typed
+
+function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
+    methods = code_typed(f, tt; kwargs...)
+    if isempty(methods)
+        println("$(string(Callsite(-1 ,f, tt, Any))) has no methods")
+        return
+    end
+    CI, rt = first(methods)
+    callsites = Callsite[]
+    for (id, c) in enumerate(CI.code)
+        if c isa Expr && c.head === :invoke
+            rt = CI.ssavaluetypes[id]
+            push!(callsites, Callsite(id, c.args[1], rt))
+        end
+    end
     while true
         println()
-        println("│ ─ $(string(Callsite(f, tt)))")
+        println("│ ─ $(string(Callsite(-1, f, tt, rt)))")
         display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
+        println("In `$f` select a call to descend into or ↩ to ascend. [q] to quit.")
         cid = request(menu)
         if cid == length(callsites) + 1
             break
@@ -81,7 +117,7 @@ function _explore_code_typed(f, @nospecialize(tt))
             throw(InterruptException())
         end
         callsite = callsites[cid]
-        _explore_code_typed(callsite.f, callsite.tt)
+        _descend(callsite.f, callsite.tt)
     end
 end
 
