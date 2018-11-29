@@ -102,10 +102,17 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
                 push!(callsites, Callsite(id, c.args[1], rt))
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                @assert c.args[1] isa GlobalRef
-                mod = c.args[1].mod
-                name = c.args[1].name
-                f = getfield(mod, name)
+                if c.args[1] isa Function
+                    f = c.args[1]
+                elseif c.args[1] isa GlobalRef
+                    mod = c.args[1].mod
+                    name = c.args[1].name
+                    f = getfield(mod, name)
+                else
+                    @warn "Don't know how to handle call: " c
+                    dump(c.args[1])
+                    continue
+                end
                 args = c.args[2:end]
                 types = Any[]
                 for arg in args
