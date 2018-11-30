@@ -87,10 +87,10 @@ end
 """
 const descend = descend_code_typed
 
-function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
-    methods = code_typed(f, tt; kwargs...)
+function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
+    methods = code_typed(F, TT; kwargs...)
     if isempty(methods)
-        println("$(string(Callsite(-1 ,f, tt, Any))) has no methods")
+        println("$(string(Callsite(-1 ,F, TT, Any))) has no methods")
         return
     end
     CI, rt = first(methods)
@@ -134,7 +134,7 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
                     if arg isa Core.SSAValue
                         T = CI.ssavaluetypes[arg.id]
                     elseif arg isa Core.SlotNumber
-                        T = tt.parameters[arg.id - 1]
+                        T = TT.parameters[arg.id - 1]
                     elseif arg isa Expr # arrrgh
                         @assert arg.head === :static_parameter
                         T = typeof(args.args[1])
@@ -146,21 +146,29 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
                     end
                     push!(types, T)
                 end
+
+                # Filter out builtin functions and intrinsic function
                 if f isa Core.Builtin || f isa Core.IntrinsicFunction
                     continue
                 end
+
+                # Filter out abstract signatures
+                if any(isabstracttype, types)
+                    continue
+                end
+
                 push!(callsites, Callsite(id, f, Tuple{types...}, rt))
             end
         end
     end
     while true
         println()
-        println("│ ─ $(string(Callsite(-1, f, tt, rt)))")
+        println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
         display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
-        println("In `$f` select a call to descend into or ↩ to ascend. [q] to quit.")
+        println("In `$F` select a call to descend into or ↩ to ascend. [q] to quit.")
         cid = request(menu)
         if cid == length(callsites) + 1
             break
