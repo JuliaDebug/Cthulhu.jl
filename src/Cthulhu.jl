@@ -131,6 +131,9 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
                     end
                     push!(types, T)
                 end
+                if f isa Core.Builtin || f isa Core.IntrinsicFunction
+                    continue
+                end
                 push!(callsites, Callsite(id, f, Tuple{types...}, rt))
             end
         end
