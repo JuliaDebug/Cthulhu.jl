@@ -108,6 +108,21 @@ function _descend(@nospecialize(f), @nospecialize(tt); kwargs...)
                     mod = c.args[1].mod
                     name = c.args[1].name
                     f = getfield(mod, name)
+                elseif c.args[1] isa Core.SSAValue
+                    # probably somthing of form
+                    # %1 = Base.Broadcast.materialize::Const(materialize, false)
+                    # ...
+                    # %9 = (%1)(%8)::Any
+                    _T = CI.ssavaluetypes[c.args[1].id]
+                    if _T isa Core.Compiler.Const && _T.val isa Function
+                        f = _T.val
+                    elseif _T isa Type
+                        continue
+                    else
+                        @warn "Don't know how to handle call: " c
+                        dump(c.args[1])
+                        continue
+                    end
                 else
                     @warn "Don't know how to handle call: " c
                     dump(c.args[1])
