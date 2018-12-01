@@ -3,7 +3,7 @@ module Cthulhu
 using TerminalMenus
 using InteractiveUtils
 
-export descend, @descend, descend_code_typed, @descend_code_typed
+export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 
 struct Callsite
     id::Int # ssa-id
@@ -34,19 +34,29 @@ end
   @descend_code_typed
 
   Evaluates the arguments to the function or macro call, determines their
-types, and calls `code_typed on the resulting expression.
+types, and calls `code_typed` on the resulting expression.
 """
 macro descend_code_typed(ex0...)
     InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
 end
 
 """
+  @descend_code_warntype
+
+  Evaluates the arguments to the function or macro call, determines their
+types, and calls `code_warntype` on the resulting expression.
+"""
+macro descend_code_warntype(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_warntype, ex0)
+end
+
+"""
   @descend
 
-  Shortcut for [`@descend_code_typed`](@ref).
+  Shortcut for [`@descend_code_warntype`](@ref).
 """
 macro descend(ex0...)
-    esc(:(@descend_code_typed($(ex0...))))
+    esc(:(@descend_code_warntype($(ex0...))))
 end
 
 """
@@ -67,7 +77,31 @@ end
 descend_code_typed(foo, Tuple{})
 ```
 """
-function descend_code_typed(f, @nospecialize(tt); kwargs...)
+descend_code_typed(f, @nospecialize(tt); kwargs...) =
+    _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
+
+"""
+    descend_code_warntype(f, tt; kwargs...)
+
+Given a function and a tuple-type, interactively explore the output of
+`code_warntype` by descending into `invoke` statements. Type enter to select an
+`invoke` to descend into, select ↩  to ascend, and press q or control-c to
+quit.
+
+# Usage:
+```julia
+function foo()
+    T = rand() > 0.5 ? Int64 : Float64
+    sum(rand(T, 100))
+end
+
+descend_code_warntype(foo, Tuple{})
+```
+"""
+descend_code_warntype(f, @nospecialize(tt); kwargs...) =
+    _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
+
+function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
     try
         _descend(f, tt; kwargs...)
     catch x
@@ -85,9 +119,9 @@ end
 
   Shortcut for [`descend_code_typed`](@ref).
 """
-const descend = descend_code_typed
+const descend = descend_code_warntype
 
-function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
+function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
     methods = code_typed(F, TT; kwargs...)
     if isempty(methods)
         println("$(string(Callsite(-1 ,F, TT, Any))) has no methods")
@@ -164,7 +198,7 @@ function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
     while true
         println()
         println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
-        display(CI=>rt)
+        iswarn ? code_warntype(F, TT; kwargs...) : display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
@@ -177,7 +211,7 @@ function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
             throw(InterruptException())
         end
         callsite = callsites[cid]
-        _descend(callsite.f, callsite.tt)
+        _descend(callsite.f, callsite.tt; iswarn=iswarn, kwargs...)
     end
 end
 
