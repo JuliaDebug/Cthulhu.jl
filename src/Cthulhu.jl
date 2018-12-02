@@ -114,6 +114,38 @@ function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
     return nothing
 end
 
+find_type(CI, TT, arg) = typeof(arg)
+find_type(CI, TT, arg::Core.SSAValue) = CI.ssavaluetypes[arg.id]
+
+function find_type(CI, TT, arg::Expr)
+    @assert arg.head === :static_parameter
+    T = typeof(args.args[1])
+end
+
+function find_type(CI, TT, arg::Core.SlotNumber)
+    slotid = arg.id - 1
+    if slotid <= length(TT.parameters)
+        return TT.parameters[slotid]
+    end
+
+    # find assignment
+    root = nothing
+    for c in CI.code
+        if c isa Expr && c.head === :(=) && c.args[1] == arg
+            root = c.args[2]
+            break
+        end
+    end
+    if root === nothing
+        @warn "Could not find type of slot" arg
+        return Union{}
+    end
+    find_type(CI, TT, root)
+end
+
+unwrap_type(T) = T
+unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
+
 """
   descend
 
@@ -154,32 +186,17 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
                         continue
                     else
                         @warn "Don't know how to handle call: " c
-                        dump(c.args[1])
+                        dump(c)
                         continue
                     end
                 else
                     @warn "Don't know how to handle call: " c
-                    dump(c.args[1])
+                    dump(c)
                     continue
                 end
+
                 args = c.args[2:end]
-                types = Any[]
-                for arg in args
-                    if arg isa Core.SSAValue
-                        T = CI.ssavaluetypes[arg.id]
-                    elseif arg isa Core.SlotNumber
-                        T = TT.parameters[arg.id - 1]
-                    elseif arg isa Expr # arrrgh
-                        @assert arg.head === :static_parameter
-                        T = typeof(args.args[1])
-                    else
-                        T = typeof(arg)
-                    end
-                    if T isa Core.Compiler.Const
-                        T = typeof(T.val)
-                    end
-                    push!(types, T)
-                end
+                types = map(arg -> unwrap_type(find_type(CI, TT, arg)), args)
 
                 # Filter out builtin functions and intrinsic function
                 if f isa Core.Builtin || f isa Core.IntrinsicFunction
@@ -187,6 +204,7 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
                 end
 
                 # Filter out abstract signatures
+                # otherwise generated functions get crumpy 
                 if any(isabstracttype, types)
                     continue
                 end
