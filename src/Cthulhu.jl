@@ -193,7 +193,7 @@ function find_callsites(CI, TT; kwargs...)
 
                 # Filter out abstract signatures
                 # otherwise generated functions get crumpy 
-                if any(isabstracttype, types)
+                if any(isabstracttype, types) || any(T->(T isa Union || T isa UnionAll), types)
                     continue
                 end
 
