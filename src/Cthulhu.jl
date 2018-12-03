@@ -53,10 +53,10 @@ end
 """
   @descend
 
-  Shortcut for [`@descend_code_warntype`](@ref).
+  Shortcut for [`@descend_code_typed`](@ref).
 """
 macro descend(ex0...)
-    esc(:(@descend_code_warntype($(ex0...))))
+    esc(:(@descend_code_typed($(ex0...))))
 end
 
 """
@@ -81,7 +81,7 @@ descend_code_typed(f, @nospecialize(tt); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, tt; kwargs...)
+    descend_code_warntype(f, tt)
 
 Given a function and a tuple-type, interactively explore the output of
 `code_warntype` by descending into `invoke` statements. Type enter to select an
@@ -98,8 +98,8 @@ end
 descend_code_warntype(foo, Tuple{})
 ```
 """
-descend_code_warntype(f, @nospecialize(tt); kwargs...) =
-    _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
+descend_code_warntype(f, @nospecialize(tt)) =
+    _descend_with_error_handling(f, tt; iswarn=true)
 
 function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
     try
@@ -215,9 +215,9 @@ end
 """
   descend
 
-  Shortcut for [`descend_code_warntype`](@ref).
+  Shortcut for [`descend_code_typed`](@ref).
 """
-const descend = descend_code_warntype
+const descend = descend_code_typed
 
 function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
     methods = code_typed(F, TT; kwargs...)
@@ -230,7 +230,7 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
     while true
         println()
         println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
-        iswarn ? code_warntype(F, TT; kwargs...) : display(CI=>rt)
+        iswarn ? code_warntype(F, TT) : display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
