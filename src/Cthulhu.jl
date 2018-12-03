@@ -119,7 +119,7 @@ find_type(CI, TT, arg::Core.SSAValue) = CI.ssavaluetypes[arg.id]
 
 function find_type(CI, TT, arg::Expr)
     @assert arg.head === :static_parameter
-    T = typeof(args.args[1])
+    T = typeof(arg.args[1])
 end
 
 function find_type(CI, TT, arg::Core.SlotNumber)
