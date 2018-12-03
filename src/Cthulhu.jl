@@ -146,26 +146,14 @@ end
 unwrap_type(T) = T
 unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
 
-"""
-  descend
-
-  Shortcut for [`descend_code_typed`](@ref).
-"""
-const descend = descend_code_warntype
-
-function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
-    methods = code_typed(F, TT; kwargs...)
-    if isempty(methods)
-        println("$(string(Callsite(-1 ,F, TT, Any))) has no methods")
-        return
-    end
-    CI, rt = first(methods)
+function find_callsites(CI, TT; kwargs...)
     callsites = Callsite[]
     for (id, c) in enumerate(CI.code)
         if c isa Expr
+            callsite = nothing
             if c.head === :invoke
                 rt = CI.ssavaluetypes[id]
-                push!(callsites, Callsite(id, c.args[1], rt))
+                callsite = Callsite(id, c.args[1], rt)
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
                 if c.args[1] isa Function
@@ -209,10 +197,36 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
                     continue
                 end
 
-                push!(callsites, Callsite(id, f, Tuple{types...}, rt))
+                callsite = Callsite(id, f, Tuple{types...}, rt)
+            end
+
+            if callsite !== nothing
+                methods = code_typed(callsite.f, callsite.tt; kwargs...)
+                if isempty(methods)
+                    continue
+                end
+                push!(callsites, callsite)
             end
         end
     end
+    return callsites
+end
+
+"""
+  descend
+
+  Shortcut for [`descend_code_warntype`](@ref).
+"""
+const descend = descend_code_warntype
+
+function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
+    methods = code_typed(F, TT; kwargs...)
+    if isempty(methods)
+        println("$(string(Callsite(-1 ,F, TT, Any))) has no methods")
+        return
+    end
+    CI, rt = first(methods)
+    callsites = find_callsites(CI, TT; kwargs...)
     while true
         println()
         println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
