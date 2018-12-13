@@ -11,6 +11,11 @@ Given a function and a tuple-type, interactively explore the output of
 `invoke` to descend into, select ↩  to ascend, and press q or control-c to
 quit.
 
+Cthulhu can help you debug type inference issues by recursively showing the 
+`code_typed` output until you find the exact point where inference gave up, 
+messed up, or did something unexpected. Using the Cthulhu interface you can
+debug type inference problems faster.
+
 ## Usage
 
 ```julia
