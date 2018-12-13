@@ -1,6 +1,11 @@
 # Cthulhu.jl
 *The slow descent into madness*
 
+Cthulhu can help you debug type inference issues by recursively showing the 
+`code_typed` output until you find the exact point where inference gave up, 
+messed up, or did something unexpected. Using the Cthulhu interface you can
+debug type inference problems faster.
+
 ```julia
 descend(f, tt)
 @descend f()
