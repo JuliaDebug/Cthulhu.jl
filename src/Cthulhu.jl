@@ -212,6 +212,21 @@ function find_callsites(CI, TT; kwargs...)
     return callsites
 end
 
+if VERSION >= v"1.1.0-DEV.215"
+function dce!(code, TT)
+    argtypes = Any[T for T in TT.parameters]
+    ir = Core.Compiler.inflate_ir(code, Core.svec(), argtypes)
+    compact = Core.Compiler.IncrementalCompact(ir, true)
+    # Just run through the iterator without any processing
+    Core.Compiler.foreach(x -> nothing, compact)
+    ir = Core.Compiler.finish(compact)
+    Core.Compiler.replace_code_newstyle!(code, ir, length(argtypes))
+end
+else
+function dce!(code, TT)
+end
+end
+
 """
   descend
 
@@ -226,6 +241,8 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
         return
     end
     CI, rt = first(methods)
+    dce!(CI, TT)
+    dce!(CI, TT)
     callsites = find_callsites(CI, TT; kwargs...)
     while true
         println()
