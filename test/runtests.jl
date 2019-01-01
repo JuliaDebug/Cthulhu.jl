@@ -13,8 +13,25 @@ end
 
 CI, rt = code_typed(test, Tuple{})[1]
 callsites = Cthulhu.find_callsites(CI, Tuple{})
-@test length(callsites) == 4
+@test length(callsites) == 3
 
 CI, rt = code_typed(test, Tuple{}, optimize=false)[1]
 callsites = Cthulhu.find_callsites(CI, Tuple{})
-@test length(callsites) == 4
+@test length(callsites) == 3
+
+if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
+Base.@propagate_inbounds function f(x)
+    @boundscheck error()
+end
+g(x) = @inbounds f(x)
+h(x) = f(x)
+CI, rt = code_typed(g, Tuple{Vector{Float64}})[1]
+Cthulhu.dce!(CI,  Tuple{Vector{Float64}})
+Cthulhu.dce!(CI,  Tuple{Vector{Float64}})
+@test length(CI.code) == 3
+
+CI, rt = code_typed(h, Tuple{Vector{Float64}})[1]
+Cthulhu.dce!(CI,  Tuple{Vector{Float64}})
+Cthulhu.dce!(CI,  Tuple{Vector{Float64}})
+@test length(CI.code) == 2
+end
