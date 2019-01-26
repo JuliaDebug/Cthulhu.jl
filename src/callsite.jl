@@ -48,7 +48,7 @@ function Base.show(io::IO, c::Callsite)
     print(limiter, string(c.mi.def.name))
     tt = c.mi.specTypes.parameters[2:end]
     pstrings = map(string, tt)
-    headstrings = map(x->string(Base.unwrap_unionall(x).name), tt)
+    headstrings = map(x->isa(x, Union) ? string(x) : string(Base.unwrap_unionall(x).name), tt)
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully

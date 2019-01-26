@@ -108,38 +108,10 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 callsite = Callsite(id, c.args[1], rt)
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                if c.args[1] isa Function
-                    f = c.args[1]
-                elseif c.args[1] isa GlobalRef
-                    mod = c.args[1].mod
-                    name = c.args[1].name
-                    f = getfield(mod, name)
-                elseif c.args[1] isa Core.SSAValue
-                    # probably somthing of form
-                    # %1 = Base.Broadcast.materialize::Const(materialize, false)
-                    # ...
-                    # %9 = (%1)(%8)::Any
-                    _T = CI.ssavaluetypes[c.args[1].id]
-                    if _T isa Core.Compiler.Const && _T.val isa Function
-                        f = _T.val
-                    elseif _T isa Type
-                        continue
-                    else
-                        @warn "Don't know how to handle call: " c
-                        dump(c)
-                        continue
-                    end
-                else
-                    @warn "Don't know how to handle call: " c
-                    dump(c)
-                    continue
-                end
-
-                args = c.args[2:end]
-                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, spvals, slottypes)), args)
+                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, spvals, slottypes)), c.args)
 
                 # Filter out builtin functions and intrinsic function
-                if f isa Core.Builtin || f isa Core.IntrinsicFunction
+                if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
                     continue
                 end
 
@@ -149,7 +121,8 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     continue
                 end
 
-                mi = first_method_instance(f, Tuple{types...})
+                mi = first_method_instance(Tuple{types...})
+                mi == nothing && continue
                 callsite = Callsite(id, mi, rt)
             end
 
@@ -222,7 +195,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
     while true
         println()
-        #println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
+        println("│ ─ $(string(Callsite(-1, mi, rt)))")
         iswarn ? code_warntype(F, TT) : display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
@@ -242,9 +215,17 @@ end
 
 function first_method_instance(F, TT; params=current_params())
     sig = Tuple{typeof(F), TT.parameters...}
+    first_method_instance(sig; params=params)
+end
+
+function first_method_instance(sig; params=current_params())
     methds = Base._methods_by_ftype(sig, 1, params.world)
+    methds === false && return nothing
     x = methds[1]
-    meth = Base.func_for_method_checked(x[3], TT.parameters)
+    meth = x[3]
+    if isdefined(meth, :generator) && !isdispatchtuple(Tuple{sig.parameters[2:end]...})
+        return nothing
+    end
     mi = Compiler.code_for_method(meth, sig, x[2], params.world)
 end
 
