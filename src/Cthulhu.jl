@@ -3,32 +3,12 @@ module Cthulhu
 using TerminalMenus
 using InteractiveUtils
 
+using Core: MethodInstance
+const Compiler = Core.Compiler
+
+include("callsite.jl")
+
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
-
-struct Callsite
-    id::Int # ssa-id
-    f
-    tt
-    rt
-end
-
-function Base.string(c::Callsite)
-    io = IOBuffer()
-    print(io, "%", c.id, " = invoke ", c.f, "(")
-    TT = c.tt.parameters
-    for T in TT
-        print(io, "::", T, ",")
-    end
-    !isempty(TT) && seek(io, position(io)-1)
-    print(io, ")", "::", c.rt)
-    String(take!(io))
-end
-
-function Callsite(id, mi, rt)
-    f = getfield(mi.def.module, mi.def.name)
-    tt = Tuple{mi.specTypes.parameters[2:end]...}
-    return Callsite(id, f, tt, rt)
-end
 
 """
   @descend_code_typed
@@ -114,39 +94,11 @@ function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
     return nothing
 end
 
-find_type(CI, TT, arg) = typeof(arg)
-find_type(CI, TT, arg::Core.SSAValue) = CI.ssavaluetypes[arg.id]
-
-function find_type(CI, TT, arg::Expr)
-    @assert arg.head === :static_parameter
-    T = typeof(arg.args[1])
-end
-
-function find_type(CI, TT, arg::Core.SlotNumber)
-    slotid = arg.id - 1
-    if slotid <= length(TT.parameters)
-        return TT.parameters[slotid]
-    end
-
-    # find assignment
-    root = nothing
-    for c in CI.code
-        if c isa Expr && c.head === :(=) && c.args[1] == arg
-            root = c.args[2]
-            break
-        end
-    end
-    if root === nothing
-        @warn "Could not find type of slot" arg
-        return Union{}
-    end
-    find_type(CI, TT, root)
-end
-
 unwrap_type(T) = T
 unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
 
-function find_callsites(CI, TT; kwargs...)
+function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
+    spvals = Core.Compiler.spvals_from_meth_instance(mi)
     callsites = Callsite[]
     for (id, c) in enumerate(CI.code)
         if c isa Expr
@@ -184,7 +136,7 @@ function find_callsites(CI, TT; kwargs...)
                 end
 
                 args = c.args[2:end]
-                types = map(arg -> unwrap_type(find_type(CI, TT, arg)), args)
+                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, spvals, slottypes)), args)
 
                 # Filter out builtin functions and intrinsic function
                 if f isa Core.Builtin || f isa Core.IntrinsicFunction
@@ -197,14 +149,11 @@ function find_callsites(CI, TT; kwargs...)
                     continue
                 end
 
-                callsite = Callsite(id, f, Tuple{types...}, rt)
+                mi = first_method_instance(f, Tuple{types...})
+                callsite = Callsite(id, mi, rt)
             end
 
             if callsite !== nothing
-                methods = code_typed(callsite.f, callsite.tt; kwargs...)
-                if isempty(methods)
-                    continue
-                end
                 push!(callsites, callsite)
             end
         end
@@ -213,17 +162,18 @@ function find_callsites(CI, TT; kwargs...)
 end
 
 if VERSION >= v"1.1.0-DEV.215"
-function dce!(code, TT)
-    argtypes = Any[T for T in TT.parameters]
-    ir = Core.Compiler.inflate_ir(code, Core.svec(), argtypes)
+function dce!(ci, mi)
+    argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
+    ir = Compiler.inflate_ir(ci, Core.Compiler.spvals_from_meth_instance(mi),
+                             argtypes)
     compact = Core.Compiler.IncrementalCompact(ir, true)
     # Just run through the iterator without any processing
     Core.Compiler.foreach(x -> nothing, compact)
     ir = Core.Compiler.finish(compact)
-    Core.Compiler.replace_code_newstyle!(code, ir, length(argtypes))
+    Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
 end
 else
-function dce!(code, TT)
+function dce!(ci, mi)
 end
 end
 
@@ -234,24 +184,50 @@ end
 """
 const descend = descend_code_typed
 
-function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
-    methods = code_typed(F, TT; kwargs...)
-    if isempty(methods)
-        println("$(string(Callsite(-1 ,F, TT, Any))) has no methods")
-        return
+function show_as_line(el)
+    reduced_displaysize = displaysize(stdout) .- (0, 3)
+    buf = IOBuffer()
+    show(IOContext(buf, :limit=>true, :displasize=>reduced_displaysize), el)
+    String(take!(buf))
+end
+
+function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, params::Core.Compiler.Params)
+    ccall(:jl_typeinf_begin, Cvoid, ())
+    result = Core.Compiler.InferenceResult(mi)
+    frame = Core.Compiler.InferenceState(result, false, params)
+    frame === nothing && return (nothing, Any)
+    if Compiler.typeinf(frame) && run_optimizer
+        opt = Compiler.OptimizationState(frame)
+        Compiler.optimize(opt, result.result)
+        opt.src.inferred = true
     end
-    CI, rt = first(methods)
-    dce!(CI, TT)
-    dce!(CI, TT)
-    callsites = find_callsites(CI, TT; kwargs...)
+    ccall(:jl_typeinf_end, Cvoid, ())
+    frame.inferred || return (nothing, Any)
+    return (frame.src, result.result, frame.slottypes)
+end
+
+function preprocess_ci!(ci, mi, optimize)
+    if optimize
+        # if the optimizer hasn't run, the IR hasn't been converted
+        # to SSA form yet and dce is not legal
+        dce!(ci, mi)
+        dce!(ci, mi)
+    end
+end
+
+current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+    (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
+
+    callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
     while true
         println()
-        println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
+        #println("│ ─ $(string(Callsite(-1, F, TT, rt)))")
         iswarn ? code_warntype(F, TT) : display(CI=>rt)
         println()
         TerminalMenus.config(cursor = '•', scroll = :wrap)
-        menu = RadioMenu(vcat(map(string, callsites), ["↩ "]))
-        println("In `$F` select a call to descend into or ↩ to ascend. [q] to quit.")
+        menu = RadioMenu(vcat(map(show_as_line, callsites), ["↩ "]))
+        println("In `$(mi.def.name)` select a call to descend into or ↩ to ascend. [q] to quit.")
         cid = request(menu)
         if cid == length(callsites) + 1
             break
@@ -260,8 +236,21 @@ function _descend(@nospecialize(F), @nospecialize(TT); iswarn::Bool, kwargs...)
             throw(InterruptException())
         end
         callsite = callsites[cid]
-        _descend(callsite.f, callsite.tt; iswarn=iswarn, kwargs...)
+        _descend(callsite.mi; iswarn=iswarn, kwargs...)
     end
+end
+
+function first_method_instance(F, TT; params=current_params())
+    sig = Tuple{typeof(F), TT.parameters...}
+    methds = Base._methods_by_ftype(sig, 1, params.world)
+    x = methds[1]
+    meth = Base.func_for_method_checked(x[3], TT.parameters)
+    mi = Compiler.code_for_method(meth, sig, x[2], params.world)
+end
+
+function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+    mi = first_method_instance(F, TT; params=params)
+    _descend(mi; params=params, kwargs...)
 end
 
 end
