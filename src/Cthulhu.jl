@@ -2,6 +2,7 @@ module Cthulhu
 
 using TerminalMenus
 using InteractiveUtils
+using Requires
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
@@ -97,6 +98,33 @@ end
 unwrap_type(T) = T
 unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
 
+"""
+    substitute(callsite)
+
+Walks the callsite of a function and substitute calls.
+Useful for descending into GPU code.
+"""
+function substitute(callsite, args...; kwargs...)
+    mi = callsite.mi
+    if nameof(mi.def.module) == :CUDAnative &&
+              mi.def.name   == :cufunction
+        return transform(Val(:CuFunction), callsite, args...; kwargs...)
+    else
+        return callsite
+    end
+end
+
+transform(::Val, callsite) = callsite
+@init @require CUDAnative="be33ccc6-a3ff-5ff2-a52e-74243cff1e17" begin
+    using .CUDAnative
+    @eval function transform(::Val{:CuFunction}, callsite, callexpr, CI, oldMI, slottypes; params=nothing, kwargs....)
+        spvals = Core.Compiler.spvals_from_meth_instance(mi)
+        @show mi.specTypes
+        @show spvals
+        return callsite
+    end
+end
+
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
     spvals = Core.Compiler.spvals_from_meth_instance(mi)
     callsites = Callsite[]
@@ -127,6 +155,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
             end
 
             if callsite !== nothing
+                callsite = substitute(callsite, callexpr, CI, mi, slottypes; params=params, kwargs...)
                 push!(callsites, callsite)
             end
         end
@@ -193,6 +222,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
 
     callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
+    callsites = substitute(callsites)
     while true
         println()
         println("│ ─ $(string(Callsite(-1, mi, rt)))")
