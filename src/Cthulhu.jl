@@ -191,6 +191,7 @@ current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
 function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
     while true
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
+        preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
         println()
