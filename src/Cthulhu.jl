@@ -97,8 +97,14 @@ end
 unwrap_type(T) = T
 unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
 
+if VERSION >= v"1.2.0-DEV.249"
+    sptypes_from_meth_instance(mi) = Core.Compiler.sptypes_from_meth_instance(mi)
+else
+    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
+end
+
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
-    spvals = Core.Compiler.spvals_from_meth_instance(mi)
+    sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
     for (id, c) in enumerate(CI.code)
         if c isa Expr
@@ -108,7 +114,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 callsite = Callsite(id, c.args[1], rt)
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, spvals, slottypes)), c.args)
+                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, sptypes, slottypes)), c.args)
 
                 # Filter out builtin functions and intrinsic function
                 if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
@@ -137,7 +143,7 @@ end
 if VERSION >= v"1.1.0-DEV.215"
 function dce!(ci, mi)
     argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
-    ir = Compiler.inflate_ir(ci, Core.Compiler.spvals_from_meth_instance(mi),
+    ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
                              argtypes)
     compact = Core.Compiler.IncrementalCompact(ir, true)
     # Just run through the iterator without any processing
