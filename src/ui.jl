@@ -18,8 +18,8 @@ end
 
 
 function CthulhuMenu(callsites; pagesize::Int=10)
-    length(callsites) < 1 && error("CthulhuMenu must have at least one option")
     options = vcat(map(show_as_line, callsites), ["↩"])
+    length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
     pagesize = pagesize == -1 ? length(options) : pagesize
