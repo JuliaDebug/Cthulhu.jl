@@ -1,12 +1,12 @@
 module Cthulhu
 
-using TerminalMenus
 using InteractiveUtils
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
 
 include("callsite.jl")
+include("ui.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 
@@ -157,13 +157,6 @@ end
 """
 const descend = descend_code_typed
 
-function show_as_line(el)
-    reduced_displaysize = displaysize(stdout) .- (0, 3)
-    buf = IOBuffer()
-    show(IOContext(buf, :limit=>true, :displasize=>reduced_displaysize), el)
-    String(take!(buf))
-end
-
 function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, params::Core.Compiler.Params)
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = Core.Compiler.InferenceResult(mi)
@@ -190,26 +183,36 @@ end
 
 current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
 function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
-    (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
-
-    callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
     while true
+        (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
+        callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
+
         println()
         println("│ ─ $(string(Callsite(-1, mi, rt)))")
         iswarn ? code_warntype(F, TT) : display(CI=>rt)
         println()
+
         TerminalMenus.config(cursor = '•', scroll = :wrap)
-        menu = RadioMenu(vcat(map(show_as_line, callsites), ["↩ "]))
-        println("In `$(mi.def.name)` select a call to descend into or ↩ to ascend. [q] to quit.")
+        menu = CthulhuMenu(callsites)
         cid = request(menu)
-        if cid == length(callsites) + 1
-            break
+        toggle = menu.toggle
+
+        if toggle === nothing
+            if cid == length(callsites) + 1
+                break
+            end
+            if cid == -1
+                throw(InterruptException())
+            end
+            callsite = callsites[cid]
+            _descend(callsite.mi; iswarn=iswarn, kwargs...)
+        elseif toggle === :warn
+            iswarn ⊻= true
+        elseif toggle === :optimize
+            optimize ⊻= true
+        else
+            error("Unknown toggle option $toggle")
         end
-        if cid == -1
-            throw(InterruptException())
-        end
-        callsite = callsites[cid]
-        _descend(callsite.mi; iswarn=iswarn, kwargs...)
     end
 end
 
