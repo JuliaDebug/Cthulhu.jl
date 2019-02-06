@@ -212,7 +212,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 throw(InterruptException())
             end
             callsite = callsites[cid]
-            _descend(callsite.mi; iswarn=iswarn, kwargs...)
+            _descend(callsite.mi; optimize=optimize, iswarn=iswarn, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
