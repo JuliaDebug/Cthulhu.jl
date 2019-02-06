@@ -7,6 +7,7 @@ const Compiler = Core.Compiler
 
 include("callsite.jl")
 include("ui.jl")
+include("reflection.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 
@@ -193,15 +194,34 @@ end
 
 current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
 function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+    display_CI = true
+    debuginfo = true
+    if :debuginfo in keys(kwargs)
+        selected = ans[:debuginfo]
+        # TODO: respect default
+        debuginfo = selected == :source 
+    end
+
     while true
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
         preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
-        println()
-        println("│ ─ $(string(Callsite(-1, mi, rt)))")
-        iswarn ? code_warntype(F, TT) : display(CI=>rt)
-        println()
+        if display_CI
+            println()
+            println("│ ─ $(string(Callsite(-1, mi, rt)))")
+    
+            debuginfo_key = debuginfo ? :source : :none
+            if iswarn
+                cthulhu_warntype(CI, rt, debuginfo_key)
+            elseif VERSION >= v"1.1.0-DEV.762"
+                show(stdout, CI, debuginfo = debuginfo_key)
+            else
+                display(CI=>rt)
+            end
+            println()
+        end
+        display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = CthulhuMenu(callsites)
@@ -216,13 +236,23 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 throw(InterruptException())
             end
             callsite = callsites[cid]
+
+            # recurse
             _descend(callsite.mi; optimize=optimize, iswarn=iswarn, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
+        elseif toggle === :debuginfo
+            debuginfo ⊻= true
+        elseif toggle === :llvm
+            cthulhu_llvm()
+            display_CI = false
+        elseif toggle === :native
+            cthulhu_native()
+            display_CI = false
         else
-            error("Unknown toggle option $toggle")
+            error("Unknown option $toggle")
         end
     end
 end
