@@ -41,6 +41,7 @@ function TerminalMenus.header(m::CthulhuMenu)
     """
     Select a call to descend into or ↩ to ascend. [q]uit.
     Toggles: [o]ptimize, [w]arn, [d]ebuginfo.
+    Advanced: dump [P]arams cache. 
     """
 #    Display: [L] for code_llvm, [N] for code_native
 end
@@ -60,6 +61,8 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('N')
         m.toggle = :native
+    elseif key == UInt32('P')
+        m.toggle = :dump_params
         return true
     end
     return false

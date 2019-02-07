@@ -153,7 +153,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             callsite = callsites[cid]
 
             # recurse
-            _descend(callsite.mi; optimize=optimize, iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+            _descend(callsite.mi; params=params, optimize=optimize, iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
@@ -165,6 +165,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             display_CI = false
         elseif toggle === :native
             cthulhu_native()
+            display_CI = false
+        elseif toggle === :dump_params
+            @info "Dumping inference cache"
+            Core.show(map(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
             display_CI = false
         else
             error("Unknown option $toggle")
