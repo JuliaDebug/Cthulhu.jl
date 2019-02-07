@@ -206,7 +206,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         if display_CI
             println()
             println("│ ─ $(string(Callsite(-1, mi, rt)))")
-    
+
             debuginfo_key = debuginfo ? :source : :none
             if iswarn
                 cthulhu_warntype(CI, rt, debuginfo_key)
