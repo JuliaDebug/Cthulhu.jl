@@ -41,8 +41,8 @@ function TerminalMenus.header(m::CthulhuMenu)
     """
     Select a call to descend into or ↩ to ascend. [q]uit.
     Toggles: [o]ptimize, [w]arn, [d]ebuginfo.
-    Display: [L] for code_llvm, [N] for code_native
     """
+#    Display: [L] for code_llvm, [N] for code_native
 end
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
