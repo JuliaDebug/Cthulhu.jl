@@ -109,6 +109,10 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
     for (id, c) in enumerate(CI.code)
         if c isa Expr
             callsite = nothing
+	    if c.head === :(=)
+                c = c.args[2]
+		(c isa Expr) || continue
+	    end
             if c.head === :invoke
                 rt = CI.ssavaluetypes[id]
                 callsite = Callsite(id, c.args[1], rt)

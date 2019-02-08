@@ -28,6 +28,15 @@ callsites = find_callsites_by_ftt(test, Tuple{})
 callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
 @test length(callsites) == 2
 
+# Check that we see callsites that are the rhs of assignments
+@noinline bar_callsite_assign() = nothing
+function foo_callsite_assign()
+    x = bar_callsite_assign()
+    x
+end
+callsites = find_callsites_by_ftt(foo_callsite_assign, Tuple{}; optimize=false)
+@test length(callsites) == 1
+
 if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
 Base.@propagate_inbounds function f(x)
     @boundscheck error()
