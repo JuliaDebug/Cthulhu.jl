@@ -112,7 +112,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     display_CI = true
     debuginfo = true
     if :debuginfo in keys(kwargs)
-        selected = ans[:debuginfo]
+        selected = kwargs[:debuginfo]
         # TODO: respect default
         debuginfo = selected == :source 
     end
@@ -153,7 +153,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             callsite = callsites[cid]
 
             # recurse
-            _descend(callsite.mi; optimize=optimize, iswarn=iswarn, kwargs...)
+            _descend(callsite.mi; optimize=optimize, iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
