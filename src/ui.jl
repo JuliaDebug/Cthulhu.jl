@@ -39,9 +39,10 @@ TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
 function TerminalMenus.header(m::CthulhuMenu)
     """
-    Select a call to descend into or ↩ to ascend.
-    [q] to quit, [o] to toggle optimize, [w] to toggle warn.
+    Select a call to descend into or ↩ to ascend. [q]uit.
+    Toggles: [o]ptimize, [w]arn, [d]ebuginfo.
     """
+#    Display: [L] for code_llvm, [N] for code_native
 end
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
@@ -50,6 +51,15 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('o')
         m.toggle = :optimize
+        return true
+    elseif key == UInt32('d')
+        m.toggle = :debuginfo
+        return true
+    elseif key == UInt32('L')
+        m.toggle = :llvm
+        return true
+    elseif key == UInt32('N')
+        m.toggle = :native
         return true
     end
     return false
