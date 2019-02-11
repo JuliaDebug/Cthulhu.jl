@@ -2,8 +2,7 @@
 # Reflection tooling
 ##
 
-unwrap_type(T) = T
-unwrap_type(T::Core.Compiler.Const) = typeof(T.val)
+using .Compiler: widenconst
 
 if VERSION >= v"1.2.0-DEV.249"
     sptypes_from_meth_instance(mi) = Core.Compiler.sptypes_from_meth_instance(mi)
@@ -26,7 +25,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 callsite = Callsite(id, c.args[1], rt)
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                types = map(arg -> unwrap_type(Compiler.argextype(arg, CI, sptypes, slottypes)), c.args)
+                types = map(arg -> widenconst(Compiler.argextype(arg, CI, sptypes, slottypes)), c.args)
 
                 # Filter out builtin functions and intrinsic function
                 if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
