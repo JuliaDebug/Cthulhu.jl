@@ -37,6 +37,13 @@ end
 callsites = find_callsites_by_ftt(foo_callsite_assign, Tuple{}; optimize=false)
 @test length(callsites) == 1
 
+@eval function call_rt()
+    S = $(Core.Compiler.return_type)(+, Tuple{Int, Int})
+end
+let callsites = find_callsites_by_ftt(call_rt, Tuple{}; optimize=false)
+    @test length(callsites) == 1
+end
+
 if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
 Base.@propagate_inbounds function f(x)
     @boundscheck error()
@@ -44,11 +51,11 @@ end
 g(x) = @inbounds f(x)
 h(x) = f(x)
 
-let CI, _, _, _ = process(g, Tuple{Vector{Float64}})
+let (CI, _, _, _) = process(g, Tuple{Vector{Float64}})
     @test length(CI.code) == 3
 end
 
-let CI, _, _, _ = process(h, Tuple{Vector{Float64}})
+let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.code) == 2
 end
 end
