@@ -1,9 +1,21 @@
-struct Callsite
-    id::Int # ssa-id
+abstract type CallInfo; end
+
+struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
 end
+get_mi(mici::MICallInfo) = mici.mi
 
+struct ReturnTypeCallInfo <: CallInfo
+    called_mi::MICallInfo
+end
+get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
+
+struct Callsite
+    id::Int # ssa-id
+    info::CallInfo
+end
+get_mi(c::Callsite) = get_mi(c.info)
 
 # Callsite printing
 mutable struct TextWidthLimiter
@@ -36,17 +48,14 @@ function Base.print(io::TextWidthLimiter, s::String)
     end
 end
 
-function Base.show(io::IO, c::Callsite)
-    limit = get(io, :limit, false)
-    cols = limit ? displaysize(io)[2] : typemax(Int)
-    limiter = TextWidthLimiter(io, cols)
-    print(limiter, string("%", c.id, " = invoke "))
-    if !has_space(limiter, c.mi.def.name)
+function show_callinfo(limiter, mici::MICallInfo)
+    mi = mici.mi
+    if !has_space(limiter, mi.def.name)
         print(limiter, '…')
         return
     end
-    print(limiter, string(c.mi.def.name))
-    tt = c.mi.specTypes.parameters[2:end]
+    print(limiter, string(mi.def.name))
+    tt = mi.specTypes.parameters[2:end]
     pstrings = map(string, tt)
     headstrings = map(x->isa(x, Union) ? string(x) : string(Base.unwrap_unionall(x).name), tt)
     print(limiter, "(")
@@ -67,8 +76,24 @@ function Base.show(io::IO, c::Callsite)
     print(limiter, ")")
 
     # If we have space for the return type, print it
-    rts = string(c.rt)
+    rts = string(mici.rt)
     if has_space(limiter, textwidth(rts)+2)
         print(limiter, string("::", rts))
+    end
+end
+
+
+function Base.show(io::IO, c::Callsite)
+    limit = get(io, :limit, false)
+    cols = limit ? displaysize(io)[2] : typemax(Int)
+    limiter = TextWidthLimiter(io, cols)
+    print(limiter, string("%", c.id, " "))
+    if isa(c.info, MICallInfo)
+        print(limiter, " = invoke ")
+        show_callinfo(limiter, c.info)
+    elseif isa(c.info, ReturnTypeCallInfo)
+        print(limiter, " = return_type < ")
+        show_callinfo(limiter, c.info.called_mi)
+        print(limiter, " >")
     end
 end

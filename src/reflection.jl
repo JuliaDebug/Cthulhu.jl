@@ -2,7 +2,8 @@
 # Reflection tooling
 ##
 
-using .Compiler: widenconst
+using Base.Meta
+using .Compiler: widenconst, argextype, Const
 
 if VERSION >= v"1.2.0-DEV.249"
     sptypes_from_meth_instance(mi) = Core.Compiler.sptypes_from_meth_instance(mi)
@@ -10,37 +11,64 @@ else
     sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
 end
 
+if VERSION >= v"1.1.0-DEV.157"
+    const is_return_type = Core.Compiler.is_return_type
+else
+    is_return_type(f) = f === Core.Compiler.return_type
+end
+
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
+
+    function process_return_type(id, c, rt)
+        is_call = isexpr(c, :call)
+        arg_base = is_call ? 0 : 1
+        length(c.args) == (arg_base + 3) || return nothing
+        ft = argextype(c.args[arg_base + 2], CI, sptypes, slottypes)
+        argTs = argextype(c.args[arg_base + 3], CI, sptypes, slottypes)
+        isa(argTs, Const) || return nothing
+        mi = first_method_instance(Tuple{widenconst(ft), argTs.val.parameters...})
+        return Callsite(id, ReturnTypeCallInfo(MICallInfo(mi, rt.val)))
+    end
+
     for (id, c) in enumerate(CI.code)
         if c isa Expr
             callsite = nothing
-	    if c.head === :(=)
+            if c.head === :(=)
                 c = c.args[2]
-		(c isa Expr) || continue
-	    end
+                (c isa Expr) || continue
+            end
             if c.head === :invoke
                 rt = CI.ssavaluetypes[id]
-                callsite = Callsite(id, c.args[1], rt)
+                at = argextype(c.args[2], CI, sptypes, slottypes)
+                if isa(at, Const) && is_return_type(at.val)
+                    callsite = process_return_type(id, c, rt)
+                else
+                    callsite = Callsite(id, MICallInfo(c.args[1], rt))
+                end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                types = map(arg -> widenconst(Compiler.argextype(arg, CI, sptypes, slottypes)), c.args)
+                types = map(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
 
                 # Filter out builtin functions and intrinsic function
                 if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
                     continue
                 end
 
-                # Filter out abstract signatures
-                # otherwise generated functions get crumpy 
-                if any(isabstracttype, types) || any(T->(T isa Union || T isa UnionAll), types)
-                    continue
-                end
+                if isdefined(types[1], :instance) && is_return_type(types[1].instance)
+                    callsite = process_return_type(id, c, rt)
+                else
+                    # Filter out abstract signatures
+                    # otherwise generated functions get crumpy
+                    if any(isabstracttype, types) || any(T->(T isa Union || T isa UnionAll), types)
+                        continue
+                    end
 
-                mi = first_method_instance(Tuple{types...})
-                mi == nothing && continue
-                callsite = Callsite(id, mi, rt)
+                    mi = first_method_instance(Tuple{types...})
+                    mi == nothing && continue
+                    callsite = Callsite(id, MICallInfo(mi, rt))
+                end
             end
 
             if callsite !== nothing
@@ -91,7 +119,11 @@ function preprocess_ci!(ci, mi, optimize)
     end
 end
 
-current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
+if :trace_inference_limits in fieldnames(Core.Compiler.Params)
+    current_params() = Core.Compiler.CustomParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
+else
+    current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
+end
 
 function first_method_instance(F, TT; params=current_params())
     sig = Tuple{typeof(F), TT.parameters...}
@@ -108,4 +140,3 @@ function first_method_instance(sig; params=current_params())
     end
     mi = Compiler.code_for_method(meth, sig, x[2], params.world)
 end
-
