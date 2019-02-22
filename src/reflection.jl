@@ -69,6 +69,16 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     mi == nothing && continue
                     callsite = Callsite(id, MICallInfo(mi, rt))
                 end
+            else c.head === :foreigncall
+                # special handling of jl_threading_run
+                length(c.args) > 0 || continue
+                if c.args[1] isa QuoteNode && c.args[1].value === :jl_threading_run
+                    func = c.args[7]
+                    ftype = widenconst(argextype(func, CI, sptypes, slottypes))
+                    mi = first_method_instance(Tuple{ftype.parameters...}, params=params)
+                    mi == nothing && continue
+                    callsite = Callsite(id, MICallInfo(mi, Nothing))
+                end
             end
 
             if callsite !== nothing
@@ -132,7 +142,7 @@ end
 
 function first_method_instance(sig; params=current_params())
     methds = Base._methods_by_ftype(sig, 1, params.world)
-    methds === false && return nothing
+    (methds === false || length(methds) < 1) && return nothing
     x = methds[1]
     meth = x[3]
     if isdefined(meth, :generator) && !isdispatchtuple(Tuple{sig.parameters[2:end]...})
