@@ -1,11 +1,19 @@
-function cthulhu_llvm()
-    @info "Cthulhu can't display LLVM IR yet"
-    return nothing
+function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params)
+    dump = InteractiveUtils._dump_function_linfo(
+        mi, params.world, #=native=# false,
+        #=wrapper=# false, #=strip_ir_metadata=# true,
+        #=dump_module=# false, #=syntax=# :att,
+        optimize, debuginfo ? :source : :none)
+    print(io, dump)
 end
 
-function cthulhu_native()
-    @info "Cthulhu can't display assembly yet"
-    return nothing
+function cthulhu_native(io::IO, mi, optimize, debuginfo, params)
+    dump = InteractiveUtils._dump_function_linfo(
+        mi, params.world, #=native=# true,
+        #=wrapper=# false, #=strip_ir_metadata=# true,
+        #=dump_module=# false, #=syntax=# :att,
+        optimize, debuginfo ? :source : :none)
+    print(io, dump)
 end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)

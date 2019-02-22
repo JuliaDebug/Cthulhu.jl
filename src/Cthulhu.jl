@@ -114,7 +114,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
         # TODO: respect default
-        debuginfo = selected == :source 
+        debuginfo = selected == :source
     end
 
     while true
@@ -128,7 +128,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
 
             debuginfo_key = debuginfo ? :source : :none
             if iswarn
-                cthulhu_warntype(CI, rt, debuginfo_key)
+                cthulhu_warntype(stdout, CI, rt, debuginfo_key)
             elseif VERSION >= v"1.1.0-DEV.762"
                 show(stdout, CI, debuginfo = debuginfo_key)
             else
@@ -161,10 +161,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         elseif toggle === :debuginfo
             debuginfo ⊻= true
         elseif toggle === :llvm
-            cthulhu_llvm()
+            cthulhu_llvm(stdout, mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :native
-            cthulhu_native()
+            cthulhu_native(stdout, mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
