@@ -51,6 +51,22 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 rt = CI.ssavaluetypes[id]
                 types = map(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
 
+                # Look through _apply
+                ok = true
+                while types[1] === typeof(Core._apply)
+                    new_types = Any[types[2]]
+                    for t in types[3:end]
+                        if !(t <: Tuple)
+                            ok = false
+                            break
+                        end
+                        append!(new_types, t.parameters)
+                    end
+                    ok || break
+                    types = new_types
+                end
+                ok || continue
+
                 # Filter out builtin functions and intrinsic function
                 if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
                     continue

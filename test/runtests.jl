@@ -44,6 +44,13 @@ let callsites = find_callsites_by_ftt(call_rt, Tuple{}; optimize=false)
     @test length(callsites) == 1
 end
 
+function call_by_apply(args...)
+    identity(args...)
+end
+let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize=false)
+    @test length(callsites) == 1
+end
+
 if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
 Base.@propagate_inbounds function f(x)
     @boundscheck error()
