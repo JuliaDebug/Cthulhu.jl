@@ -122,11 +122,11 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
+        debuginfo_key = debuginfo ? :source : :none
         if display_CI
             println()
             println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rt))))")
 
-            debuginfo_key = debuginfo ? :source : :none
             if iswarn
                 cthulhu_warntype(stdout, CI, rt, debuginfo_key)
             elseif VERSION >= v"1.1.0-DEV.762"
@@ -153,7 +153,8 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             callsite = callsites[cid]
 
             # recurse
-            _descend(get_mi(callsite); params=params, optimize=optimize, iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+            _descend(get_mi(callsite); params=params, optimize=optimize,
+                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
