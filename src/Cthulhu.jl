@@ -114,7 +114,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
         # TODO: respect default
-        debuginfo = selected == :source 
+        debuginfo = selected == :source
     end
 
     while true
@@ -122,13 +122,13 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
+        debuginfo_key = debuginfo ? :source : :none
         if display_CI
             println()
             println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rt))))")
 
-            debuginfo_key = debuginfo ? :source : :none
             if iswarn
-                cthulhu_warntype(CI, rt, debuginfo_key)
+                cthulhu_warntype(stdout, CI, rt, debuginfo_key)
             elseif VERSION >= v"1.1.0-DEV.762"
                 show(stdout, CI, debuginfo = debuginfo_key)
             else
@@ -153,7 +153,8 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             callsite = callsites[cid]
 
             # recurse
-            _descend(get_mi(callsite); params=params, optimize=optimize, iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+            _descend(get_mi(callsite); params=params, optimize=optimize,
+                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
@@ -161,10 +162,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         elseif toggle === :debuginfo
             debuginfo ⊻= true
         elseif toggle === :llvm
-            cthulhu_llvm()
+            cthulhu_llvm(stdout, mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :native
-            cthulhu_native()
+            cthulhu_native(stdout, mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
