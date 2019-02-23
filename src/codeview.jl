@@ -1,8 +1,10 @@
+const asm_syntax = Ref(:att)
+
 function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params)
     dump = InteractiveUtils._dump_function_linfo(
         mi, params.world, #=native=# false,
         #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# :att,
+        #=dump_module=# false, #=syntax=# asm_syntax[],
         optimize, debuginfo ? :source : :none)
     print(io, dump)
 end
@@ -11,7 +13,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params)
     dump = InteractiveUtils._dump_function_linfo(
         mi, params.world, #=native=# true,
         #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# :att,
+        #=dump_module=# false, #=syntax=# asm_syntax[],
         optimize, debuginfo ? :source : :none)
     print(io, dump)
 end
