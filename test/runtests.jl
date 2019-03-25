@@ -23,10 +23,10 @@ function test()
 end
 
 callsites = find_callsites_by_ftt(test, Tuple{})
-@test length(callsites) == 3
+@test length(callsites) == 4
 
 callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
-@test length(callsites) == 2
+@test length(callsites) == 4
 
 # Check that we see callsites that are the rhs of assignments
 @noinline bar_callsite_assign() = nothing

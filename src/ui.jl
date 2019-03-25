@@ -7,6 +7,7 @@ mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     pageoffset::Int
     selected::Int
     toggle::Union{Nothing, Symbol}
+    sub_menu::Bool
 end
 
 function show_as_line(el)
@@ -17,7 +18,7 @@ function show_as_line(el)
 end
 
 
-function CthulhuMenu(callsites; pagesize::Int=10)
+function CthulhuMenu(callsites; pagesize::Int=10, sub_menu = false)
     options = vcat(map(show_as_line, callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
@@ -31,23 +32,24 @@ function CthulhuMenu(callsites; pagesize::Int=10)
     pageoffset = 0
     selected = -1 # none
 
-    CthulhuMenu(options, pagesize, pageoffset, selected, nothing)
+    CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu)
 end
 
 TerminalMenus.options(m::CthulhuMenu) = m.options
 TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
 function TerminalMenus.header(m::CthulhuMenu)
+    m.sub_menu && return ""
     """
     Select a call to descend into or ↩ to ascend. [q]uit.
     Toggles: [o]ptimize, [w]arn, [d]ebuginfo.
     Show: [L]LVM IR, [N]ative code
     Advanced: dump [P]arams cache.
     """
-#    Display: [L] for code_llvm, [N] for code_native
 end
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
+    m.sub_menu && return false
     if key == UInt32('w')
         m.toggle = :warn
         return true

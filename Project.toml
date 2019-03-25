@@ -4,6 +4,7 @@ authors = ["Valentin Churavy <v.churavy@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 TerminalMenus = "dc548174-15c3-5faf-af27-7997cfbde655"
 
