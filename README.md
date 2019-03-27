@@ -39,5 +39,5 @@ descend(foo, Tuple{})
 - `descend_code_typed`
 - `@descend_code_warntype`
 - `descend_code_warntype`
-- `@descend`: Shortcut for `@descend_code_warntype`
-- `descend`: Shortcut for `descend_code_warntype`
+- `@descend`: Shortcut for `@descend_code_typed`
+- `descend`: Shortcut for `descend_code_typed`
