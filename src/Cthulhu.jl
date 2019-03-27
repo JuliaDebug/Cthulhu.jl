@@ -13,9 +13,9 @@ include("codeview.jl")
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 
 """
-  @descend_code_typed
+    @descend_code_typed
 
-  Evaluates the arguments to the function or macro call, determines their
+Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_typed` on the resulting expression.
 """
 macro descend_code_typed(ex0...)
@@ -23,9 +23,9 @@ macro descend_code_typed(ex0...)
 end
 
 """
-  @descend_code_warntype
+    @descend_code_warntype
 
-  Evaluates the arguments to the function or macro call, determines their
+Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_warntype` on the resulting expression.
 """
 macro descend_code_warntype(ex0...)
@@ -33,9 +33,9 @@ macro descend_code_warntype(ex0...)
 end
 
 """
-  @descend
+    @descend
 
-  Shortcut for [`@descend_code_typed`](@ref).
+Shortcut for [`@descend_code_typed`](@ref).
 """
 macro descend(ex0...)
     esc(:(@descend_code_typed($(ex0...))))
@@ -97,9 +97,9 @@ function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
 end
 
 """
-  descend
+    descend
 
-  Shortcut for [`descend_code_typed`](@ref).
+Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
