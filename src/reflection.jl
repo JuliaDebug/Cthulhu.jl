@@ -25,6 +25,20 @@ else
 #    get_world() = Core.Compiler.get_world_counter()
 end
 
+using Requires
+transform(::Val, callsite) = callsite
+@init @require CUDAnative="be33ccc6-a3ff-5ff2-a52e-74243cff1e17" begin
+    using .CUDAnative
+    function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
+        spvals = Core.Compiler.spvals_from_meth_instance(mi)
+        tt = argextype(callexpr.args[4], CI, spvals, slottypes)
+        ft = argextype(callexpr.args[3], CI, spvals, slottypes)
+        isa(tt, Const) || return callsite
+        mi = first_method_instance(Tuple{widenconst(ft), tt.val.parameters...})
+        return Callsite(callsite.id, CuCallInfo(MICallInfo(mi, Nothing)))
+    end
+end
+
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
@@ -54,6 +68,10 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     callsite = process_return_type(id, c, rt)
                 else
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
+                end
+                mi = get_mi(callsite)
+                if nameof(mi.def.module) == :CUDAnative && mi.def.name   == :cufunction
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
                 end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]

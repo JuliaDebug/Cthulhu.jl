@@ -47,6 +47,12 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
 
+# CUDA callsite
+struct CuCallInfo <: CallInfo
+     cumi::MICallInfo
+end
+get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
+
 struct Callsite
     id::Int # ssa-id
     info::CallInfo
@@ -154,6 +160,10 @@ function Base.show(io::IO, c::Callsite)
     elseif isa(c.info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
         show_callinfo(limiter, c.info.called_mi)
+        print(limiter, " >")
+    elseif isa(c.info, CuCallInfo)
+        print(limiter, " = cucall < ")
+        show_callinfo(limiter, c.info.cumi)
         print(limiter, " >")
     end
 end
