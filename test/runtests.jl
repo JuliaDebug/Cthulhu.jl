@@ -23,10 +23,10 @@ function test()
 end
 
 callsites = find_callsites_by_ftt(test, Tuple{})
-@test length(callsites) == 3
+@test length(callsites) == 4
 
 callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
-@test length(callsites) == 2
+@test length(callsites) == 4
 
 # Check that we see callsites that are the rhs of assignments
 @noinline bar_callsite_assign() = nothing
@@ -65,4 +65,11 @@ end
 let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.code) == 2
 end
+
+f(a, b) = a + b
+callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
+@test length(callsites) == 1
+callinfo = callsites[1].info
+@test callinfo isa Cthulhu.MultiCallInfo
+
 end

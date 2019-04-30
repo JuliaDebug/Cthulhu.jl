@@ -5,16 +5,42 @@
 using Base.Meta
 using .Compiler: widenconst, argextype, Const
 
-if VERSION >= v"1.2.0-DEV.249"
-    sptypes_from_meth_instance(mi) = Core.Compiler.sptypes_from_meth_instance(mi)
-else
-    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
-end
-
 if VERSION >= v"1.1.0-DEV.157"
     const is_return_type = Core.Compiler.is_return_type
 else
     is_return_type(f) = f === Core.Compiler.return_type
+end
+
+if VERSION >= v"1.2.0-DEV.249"
+    const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
+else
+    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
+end
+
+if VERSION >= v"1.2.0-DEV.320"
+    const may_invoke_generator = Base.may_invoke_generator
+else
+    may_invoke_generator(meth, @nospecialize(atypes), sparams) = isdispatchtuple(atypes)
+end
+
+if VERSION < v"1.2.0-DEV.573"
+    code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.code_for_method(method, metharg, methsp, world, force)
+else
+    code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
+end
+
+using Requires
+transform(::Val, callsite) = callsite
+@init @require CUDAnative="be33ccc6-a3ff-5ff2-a52e-74243cff1e17" begin
+    using .CUDAnative
+    function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
+        spvals = Core.Compiler.spvals_from_meth_instance(mi)
+        tt = argextype(callexpr.args[4], CI, spvals, slottypes)
+        ft = argextype(callexpr.args[3], CI, spvals, slottypes)
+        isa(tt, Const) || return callsite
+        mi = first_method_instance(Tuple{widenconst(ft), tt.val.parameters...})
+        return Callsite(callsite.id, CuCallInfo(MICallInfo(mi, Nothing)))
+    end
 end
 
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
@@ -47,6 +73,10 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 else
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
                 end
+                mi = get_mi(callsite)
+                if nameof(mi.def.module) == :CUDAnative && mi.def.name   == :cufunction
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
+                end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
                 types = map(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
@@ -56,7 +86,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 while types[1] === typeof(Core._apply)
                     new_types = Any[types[2]]
                     for t in types[3:end]
-                        if !(t <: Tuple)
+                        if !(t <: Tuple) || t isa Union
                             ok = false
                             break
                         end
@@ -75,15 +105,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 if isdefined(types[1], :instance) && is_return_type(types[1].instance)
                     callsite = process_return_type(id, c, rt)
                 else
-                    # Filter out abstract signatures
-                    # otherwise generated functions get crumpy
-                    if any(isabstracttype, types) || any(T->(T isa Union || T isa UnionAll), types)
-                        continue
-                    end
-
-                    mi = first_method_instance(Tuple{types...})
-                    mi == nothing && continue
-                    callsite = Callsite(id, MICallInfo(mi, rt))
+                    callsite = Callsite(id, callinfo(Tuple{types...}, rt, params=params))
                 end
             else c.head === :foreigncall
                 # special handling of jl_threading_run
@@ -91,9 +113,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 if c.args[1] isa QuoteNode && c.args[1].value === :jl_threading_run
                     func = c.args[7]
                     ftype = widenconst(argextype(func, CI, sptypes, slottypes))
-                    mi = first_method_instance(Tuple{ftype.parameters...}, params=params)
-                    mi == nothing && continue
-                    callsite = Callsite(id, MICallInfo(mi, Nothing))
+                    callsite = Callsite(id, callinfo(ftype, nothing, params=params))
                 end
             end
 
@@ -151,6 +171,27 @@ else
     current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
 end
 
+function callinfo(sig, rt; params=current_params())
+    methds = Base._methods_by_ftype(Tuple{sig.parameters...}, -1, params.world)
+    (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
+    callinfos = CallInfo[]
+    for x in methds
+        meth = x[3]
+        atypes = x[1]
+        sparams = x[2]
+        if isdefined(meth, :generator) && may_invoke_generator(meth, atypes, sparams)
+            push!(callinfos, GeneratedCallInfo(sig, rt))
+        else
+            mi = code_for_method(meth, atypes, sparams, params.world)
+            push!(callinfos, MICallInfo(mi, rt)) 
+        end
+    end
+    
+    @assert length(callinfos) != 0
+    length(callinfos) == 1 && return first(callinfos)
+    return MultiCallInfo(sig, rt, callinfos)
+end
+
 function first_method_instance(F, TT; params=current_params())
     sig = Tuple{typeof(F), TT.parameters...}
     first_method_instance(sig; params=params)
@@ -164,5 +205,5 @@ function first_method_instance(sig; params=current_params())
     if isdefined(meth, :generator) && !isdispatchtuple(Tuple{sig.parameters[2:end]...})
         return nothing
     end
-    mi = Compiler.code_for_method(meth, sig, x[2], params.world)
+    mi = code_for_method(meth, sig, x[2], params.world)
 end

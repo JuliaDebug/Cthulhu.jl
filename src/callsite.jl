@@ -1,15 +1,60 @@
+using Crayons
+using Crayons.Box
+
 abstract type CallInfo; end
 
+# Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
 end
-get_mi(mici::MICallInfo) = mici.mi
+get_mi(ci::MICallInfo) = ci.mi
 
+# Failed
+struct FailedCallInfo <: CallInfo
+    sig
+    rt
+end
+
+function get_mi(ci::FailedCallInfo) 
+    @error "MethodInstance extraction failed" ci.sig ci.rt
+    return nothing
+end
+
+# Generated
+struct GeneratedCallInfo <: CallInfo
+    sig
+    rt
+end
+function get_mi(genci::GeneratedCallInfo) 
+    @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
+    return nothing
+end
+
+struct MultiCallInfo <: CallInfo
+    sig
+    rt
+    callinfos::Vector{CallInfo}
+end
+# actual code-error
+get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
+
+struct ThreadsCallInfo <: CallInfo
+    ci::CallInfo
+end
+get_mi(thrci::ThreadsCallInfo) = get_mi(thrci.ci)
+
+# Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
     called_mi::MICallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
+
+# CUDA callsite
+struct CuCallInfo <: CallInfo
+     cumi::MICallInfo
+end
+get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 
 struct Callsite
     id::Int # ssa-id
@@ -48,16 +93,25 @@ function Base.print(io::TextWidthLimiter, s::String)
     end
 end
 
-function show_callinfo(limiter, mici::MICallInfo)
-    mi = mici.mi
-    if !has_space(limiter, mi.def.name)
+function headstring(@nospecialize(T))
+    if T isa Union
+        return string(T)
+    elseif T isa UnionAll
+        return headstring(Base.unwrap_unionall(T))
+    else
+        return string(T.name)
+    end
+end
+
+
+function __show_limited(limiter, name, tt, rt)
+    if !has_space(limiter, name)
         print(limiter, '…')
         return
     end
-    print(limiter, string(mi.def.name))
-    tt = mi.specTypes.parameters[2:end]
+    print(limiter, string(name))
     pstrings = map(string, tt)
-    headstrings = map(x->isa(x, Union) ? string(x) : string(Base.unwrap_unionall(x).name), tt)
+    headstrings = map(headstring, tt)
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
@@ -76,12 +130,28 @@ function show_callinfo(limiter, mici::MICallInfo)
     print(limiter, ")")
 
     # If we have space for the return type, print it
-    rts = string(mici.rt)
+    rts = string(rt)
     if has_space(limiter, textwidth(rts)+2)
         print(limiter, string("::", rts))
     end
 end
 
+function show_callinfo(limiter, mici::MICallInfo)
+    mi = mici.mi
+    tt = Base.unwrap_unionall(mi.specTypes).parameters[2:end]
+    name = mi.def.name
+    rt = mici.rt
+    __show_limited(limiter, name, tt, rt)
+end
+
+function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
+    types = ci.sig.parameters
+    f = types[1]
+    name = nameof(f)
+    tt = types[2:end]
+    rt = ci.rt
+    __show_limited(limiter, name, tt, rt)
+end
 
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)
@@ -91,9 +161,24 @@ function Base.show(io::IO, c::Callsite)
     if isa(c.info, MICallInfo)
         print(limiter, " = invoke ")
         show_callinfo(limiter, c.info)
+    elseif c.info isa MultiCallInfo
+        print(limiter, " = call ")
+        show_callinfo(limiter, c.info)
+    elseif c.info isa FailedCallInfo ||
+           c.info isa GeneratedCallInfo
+        print(limiter, " = ", RED_FG("call "))
+        show_callinfo(limiter, c.info)
+    elseif c.info isa ThreadsCallInfo
+        print(limiter, " = thread_call < ")
+        show_callinfo(limiter, c.info.ci)
+        print(limiter, " >")
     elseif isa(c.info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
         show_callinfo(limiter, c.info.called_mi)
+        print(limiter, " >")
+    elseif isa(c.info, CuCallInfo)
+        print(limiter, " = cucall < ")
+        show_callinfo(limiter, c.info.cumi)
         print(limiter, " >")
     end
 end
