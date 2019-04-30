@@ -168,7 +168,7 @@ else
 end
 
 function callinfo(sig, rt; params=current_params())
-    methds = Base._methods_by_ftype(Tuple{sig.parameters...}, 1, params.world)
+    methds = Base._methods_by_ftype(Tuple{sig.parameters...}, -1, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
     for x in methds

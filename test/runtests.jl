@@ -65,4 +65,11 @@ end
 let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.code) == 2
 end
+
+f(a, b) = a + b
+callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
+@test length(callsites) == 1
+callinfo = callsites[1].info
+@test callinfo isa Cthulhu.MultiCallInfo
+
 end

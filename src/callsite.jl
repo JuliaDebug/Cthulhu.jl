@@ -90,6 +90,17 @@ function Base.print(io::TextWidthLimiter, s::String)
     end
 end
 
+function headstring(@nospecialize(T))
+    if T isa Union
+        return string(T)
+    elseif T isa UnionAll
+        return headstring(Base.unwrap_unionall(T))
+    else
+        return string(T.name)
+    end
+end
+
+
 function __show_limited(limiter, name, tt, rt)
     if !has_space(limiter, name)
         print(limiter, '…')
@@ -97,7 +108,7 @@ function __show_limited(limiter, name, tt, rt)
     end
     print(limiter, string(name))
     pstrings = map(string, tt)
-    headstrings = map(x->isa(x, Union) ? string(x) : string(Base.unwrap_unionall(x).name), tt)
+    headstrings = map(headstring, tt)
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
@@ -124,7 +135,7 @@ end
 
 function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
-    tt = mi.specTypes.parameters[2:end]
+    tt = Base.unwrap_unionall(mi.specTypes).parameters[2:end]
     name = mi.def.name
     rt = mici.rt
     __show_limited(limiter, name, tt, rt)

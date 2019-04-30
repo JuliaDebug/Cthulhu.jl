@@ -156,7 +156,13 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 sub_callsites = map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
                 menu = CthulhuMenu(sub_callsites, sub_menu=true)
                 cid = request(menu)
-                callsite = callsites[cid]
+                if cid == length(sub_callsites) + 1
+                    continue
+                end
+                if cid == -1
+                    throw(InterruptException())
+                end
+                callsite = sub_callsites[cid]
             end
 
             if callsite.info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
