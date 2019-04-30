@@ -5,24 +5,28 @@
 using Base.Meta
 using .Compiler: widenconst, argextype, Const
 
-if VERSION >= v"1.2.0-DEV.249"
-    sptypes_from_meth_instance(mi) = Core.Compiler.sptypes_from_meth_instance(mi)
-else
-    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
-end
-
 if VERSION >= v"1.1.0-DEV.157"
     const is_return_type = Core.Compiler.is_return_type
 else
     is_return_type(f) = f === Core.Compiler.return_type
 end
 
+if VERSION >= v"1.2.0-DEV.249"
+    const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
+else
+    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
+end
+
+if VERSION >= v"1.2.0-DEV.320"
+    const may_invoke_generator = Base.may_invoke_generator
+else
+    may_invoke_generator(meth, @nospecialize(atypes), sparams) = isdispatchtuple(atypes)
+end
+
 if VERSION < v"1.2.0-DEV.573"
     code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.code_for_method(method, metharg, methsp, world, force)
-#    get_world() = typemax(UInt) 
 else
     code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
-#    get_world() = Core.Compiler.get_world_counter()
 end
 
 using Requires
@@ -175,7 +179,7 @@ function callinfo(sig, rt; params=current_params())
         meth = x[3]
         atypes = x[1]
         sparams = x[2]
-        if isdefined(meth, :generator) && !Base.may_invoke_generator(meth, atypes, sparams)
+        if isdefined(meth, :generator) && may_invoke_generator(meth, atypes, sparams)
             push!(callinfos, GeneratedCallInfo(sig, rt))
         else
             mi = code_for_method(meth, atypes, sparams, params.world)
