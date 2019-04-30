@@ -1,3 +1,6 @@
+using Crayons
+using Crayons.Box
+
 abstract type CallInfo; end
 
 # Call could be resolved to a singular MI
@@ -158,11 +161,12 @@ function Base.show(io::IO, c::Callsite)
     if isa(c.info, MICallInfo)
         print(limiter, " = invoke ")
         show_callinfo(limiter, c.info)
-    elseif c.info isa MultiCallInfo || 
-           c.info isa FailedCallInfo ||
-           c.info isa GeneratedCallInfo
-        # TODO differentiate by color
+    elseif c.info isa MultiCallInfo
         print(limiter, " = call ")
+        show_callinfo(limiter, c.info)
+    elseif c.info isa FailedCallInfo ||
+           c.info isa GeneratedCallInfo
+        print(limiter, " = ", RED_FG("call "))
         show_callinfo(limiter, c.info)
     elseif c.info isa ThreadsCallInfo
         print(limiter, " = thread_call < ")
