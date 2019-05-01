@@ -48,14 +48,24 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
     callsites = Callsite[]
 
     function process_return_type(id, c, rt)
+        callinfo = nothing
         is_call = isexpr(c, :call)
         arg_base = is_call ? 0 : 1
         length(c.args) == (arg_base + 3) || return nothing
         ft = argextype(c.args[arg_base + 2], CI, sptypes, slottypes)
         argTs = argextype(c.args[arg_base + 3], CI, sptypes, slottypes)
-        isa(argTs, Const) || return nothing
-        mi = first_method_instance(Tuple{widenconst(ft), argTs.val.parameters...})
-        return Callsite(id, ReturnTypeCallInfo(MICallInfo(mi, rt.val)))
+        if isa(argTs, Const)
+            sig = Tuple{widenconst(ft), argTs.val.parameters...}
+            mi = first_method_instance(sig)
+            if mi !== nothing
+                callinfo = MICallInfo(mi, rt.val)
+            else
+                callinfo = FailedCallInfo(sig, rt)
+            end
+        else
+            callinfo = FailedCallInfo((ft, argTs), rt)
+        end
+        return Callsite(id, ReturnTypeCallInfo(callinfo))
     end
 
     for (id, c) in enumerate(CI.code)
@@ -74,7 +84,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
                 end
                 mi = get_mi(callsite)
-                if nameof(mi.def.module) == :CUDAnative && mi.def.name   == :cufunction
+                if nameof(mi.def.module) == :CUDAnative && mi.def.name == :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
                 end
             elseif c.head === :call

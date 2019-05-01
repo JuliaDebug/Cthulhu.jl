@@ -1,5 +1,6 @@
 using Crayons
 using Crayons.Box
+using Unicode
 
 abstract type CallInfo; end
 
@@ -46,7 +47,7 @@ get_mi(thrci::ThreadsCallInfo) = get_mi(thrci.ci)
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
-    called_mi::MICallInfo
+    called_mi::CallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
 
