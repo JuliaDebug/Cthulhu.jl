@@ -65,11 +65,30 @@ end
 let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.code) == 2
 end
+end
 
 f(a, b) = a + b
-callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
-@test length(callsites) == 1
-callinfo = callsites[1].info
-@test callinfo isa Cthulhu.MultiCallInfo
-
+let callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
+    @test length(callsites) == 1
+    callinfo = callsites[1].info
+    @test callinfo isa Cthulhu.MultiCallInfo
 end
+
+# Failed return_type
+only_ints(::Integer) = 1
+return_type_failure(::T) where T = Base._return_type(only_ints, Tuple{T})
+let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optimize=false)
+    @test length(callsites) == 1
+    callinfo = callsites[1].info
+    @test callinfo isa Cthulhu.ReturnTypeCallInfo
+    callinfo = callinfo.called_mi
+    @test callinfo isa Cthulhu.FailedCallInfo
+end
+
+# tasks
+ftask() = @sync @async show(io, "Hello")
+let callsites = find_callsites_by_ftt(ftask, Tuple{})
+    @test !isempty(filter(c->c.info isa Cthulhu.TaskCallInfo, callsites))
+end
+
+

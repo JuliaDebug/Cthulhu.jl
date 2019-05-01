@@ -1,5 +1,6 @@
 using Crayons
 using Crayons.Box
+using Unicode
 
 abstract type CallInfo; end
 
@@ -39,14 +40,14 @@ end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 
-struct ThreadsCallInfo <: CallInfo
+struct TaskCallInfo <: CallInfo
     ci::CallInfo
 end
-get_mi(thrci::ThreadsCallInfo) = get_mi(thrci.ci)
+get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
-    called_mi::MICallInfo
+    called_mi::CallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
 
@@ -168,8 +169,8 @@ function Base.show(io::IO, c::Callsite)
            c.info isa GeneratedCallInfo
         print(limiter, " = ", RED_FG("call "))
         show_callinfo(limiter, c.info)
-    elseif c.info isa ThreadsCallInfo
-        print(limiter, " = thread_call < ")
+    elseif c.info isa TaskCallInfo
+        print(limiter, " = task < ")
         show_callinfo(limiter, c.info.ci)
         print(limiter, " >")
     elseif isa(c.info, ReturnTypeCallInfo)
