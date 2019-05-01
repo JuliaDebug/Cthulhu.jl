@@ -84,3 +84,11 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     callinfo = callinfo.called_mi
     @test callinfo isa Cthulhu.FailedCallInfo
 end
+
+# tasks
+ftask() = @sync @async show(io, "Hello")
+let callsites = find_callsites_by_ftt(ftask, Tuple{})
+    @test !isempty(filter(c->c.info isa Cthulhu.TaskCallInfo, callsites))
+end
+
+
