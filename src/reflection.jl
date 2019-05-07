@@ -34,9 +34,9 @@ transform(::Val, callsite) = callsite
 @init @require CUDAnative="be33ccc6-a3ff-5ff2-a52e-74243cff1e17" begin
     using .CUDAnative
     function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
-        spvals = Core.Compiler.spvals_from_meth_instance(mi)
-        tt = argextype(callexpr.args[4], CI, spvals, slottypes)
-        ft = argextype(callexpr.args[3], CI, spvals, slottypes)
+        sptypes = sptypes_from_meth_instance(mi)
+        tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
+        ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
         isa(tt, Const) || return callsite
         return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, nothing, params=params)))
     end
