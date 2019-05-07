@@ -38,7 +38,7 @@ transform(::Val, callsite) = callsite
         tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
         ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
         isa(tt, Const) || return callsite
-        return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, nothing, params=params)))
+        return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
     end
 end
 
