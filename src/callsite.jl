@@ -148,7 +148,11 @@ end
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = ci.sig.parameters
     f = types[1]
-    name = nameof(f)
+    if f isa Union
+        name = string(f)
+    else
+        name = nameof(f)
+    end
     tt = types[2:end]
     rt = ci.rt
     __show_limited(limiter, name, tt, rt)

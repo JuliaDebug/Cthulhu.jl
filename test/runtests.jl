@@ -14,19 +14,22 @@ function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT); optimize=tru
 end
 
 # Testing that we don't have spurious calls from `Type`
-callsites = find_callsites_by_ftt(Base.throw_boundserror, Tuple{UnitRange{Int64},Int64})
-@test length(callsites) == 1
+let callsites = find_callsites_by_ftt(Base.throw_boundserror, Tuple{UnitRange{Int64},Int64})
+    @test length(callsites) == 1
+end
 
 function test()
     T = rand() > 0.5 ? Int64 : Float64
     sum(rand(T, 100))
 end
 
-callsites = find_callsites_by_ftt(test, Tuple{})
-@test length(callsites) == 4
+let callsites = find_callsites_by_ftt(test, Tuple{})
+    @test length(callsites) == 4
+end
 
-callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
-@test length(callsites) == 4
+let callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
+    @test length(callsites) == 4
+end
 
 # Check that we see callsites that are the rhs of assignments
 @noinline bar_callsite_assign() = nothing
@@ -34,8 +37,9 @@ function foo_callsite_assign()
     x = bar_callsite_assign()
     x
 end
-callsites = find_callsites_by_ftt(foo_callsite_assign, Tuple{}; optimize=false)
-@test length(callsites) == 1
+let callsites = find_callsites_by_ftt(foo_callsite_assign, Tuple{}; optimize=false)
+    @test length(callsites) == 1
+end
 
 @eval function call_rt()
     S = $(Core.Compiler.return_type)(+, Tuple{Int, Int})
@@ -91,4 +95,9 @@ let callsites = find_callsites_by_ftt(ftask, Tuple{})
     @test !isempty(filter(c->c.info isa Cthulhu.TaskCallInfo, callsites))
 end
 
+callf(f::F, x) where F = f(x)
+let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos)}, Float64})
+    @test !isempty(callsites)
+    @test first(callsites).info isa Cthulhu.MultiCallInfo
+end
 

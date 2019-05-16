@@ -114,7 +114,23 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 if isdefined(types[1], :instance) && is_return_type(types[1].instance)
                     callsite = process_return_type(id, c, rt)
                 else
-                    callsite = Callsite(id, callinfo(Tuple{types...}, rt, params=params))
+                    if types[1] isa Union
+                        # Union{typeof(sin), typeof(cos)}
+                        fts = Any[]
+                        function thatcher(u)
+                            if u isa Union
+                                thatcher(u.a)
+                                thatcher(u.b)
+                            else
+                                push!(fts, u)
+                            end
+                        end
+                        sigs = map(ft-> [ft, types[2:end]], fts)
+                        cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
+                        callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
+                    else
+                        callsite = Callsite(id, callinfo(Tuple{types...}, rt, params=params))
+                    end
                 end
             else c.head === :foreigncall
                 # special handling of jl_new_task
