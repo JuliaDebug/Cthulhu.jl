@@ -171,7 +171,7 @@ function Base.show(io::IO, c::Callsite)
         show_callinfo(limiter, c.info)
     elseif c.info isa FailedCallInfo ||
            c.info isa GeneratedCallInfo
-        print(limiter, " = ", RED_FG("call "))
+        print(limiter, " = call ")
         show_callinfo(limiter, c.info)
     elseif c.info isa TaskCallInfo
         print(limiter, " = task < ")
