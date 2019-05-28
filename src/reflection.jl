@@ -207,11 +207,15 @@ function callinfo(sig, rt; params=current_params())
         meth = x[3]
         atypes = x[1]
         sparams = x[2]
-        if isdefined(meth, :generator) && may_invoke_generator(meth, atypes, sparams)
+        if isdefined(meth, :generator) && !may_invoke_generator(meth, atypes, sparams)
             push!(callinfos, GeneratedCallInfo(sig, rt))
         else
             mi = code_for_method(meth, atypes, sparams, params.world)
-            push!(callinfos, MICallInfo(mi, rt)) 
+            if mi !== nothing
+                push!(callinfos, MICallInfo(mi, rt)) 
+            else 
+                push!(callinfos, FailedCallInfo(sig, rt)) 
+            end
         end
     end
     
