@@ -224,12 +224,12 @@ function callinfo(sig, rt; params=current_params())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function first_method_instance(F, TT; params=current_params())
-    sig = Tuple{typeof(F), TT.parameters...}
+function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
+    sig = Base.signature_type(F, TT)
     first_method_instance(sig; params=params)
 end
 
-function first_method_instance(sig; params=current_params())
+function first_method_instance(@nospecialize(sig); params=current_params())
     methds = Base._methods_by_ftype(sig, 1, params.world)
     (methds === false || length(methds) < 1) && return nothing
     x = methds[1]
