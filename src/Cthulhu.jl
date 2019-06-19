@@ -1,16 +1,21 @@
 module Cthulhu
 
 using InteractiveUtils
+using TypedCodeUtils
+
+import TypedCodeUtils: CallInfo, canreflect, reflect, current_params, Reflection
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
 
 include("callsite.jl")
-include("reflection.jl")
+include("show_limited.jl")
 include("ui.jl")
 include("codeview.jl")
 
-export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
+
+export descend, descend_code_typed, descend_code_warntype
+export @descend, @descend_code_typed, @descend_code_warntype
 
 """
     @descend_code_typed
@@ -103,12 +108,10 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-##
-# _descend is the main driver function.
-# src/reflection.jl has the tools to discover methods
-# src/ui.jl provides the user facing interface to which _descend responds
-##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+import TypedCodeUtils: MultiCallInfo, recurse
+
+# Cthulhu's inner loop
+function _descend(ref::Reflection; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
     display_CI = true
     debuginfo = true
     if :debuginfo in keys(kwargs)
@@ -117,22 +120,20 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         debuginfo = selected == :source
     end
 
+    ref = TypedCodeUtils.preprocess!(DefaultConsumer(), ref, optimize)
+    callsites = find_callsites(ref)
     while true
-        (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
-        preprocess_ci!(CI, mi, optimize)
-        callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
-
         debuginfo_key = debuginfo ? :source : :none
         if display_CI
             println()
-            println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rt))))")
+            # println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rt))))")
 
             if iswarn
-                cthulhu_warntype(stdout, CI, rt, debuginfo_key)
+                cthulhu_warntype(stdout, ref.CI, ref.rt, debuginfo_key)
             elseif VERSION >= v"1.1.0-DEV.762"
-                show(stdout, CI, debuginfo = debuginfo_key)
+                show(stdout, ref.CI, debuginfo = debuginfo_key)
             else
-                display(CI=>rt)
+                display(ref.CI=>ref.rt)
             end
             println()
         end
@@ -152,8 +153,8 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
             callsite = callsites[cid]
 
-            if callsite.info isa MultiCallInfo
-                sub_callsites = map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
+            if isambiguous(callsite.info)
+                sub_callsites = map(ci->Callsite(callsite.id, ci), collect(callsite.info))
                 menu = CthulhuMenu(sub_callsites, sub_menu=true)
                 cid = request(menu)
                 if cid == length(sub_callsites) + 1
@@ -165,17 +166,15 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 callsite = sub_callsites[cid]
             end
 
-            if callsite.info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
-                @error "Calliste %$(callsite.id) failed to be extracted" callsite
-            end
-
             # recurse
-            next_mi = get_mi(callsite)
-            if next_mi === nothing
-                continue
+            if canreflect(callsite)
+                next_ref = reflect(callsite)
+                _descend(next_ref; params=params, optimize=optimize,
+                         iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+            else
+                @warn "Could not descend into %$(callsite.id)" callsite
+                 continue
             end
-            _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
@@ -183,10 +182,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         elseif toggle === :debuginfo
             debuginfo ⊻= true
         elseif toggle === :llvm
-            cthulhu_llvm(stdout, mi, optimize, debuginfo, params)
+            cthulhu_llvm(stdout, ref.mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :native
-            cthulhu_native(stdout, mi, optimize, debuginfo, params)
+            cthulhu_native(stdout, ref.mi, optimize, debuginfo, params)
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
@@ -196,11 +195,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             error("Unknown option $toggle")
         end
     end
+    end
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    mi = first_method_instance(F, TT; params=params)
-    _descend(mi; params=params, kwargs...)
-end
-
+function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
+    ref = reflect(F, TT; kwargs...)
+    _descend(ref; kwargs...)
 end
