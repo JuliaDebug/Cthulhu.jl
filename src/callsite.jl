@@ -95,7 +95,7 @@ function Base.print(io::TextWidthLimiter, s::String)
 end
 
 function headstring(@nospecialize(T))
-    if T isa Union
+    if T isa Union || T === Union{}
         return string(T)
     elseif T isa UnionAll
         return headstring(Base.unwrap_unionall(T))
