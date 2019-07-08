@@ -2,8 +2,7 @@ const asm_syntax = Ref(:att)
 
 function highlight(io, lexer, x)
     Sys.which("pygmentize") === nothing && return print(io, x)
-    open(pipeline(`pygmentize -f terminal256 -O style=lovelace -l $lexer`;
-                  stdout=io, stderr=stderr), "w") do io
+    open(pipeline(`pygmentize -l $lexer`; stdout=io, stderr=stderr), "w") do io
         print(io, x)
     end
 end
