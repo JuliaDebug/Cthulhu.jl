@@ -1,12 +1,20 @@
 const asm_syntax = Ref(:att)
 
+function highlight(io, lexer, x)
+    Sys.which("pygmentize") === nothing && return print(io, x)
+    open(pipeline(`pygmentize -f terminal256 -O style=lovelace -l $lexer`;
+                  stdout=io, stderr=stderr), "w") do io
+        print(io, x)
+    end
+end
+
 function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params)
     dump = InteractiveUtils._dump_function_linfo(
         mi, params.world, #=native=# false,
         #=wrapper=# false, #=strip_ir_metadata=# true,
         #=dump_module=# false, #=syntax=# asm_syntax[],
         optimize, debuginfo ? :source : :none)
-    print(io, dump)
+    highlight(io, "llvm", dump)
 end
 
 function cthulhu_native(io::IO, mi, optimize, debuginfo, params)
@@ -15,7 +23,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params)
         #=wrapper=# false, #=strip_ir_metadata=# true,
         #=dump_module=# false, #=syntax=# asm_syntax[],
         optimize, debuginfo ? :source : :none)
-    print(io, dump)
+    highlight(io, "asm", dump)
 end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
