@@ -101,3 +101,39 @@ let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos
     @test first(callsites).info isa Cthulhu.MultiCallInfo
 end
 
+let config = Cthulhu.CthulhuConfig(enable_highlighter=false)
+    for lexer in ["llvm", "asm"]
+        @test sprint() do io
+            Cthulhu.highlight(io, "INPUT", lexer, config)
+        end == "INPUT"
+    end
+end
+
+let config = Cthulhu.CthulhuConfig(
+    highlighter = `I_am_hoping_this_command_does_not_exist`,
+    enable_highlighter = true,
+)
+    for lexer in ["llvm", "asm"]
+        @test begin
+            @test_logs (:warn, r"Highlighter command .* does not exist.") begin
+                sprint() do io
+                    Cthulhu.highlight(io, "INPUT", lexer, config)
+                end == "INPUT"
+            end
+        end
+    end
+end
+
+if VERSION >= v"1.1-"
+    let config = Cthulhu.CthulhuConfig(
+        # Implementing `cat` in Julia:
+        highlighter = `$(Base.julia_cmd()) -e "write(stdout, read(stdin))" --`,
+        enable_highlighter = true,
+    )
+        for lexer in ["llvm", "asm"]
+            @test sprint() do io
+                Cthulhu.highlight(io, "INPUT", lexer, config)
+            end == "INPUT"
+        end
+    end
+end

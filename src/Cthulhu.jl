@@ -183,10 +183,18 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         elseif toggle === :debuginfo
             debuginfo ⊻= true
         elseif toggle === :llvm
-            cthulhu_llvm(stdout, mi, optimize, debuginfo, params)
+            cthulhu_llvm(stdout, mi, optimize, debuginfo, params, CONFIG)
             display_CI = false
         elseif toggle === :native
-            cthulhu_native(stdout, mi, optimize, debuginfo, params)
+            cthulhu_native(stdout, mi, optimize, debuginfo, params, CONFIG)
+            display_CI = false
+        elseif toggle === :highlighter
+            CONFIG.enable_highlighter ⊻= true
+            if CONFIG.enable_highlighter
+                @info "Using syntax highlighter $(CONFIG.highlighter)"
+            else
+                @info "Turned off syntax highlighter for LLVM and native code."
+            end
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
