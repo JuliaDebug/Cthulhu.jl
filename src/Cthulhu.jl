@@ -3,7 +3,8 @@ module Cthulhu
 using InteractiveUtils
 using TypedCodeUtils
 
-import TypedCodeUtils: CallInfo, canreflect, reflect, current_params, Reflection
+import TypedCodeUtils: CallInfo, canreflect, reflect, current_params, Reflection,
+                       MICallInfo, MultiCallInfo, FailedCallInfo, GeneratedCallInfo
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
@@ -108,8 +109,6 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-import TypedCodeUtils: MultiCallInfo, recurse
-
 # Cthulhu's inner loop
 function _descend(ref::Reflection; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
     display_CI = true
@@ -199,6 +198,23 @@ function _descend(ref::Reflection; iswarn::Bool, params=current_params(), optimi
 end
 
 function _descend(@nospecialize(F), @nospecialize(TT); kwargs...)
-    ref = reflect(F, TT; kwargs...)
+    reflections = reflect(F, TT; kwargs...)
+    if length(reflections) == 0
+        @info "Can't reflect upon" F, TT
+    end
+    ref = if length(reflections) == 1
+        first(reflections)
+    else
+        callsites = map(r->Callsite(-1, MICallInfo(r.mi, Any)), _ref)
+        menu = CthulhuMenu(callsites, sub_menu=true)
+        cid = request(menu)
+        if cid == length(sub_callsites) + 1
+            return
+        end
+        if cid == -1
+            throw(InterruptException())
+        end
+        reflections[cid]
+    end
     _descend(ref; kwargs...)
 end

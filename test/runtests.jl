@@ -55,22 +55,6 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
-Base.@propagate_inbounds function f(x)
-    @boundscheck error()
-end
-g(x) = @inbounds f(x)
-h(x) = f(x)
-
-let (CI, _, _, _) = process(g, Tuple{Vector{Float64}})
-    @test length(CI.code) == 3
-end
-
-let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
-    @test length(CI.code) == 2
-end
-end
-
 f(a, b) = a + b
 let callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
     @test length(callsites) == 1
