@@ -80,8 +80,8 @@ end
 descend_code_warntype(foo, Tuple{})
 ```
 """
-descend_code_warntype(f, @nospecialize(tt)) =
-    _descend_with_error_handling(f, tt; iswarn=true)
+descend_code_warntype(f, @nospecialize(tt); kwargs...) =
+    _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
 function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
     try
