@@ -1,7 +1,7 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
