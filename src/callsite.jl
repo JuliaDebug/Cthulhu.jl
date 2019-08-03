@@ -131,6 +131,7 @@ function __show_limited(limiter, name, tt, rt)
     print(limiter, ")")
 
     # If we have space for the return type, print it
+    rt === nothing && return
     rts = string(rt)
     if has_space(limiter, textwidth(rts)+2)
         print(limiter, string("::", rts))
