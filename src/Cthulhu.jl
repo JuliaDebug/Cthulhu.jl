@@ -166,7 +166,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
 
             if callsite.info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
-                @error "Calliste %$(callsite.id) failed to be extracted" callsite
+                @error "Callsite %$(callsite.id) failed to be extracted" callsite
             end
 
             # recurse
