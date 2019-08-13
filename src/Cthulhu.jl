@@ -164,18 +164,13 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
             _descend(next_mi; params=params, optimize=optimize,
                      iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
         elseif toggle === :debuginfo
             debuginfo ⊻= true
-        elseif toggle === :llvm
-            cthulhu_llvm(stdout, mi, optimize, debuginfo, params, CONFIG)
-            display_CI = false
-        elseif toggle === :native
-            cthulhu_native(stdout, mi, optimize, debuginfo, params, CONFIG)
-            display_CI = false
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
@@ -190,7 +185,14 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             Core.println()
             display_CI = false
         else
-            error("Unknown option $toggle")
+            #Handle Standard alternative view, e.g. :native, :llvm
+            view_cmd = get(codeviews, toggle, nothing)
+            if view_cmd !== nothing
+                view_cmd(stdout, mi, optimize, debuginfo, params, CONFIG)
+                display_CI = false
+            else
+                error("Unknown option $toggle")
+            end
         end
     end
 end

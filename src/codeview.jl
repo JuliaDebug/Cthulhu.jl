@@ -54,6 +54,8 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     highlight(io, dump, "asm", config)
 end
 
+#function cthulhu_ast(io::IO, 
+
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
 function cthulhu_warntype(io::IO, src, rettype, debuginfo)
     if VERSION < v"1.1.0-DEV.762"
@@ -94,3 +96,12 @@ function cthulu_typed(io::IO, debuginfo, CI, rettype, mi, iswarn)
     end
     println()
 end
+
+# These are standard code views that don't need any special handling,
+# This named tuple maps toggle::Symbol to function
+const codeviews = (;
+    llvm=cthulhu_llvm,
+    native=cthulhu_native,
+   # ast=cthulhu_ast,
+    #source=cthulhu_source,
+)
