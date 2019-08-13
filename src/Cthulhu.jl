@@ -1,5 +1,6 @@
 module Cthulhu
 
+using CodeTracking: definition
 using InteractiveUtils
 
 using Core: MethodInstance
@@ -122,20 +123,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
-        debuginfo_key = debuginfo ? :source : :none
-        if display_CI
-            println()
-            println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rt))))")
-
-            if iswarn
-                cthulhu_warntype(stdout, CI, rt, debuginfo_key)
-            elseif VERSION >= v"1.1.0-DEV.762"
-                show(stdout, CI, debuginfo = debuginfo_key)
-            else
-                display(CI=>rt)
-            end
-            println()
-        end
+        display_CI && cthulu_typed(stdout, debuginfo, CI, rt, mi, iswarn)
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)

@@ -78,3 +78,19 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
     end
     return nothing
 end
+
+
+function cthulu_typed(io::IO, debuginfo, CI, rettype, mi, iswarn)
+    debuginfo_key = debuginfo ? :source : :none
+    println()
+    println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
+
+    if iswarn
+        cthulhu_warntype(stdout, CI, rettype, debuginfo_key)
+    elseif VERSION >= v"1.1.0-DEV.762"
+        show(stdout, CI, debuginfo = debuginfo_key)
+    else
+        display(CI=>rt)
+    end
+    println()
+end
