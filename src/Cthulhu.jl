@@ -199,6 +199,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         elseif toggle === :dump_params
             @info "Dumping inference cache"
             Core.show(map(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
+            Core.println()
             display_CI = false
         else
             error("Unknown option $toggle")
