@@ -109,14 +109,8 @@ const descend = descend_code_typed
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, debuginfo=true, kwargs...)
     display_CI = true
-    debuginfo = true
-    if :debuginfo in keys(kwargs)
-        selected = kwargs[:debuginfo]
-        # TODO: respect default
-        debuginfo = selected == :source
-    end
 
     while true
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
@@ -162,8 +156,9 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             if next_mi === nothing
                 continue
             end
+             
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true

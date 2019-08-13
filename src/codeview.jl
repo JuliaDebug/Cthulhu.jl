@@ -54,7 +54,24 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     highlight(io, dump, "asm", config)
 end
 
-#function cthulhu_ast(io::IO, 
+function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+    meth = mi.def
+    ast = definition(Expr, meth)
+    if ast!==nothing
+        dump(io, ast; maxdepth=typemax(Int))
+        # Or should use: ?
+        #Meta.show_expr(io, ast)
+        # Could even highlight the above as some kind-of LISP
+    else
+        @info "Could not retrieve AST. AST display requires Revise.jl to be loaded." meth
+    end
+end
+
+function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+    meth = mi.def
+    src, line = definition(String, meth)
+    highlight(io, src, "julia", config)
+end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
 function cthulhu_warntype(io::IO, src, rettype, debuginfo)
@@ -98,10 +115,10 @@ function cthulu_typed(io::IO, debuginfo, CI, rettype, mi, iswarn)
 end
 
 # These are standard code views that don't need any special handling,
-# This named tuple maps toggle::Symbol to function
+# This namedtuple maps toggle::Symbol to function
 const codeviews = (;
     llvm=cthulhu_llvm,
     native=cthulhu_native,
-   # ast=cthulhu_ast,
-    #source=cthulhu_source,
+    ast=cthulhu_ast,
+    source=cthulhu_source,
 )
