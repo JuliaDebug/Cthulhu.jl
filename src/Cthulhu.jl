@@ -109,15 +109,22 @@ const descend = descend_code_typed
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, debuginfo=true, kwargs...)
-    display_CI = true
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+    debuginfo = true
+    if :debuginfo in keys(kwargs)
+        selected = kwargs[:debuginfo]
+        # TODO: respect default
+        debuginfo = selected == :source
+    end
+    debuginfo_key = debuginfo ? :source : :none
 
+    display_CI = true
     while true
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
         preprocess_ci!(CI, mi, optimize)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo, CI, rt, mi, iswarn)
+        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn)
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
@@ -156,9 +163,9 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             if next_mi === nothing
                 continue
             end
-             
+
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true

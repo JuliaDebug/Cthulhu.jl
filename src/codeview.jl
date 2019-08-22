@@ -99,8 +99,7 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
 end
 
 
-function cthulu_typed(io::IO, debuginfo, CI, rettype, mi, iswarn)
-    debuginfo_key = debuginfo ? :source : :none
+function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn)
     println()
     println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
 
