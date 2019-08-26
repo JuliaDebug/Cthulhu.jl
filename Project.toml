@@ -1,9 +1,10 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
+CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Requires = "ae029012-a4dd-5104-9daa-d747884805df"
@@ -15,6 +16,7 @@ julia = "1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 
 [targets]
-test = ["Test"]
+test = ["Test", "Revise"]
