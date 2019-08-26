@@ -39,10 +39,13 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuCon
     meth = mi.def
     ast = definition(Expr, meth)
     if ast!==nothing
-        dump(io, ast; maxdepth=typemax(Int))
-        # Or should use: ?
-        #Meta.show_expr(io, ast)
-        # Could even highlight the above as some kind-of LISP
+        if !config.pretty_ast
+            dump(io, ast; maxdepth=typemax(Int))
+        else
+            show(io, ast)
+            # Meta.show_sexpr(io, ast)
+            # Could even highlight the above as some kind-of LISP
+        end
     else
         @info "Could not retrieve AST. AST display requires Revise.jl to be loaded." meth
     end

@@ -11,6 +11,7 @@ Base.@kwdef mutable struct CthulhuConfig
     highlighter::Cmd = `pygmentize -l`
     asm_syntax::Symbol = :att
     dead_code_elimination::Bool = true
+    pretty_ast::Bool = false
 end
 
 """
@@ -27,6 +28,7 @@ end
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
   encounter errors. Please report such bugs with a MWE to Julia or Cthulhu. 
+- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to false.
 """
 const CONFIG = CthulhuConfig()
 
