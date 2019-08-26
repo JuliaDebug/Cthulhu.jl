@@ -29,17 +29,13 @@ else
     code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 end
 
-using Requires
 transform(::Val, callsite) = callsite
-@init @require CUDAnative="be33ccc6-a3ff-5ff2-a52e-74243cff1e17" begin
-    using .CUDAnative
-    function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
-        sptypes = sptypes_from_meth_instance(mi)
-        tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
-        ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
-        isa(tt, Const) || return callsite
-        return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
-    end
+function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
+    sptypes = sptypes_from_meth_instance(mi)
+    tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
+    ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
+    isa(tt, Const) || return callsite
+    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
 end
 
 function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
@@ -83,7 +79,6 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
                 end
                 mi = get_mi(callsite)
-                @debug "Found invoke to" mod=nameof(mi.def.module) name=mi.def.name
                 if nameof(mi.def.module) == :CUDAnative && mi.def.name == :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
                 end
@@ -114,24 +109,32 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
 
                 if isdefined(types[1], :instance) && is_return_type(types[1].instance)
                     callsite = process_return_type(id, c, rt)
-                else
-                    if types[1] isa Union
-                        # Union{typeof(sin), typeof(cos)}
-                        fts = Any[]
-                        function thatcher(u)
-                            if u isa Union
-                                thatcher(u.a)
-                                thatcher(u.b)
-                            else
-                                push!(fts, u)
-                            end
+                elseif types[1] isa Union
+                    # Union{typeof(sin), typeof(cos)}
+                    fts = Any[]
+                    function thatcher(u)
+                        if u isa Union
+                            thatcher(u.a)
+                            thatcher(u.b)
+                        else
+                            push!(fts, u)
                         end
-                        sigs = map(ft-> [ft, types[2:end]], fts)
-                        cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
-                        callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
-                    else
-                        callsite = Callsite(id, callinfo(Tuple{types...}, rt, params=params))
                     end
+                    sigs = map(ft-> [ft, types[2:end]], fts)
+                    cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
+                    callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
+                else
+                    ft = types[1]
+                    name = ft.name
+                    ci = if nameof(name.module) == :CUDAnative && name.name == Symbol("#kw##cufunction")
+                        ft = types[4]
+                        # XXX: Simplify
+                        tt = types[5].parameters[1].parameters
+                        CuCallInfo(callinfo(Tuple{widenconst(ft), tt...}, Nothing, params=params))
+                    else
+                        callinfo(Tuple{types...}, rt, params=params)
+                    end
+                    callsite = Callsite(id, ci)
                 end
             else c.head === :foreigncall
                 # special handling of jl_new_task
