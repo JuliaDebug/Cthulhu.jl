@@ -4,7 +4,7 @@ using Test
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     mi = Cthulhu.first_method_instance(f, TT)
     (ci, rt, slottypes) = Cthulhu.do_typeinf_slottypes(mi, optimize, Cthulhu.current_params())
-    Cthulhu.preprocess_ci!(ci, mi, optimize)
+    Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     ci, mi, rt, slottypes
 end
 

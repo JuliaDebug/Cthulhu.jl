@@ -5,6 +5,30 @@ using InteractiveUtils
 using Core: MethodInstance
 const Compiler = Core.Compiler
 
+Base.@kwdef mutable struct CthulhuConfig
+    enable_highlighter::Bool = false
+    highlighter::Cmd = `pygmentize -l`
+    asm_syntax::Symbol = :att
+    dead_code_elimination::Bool = true
+end
+
+"""
+    Cthulhu.CONFIG
+
+# Options
+- `enable_highlighter::Bool`: Use command line `highlighter` to syntax highlight
+  LLVM and native code.  Set to `true` if `highlighter` exists at the import
+  time.
+- `highlighter::Cmd`: A command line program that receives "llvm" or "asm" as
+  an argument and the code as stdin.  Defaults to `$(CthulhuConfig().highlighter)`.
+- `asm_syntax::Symbol`: Set the syntax of assembly code being used.
+  Defaults to `$(CthulhuConfig().asm_syntax)`.
+- `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
+  Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
+  encounter errors. Please report such bugs with a MWE to Julia or Cthulhu. 
+"""
+const CONFIG = CthulhuConfig()
+
 include("callsite.jl")
 include("reflection.jl")
 include("ui.jl")
@@ -119,7 +143,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
 
     while true
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
-        preprocess_ci!(CI, mi, optimize)
+        preprocess_ci!(CI, mi, optimize, CONFIG)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
         debuginfo_key = debuginfo ? :source : :none
