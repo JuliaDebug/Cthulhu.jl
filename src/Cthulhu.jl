@@ -140,10 +140,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         # TODO: respect default
         debuginfo = selected == :source
     end
-    debuginfo_key = debuginfo ? :source : :none
 
     display_CI = true
     while true
+        debuginfo_key = debuginfo ? :source : :none
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
         preprocess_ci!(CI, mi, optimize, CONFIG)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
