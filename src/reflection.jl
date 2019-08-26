@@ -83,6 +83,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
                 end
                 mi = get_mi(callsite)
+                @debug "Found invoke to" mod=nameof(mi.def.module) name=mi.def.name
                 if nameof(mi.def.module) == :CUDAnative && mi.def.name == :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
                 end
@@ -184,8 +185,8 @@ function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::B
     return (frame.src, result.result, frame.slottypes)
 end
 
-function preprocess_ci!(ci, mi, optimize)
-    if optimize
+function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
+    if optimize && config.dead_code_elimination
         # if the optimizer hasn't run, the IR hasn't been converted
         # to SSA form yet and dce is not legal
         dce!(ci, mi)
