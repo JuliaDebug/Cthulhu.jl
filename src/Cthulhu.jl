@@ -5,6 +5,24 @@ using InteractiveUtils
 using Core: MethodInstance
 const Compiler = Core.Compiler
 
+Base.@kwdef mutable struct CthulhuConfig
+    enable_highlighter::Bool = false
+    highlighter::Cmd = `pygmentize -l`
+    asm_syntax::Symbol = :att
+end
+
+"""
+    Cthulhu.CONFIG
+
+# Options
+- `enable_highlighter::Bool`: Use command line `highlighter` to syntax highlight
+  LLVM and native code.  Set to `true` if `highlighter` exists at the import
+  time.
+- `highlighter::Cmd`: A command line program that receives "llvm" or "asm" as
+  an argument and the code as stdin.  Defaults to `$(CthulhuConfig().highlighter)`.
+"""
+const CONFIG = CthulhuConfig()
+
 include("callsite.jl")
 include("reflection.jl")
 include("ui.jl")

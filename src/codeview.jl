@@ -1,28 +1,9 @@
-Base.@kwdef mutable struct CthulhuConfig
-    enable_highlighter::Bool = false
-    highlighter::Cmd = `pygmentize -l`
-end
-
 highlighter_exists(config::CthulhuConfig) =
     Sys.which(config.highlighter.exec[1]) !== nothing
 
 @init begin
     CONFIG.enable_highlighter = highlighter_exists(CONFIG)
 end
-
-"""
-    Cthulhu.CONFIG
-
-# Options
-- `enable_highlighter::Bool`: Use command line `highlighter` to syntax highlight
-  LLVM and native code.  Set to `true` if `highlighter` exists at the import
-  time.
-- `highlighter::Cmd`: A command line program that receives "llvm" or "asm" as
-  an argument and the code as stdin.  Defaults to `$(CthulhuConfig().highlighter)`.
-"""
-const CONFIG = CthulhuConfig()
-
-const asm_syntax = Ref(:att)
 
 function highlight(io, x, lexer, config::CthulhuConfig)
     config.enable_highlighter || return print(io, x)
@@ -40,7 +21,7 @@ function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuCo
     dump = InteractiveUtils._dump_function_linfo(
         mi, params.world, #=native=# false,
         #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# asm_syntax[],
+        #=dump_module=# false, #=syntax=# config.asm_syntax,
         optimize, debuginfo ? :source : :none)
     highlight(io, dump, "llvm", config)
 end
@@ -49,7 +30,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     dump = InteractiveUtils._dump_function_linfo(
         mi, params.world, #=native=# true,
         #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# asm_syntax[],
+        #=dump_module=# false, #=syntax=# config.asm_syntax,
         optimize, debuginfo ? :source : :none)
     highlight(io, dump, "asm", config)
 end
