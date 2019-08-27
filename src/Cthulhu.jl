@@ -11,6 +11,7 @@ Base.@kwdef mutable struct CthulhuConfig
     highlighter::Cmd = `pygmentize -l`
     asm_syntax::Symbol = :att
     dead_code_elimination::Bool = true
+    pretty_ast::Bool = false
 end
 
 """
@@ -27,6 +28,7 @@ end
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
   encounter errors. Please report such bugs with a MWE to Julia or Cthulhu. 
+- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to false.
 """
 const CONFIG = CthulhuConfig()
 
@@ -140,10 +142,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         # TODO: respect default
         debuginfo = selected == :source
     end
-    debuginfo_key = debuginfo ? :source : :none
 
     display_CI = true
     while true
+        debuginfo_key = debuginfo ? :source : :none
         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
         preprocess_ci!(CI, mi, optimize, CONFIG)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
