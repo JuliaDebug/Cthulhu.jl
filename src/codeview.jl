@@ -1,9 +1,7 @@
 highlighter_exists(config::CthulhuConfig) =
     Sys.which(config.highlighter.exec[1]) !== nothing
 
-@init begin
-    CONFIG.enable_highlighter = highlighter_exists(CONFIG)
-end
+__init__() = CONFIG.enable_highlighter = highlighter_exists(CONFIG)
 
 function highlight(io, x, lexer, config::CthulhuConfig)
     config.enable_highlighter || return print(io, x)
