@@ -170,7 +170,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             if callsite.info isa MultiCallInfo
                 sub_callsites = map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
                 if isempty(sub_callsites)
-                    @warn "Found MultiCallInfo, but sub callinfos is empty"
+                    @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
                     continue
                 end
                 menu = CthulhuMenu(sub_callsites, sub_menu=true)
