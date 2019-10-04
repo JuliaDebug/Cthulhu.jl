@@ -95,12 +95,41 @@ let callsites = find_callsites_by_ftt(ftask, Tuple{})
     @test !isempty(filter(c->c.info isa Cthulhu.TaskCallInfo, callsites))
 end
 
+##
+# Union{f, g}
+##
 callf(f::F, x) where F = f(x)
 let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos)}, Float64})
     @test !isempty(callsites)
     @test first(callsites).info isa Cthulhu.MultiCallInfo
+    callinfos = first(callsites).info.callinfos
+    @test !isempty(callinfos)
+    mis = map(Cthulhu.get_mi, callinfos)
+    @test any(mi->mi.def.name == :cos, mis)
+    @test any(mi->mi.def.name == :sin, mis)
 end
 
+function toggler(toggle)
+    if toggle
+        g = sin
+    else
+        g = cos
+    end
+    g(0.0)
+end
+let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
+    @test !isempty(callsites)
+    @test first(callsites).info isa Cthulhu.MultiCallInfo
+    callinfos = first(callsites).info.callinfos
+    @test !isempty(callinfos)
+    mis = map(Cthulhu.get_mi, callinfos)
+    @test any(mi->mi.def.name == :cos, mis)
+    @test any(mi->mi.def.name == :sin, mis)
+end
+
+##
+# Cthulhu config test
+##
 let config = Cthulhu.CthulhuConfig(enable_highlighter=false)
     for lexer in ["llvm", "asm"]
         @test sprint() do io

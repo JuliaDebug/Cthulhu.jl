@@ -120,7 +120,8 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                             push!(fts, u)
                         end
                     end
-                    sigs = map(ft-> [ft, types[2:end]], fts)
+                    thatcher(types[1])
+                    sigs = map(ft-> [ft, types[2:end]...], fts)
                     cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
                     callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
                 else
