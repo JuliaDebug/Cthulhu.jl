@@ -120,7 +120,8 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                             push!(fts, u)
                         end
                     end
-                    sigs = map(ft-> [ft, types[2:end]], fts)
+                    thatcher(types[1])
+                    sigs = map(ft-> [ft, types[2:end]...], fts)
                     cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
                     callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
                 else
@@ -203,7 +204,25 @@ else
     current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
 end
 
-function callinfo(sig, rt; params=current_params())
+function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
+    sig = Base.signature_type(F, TT)
+    first_method_instance(sig; params=params)
+end
+
+function first_method_instance(@nospecialize(sig); params=current_params())
+    ci = callinfo(sig, Any, 1, params=params)
+    if ci isa Union{GeneratedCallInfo, FailedCallInfo, MultiCallInfo}
+        if ci isa MultiCallInfo
+            @warn "expected single CallInfo got multiple" ci
+        end
+        return nothing
+    else
+        @assert ci isa MICallInfo
+        return get_mi(ci)
+    end
+end
+
+function callinfo(sig, rt, max=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, -1, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
@@ -216,30 +235,14 @@ function callinfo(sig, rt; params=current_params())
         else
             mi = code_for_method(meth, atypes, sparams, params.world)
             if mi !== nothing
-                push!(callinfos, MICallInfo(mi, rt)) 
-            else 
-                push!(callinfos, FailedCallInfo(sig, rt)) 
+                push!(callinfos, MICallInfo(mi, rt))
+            else
+                push!(callinfos, FailedCallInfo(sig, rt))
             end
         end
     end
-    
+
     @assert length(callinfos) != 0
     length(callinfos) == 1 && return first(callinfos)
     return MultiCallInfo(sig, rt, callinfos)
-end
-
-function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
-    sig = Base.signature_type(F, TT)
-    first_method_instance(sig; params=params)
-end
-
-function first_method_instance(@nospecialize(sig); params=current_params())
-    methds = Base._methods_by_ftype(sig, 1, params.world)
-    (methds === false || length(methds) < 1) && return nothing
-    x = methds[1]
-    meth = x[3]
-    if isdefined(meth, :generator) && !isdispatchtuple(Tuple{sig.parameters[2:end]...})
-        return nothing
-    end
-    mi = code_for_method(meth, sig, x[2], params.world)
 end

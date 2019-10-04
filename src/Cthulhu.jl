@@ -27,7 +27,7 @@ end
   Defaults to `$(CthulhuConfig().asm_syntax)`.
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
-  encounter errors. Please report such bugs with a MWE to Julia or Cthulhu. 
+  encounter errors. Please report such bugs with a MWE to Julia or Cthulhu.
 - `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to false.
 """
 const CONFIG = CthulhuConfig()
@@ -169,6 +169,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
 
             if callsite.info isa MultiCallInfo
                 sub_callsites = map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
+                if isempty(sub_callsites)
+                    @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
+                    continue
+                end
                 menu = CthulhuMenu(sub_callsites, sub_menu=true)
                 cid = request(menu)
                 if cid == length(sub_callsites) + 1
