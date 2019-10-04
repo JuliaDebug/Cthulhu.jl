@@ -24,7 +24,7 @@ function test()
 end
 
 let callsites = find_callsites_by_ftt(test, Tuple{})
-    @test length(callsites) == 4
+    @test length(callsites) >= 4
 end
 
 let callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
