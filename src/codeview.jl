@@ -16,20 +16,35 @@ function highlight(io, x, lexer, config::CthulhuConfig)
 end
 
 function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
-    dump = InteractiveUtils._dump_function_linfo(
-        mi, params.world, #=native=# false,
-        #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# config.asm_syntax,
-        optimize, debuginfo ? :source : :none)
+    @static if VERSION >= v"1.5.0-DEV.393"
+        dump = InteractiveUtils._dump_function_linfo_llvm(
+            mi, params.world,
+            #=wrapper=# false, #=strip_ir_metadata=# true,
+            #=dump_module=# false,
+            optimize, debuginfo ? :source : :none, Base.CodegenParams())
+    else
+        dump = InteractiveUtils._dump_function_linfo(
+            mi, params.world, #=native=# false,
+            #=wrapper=# false, #=strip_ir_metadata=# true,
+            #=dump_module=# false, #=syntax=# config.asm_syntax,
+            optimize, debuginfo ? :source : :none)
+    end
     highlight(io, dump, "llvm", config)
 end
 
 function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
-    dump = InteractiveUtils._dump_function_linfo(
-        mi, params.world, #=native=# true,
-        #=wrapper=# false, #=strip_ir_metadata=# true,
-        #=dump_module=# false, #=syntax=# config.asm_syntax,
-        optimize, debuginfo ? :source : :none)
+    @static if VERSION >= v"1.5.0-DEV.393"
+        dump = InteractiveUtils._dump_function_linfo_native(
+            mi, params.world,
+            #=wrapper=# false, #=syntax=# config.asm_syntax,
+            debuginfo ? :source : :none)
+    else
+        dump = InteractiveUtils._dump_function_linfo(
+            mi, params.world, #=native=# true,
+            #=wrapper=# false, #=strip_ir_metadata=# true,
+            #=dump_module=# false, #=syntax=# config.asm_syntax,
+            optimize, debuginfo ? :source : :none)
+    end
     highlight(io, dump, "asm", config)
 end
 
