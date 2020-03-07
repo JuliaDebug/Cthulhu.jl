@@ -125,7 +125,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
                     callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
                 else
-                    ft = types[1]
+                    ft = Base.unwrap_unionall(types[1])
                     name = ft.name
                     ci = if nameof(name.module) == :CUDAnative && name.name == Symbol("#kw##cufunction")
                         ft = types[4]
