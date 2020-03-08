@@ -29,11 +29,6 @@ descend(foo, Tuple{})
 @descend foo()
 ```
 
-### Examples
-
-#### `@descend optimize=true foo()`
-[![asciicast1](https://asciinema.org/a/y3a7kR38nbDGdm98kL9yZcUJA.svg)](https://asciinema.org/a/y3a7kR38nbDGdm98kL9yZcUJA)
-
 ## Methods
 
 - `@descend_code_typed`
