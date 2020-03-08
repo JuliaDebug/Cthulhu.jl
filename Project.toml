@@ -5,7 +5,6 @@ version = "0.1.2"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 TerminalMenus = "dc548174-15c3-5faf-af27-7997cfbde655"
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
@@ -14,8 +13,8 @@ Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 julia = "1"
 
 [extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test", "Revise"]

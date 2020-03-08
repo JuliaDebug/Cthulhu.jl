@@ -1,5 +1,3 @@
-using Crayons
-using Crayons.Box
 using Unicode
 
 abstract type CallInfo; end
