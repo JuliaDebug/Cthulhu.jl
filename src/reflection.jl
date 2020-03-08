@@ -102,6 +102,23 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 end
                 ok || continue
 
+                if VERSION >= v"1.4.0"
+                    # Look through _apply_iterate
+                    if types[1] === typeof(Core._apply_iterate)
+                        ok = true
+                        new_types = Any[types[3]]
+                        for t in types[4:end]
+                            if !(t <: Tuple) || t isa Union
+                                ok = false
+                                break
+                            end
+                            append!(new_types, t.parameters)
+                        end
+                        ok || continue
+                        types = new_types
+                    end
+                end
+
                 # Filter out builtin functions and intrinsic function
                 if types[1] <: Core.Builtin || types[1] <: Core.IntrinsicFunction
                     continue
