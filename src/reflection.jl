@@ -102,7 +102,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 end
                 ok || continue
 
-                if VERSION >= v"1.4.0"
+                @static if VERSION >= v"1.4.0-DEV.304"
                     # Look through _apply_iterate
                     if types[1] === typeof(Core._apply_iterate)
                         ok = true
