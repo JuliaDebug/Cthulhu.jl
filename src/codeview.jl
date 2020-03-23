@@ -97,17 +97,17 @@ end
 
 
 function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn)
-    println()
-    println("│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
+    println(io)
+    println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
 
     if iswarn
-        cthulhu_warntype(stdout, CI, rettype, debuginfo_key)
+        cthulhu_warntype(io, CI, rettype, debuginfo_key)
     elseif VERSION >= v"1.1.0-DEV.762"
-        show(stdout, CI, debuginfo = debuginfo_key)
+        show(io, CI, debuginfo = debuginfo_key)
     else
-        display(CI=>rt)
+        show(io, MIME"text/plain"(), CI=>rettype)
     end
-    println()
+    println(io)
 end
 
 # These are standard code views that don't need any special handling,
@@ -118,3 +118,72 @@ const codeviews = (;
     ast=cthulhu_ast,
     source=cthulhu_source,
 )
+
+"""
+    Cthulhu.Bookmark
+
+A `Cthulhu.Bookmark` remembers a method marked by `b` key during a descent.
+It can be used with the following functions:
+
+* `descend(::Bookmark)`, `descend_code_typed(::Bookmark)`,
+  `descend_code_warntype(::Bookmark)`: continue the descent.
+* `code_typed(::Bookmark)`, `code_warntype([::IO,] ::Bookmark)`: show typed IR
+* `code_llvm([::IO,] ::Bookmark)`: pretty-print LLVM IR
+* `code_native([::IO,] ::Bookmark)`: pretty-print native code
+"""
+struct Bookmark
+    mi::MethodInstance
+    params::CompilerParams
+end
+
+"""
+    Cthulhu.BOOKMARKS :: Vector{Bookmark}
+
+During a descent, methods can be "bookmarked" by pressing `b` key.  It
+pushes a [`Cthulhu.Bookmark`](@ref) into `Cthulhu.BOOKMARKS`.  This can be
+used to, e.g., continue descending by `descend(Cthulhu.BOOKMARKS[end])`.
+See [`Cthulhu.Bookmark`](@ref) for other usages.
+"""
+const BOOKMARKS = Bookmark[]
+
+# Default `show` is broken for `Core.Compiler.Params`. Trying not invoke it.
+Base.show(io::IO, b::Bookmark) =
+    print(io, "Cthulhu.Bookmark(", b.mi, ", ::", CompilerParams, ")")
+
+# Turn off `optimize` and `debuginfo` for default `show` so that the
+# output is smaller.
+function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
+                   optimize = false, debuginfo = :none, iswarn=false)
+    CI, rt = InteractiveUtils.code_typed(b, optimize = optimize)
+    if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
+        print(io, Callsite(-1, MICallInfo(b.mi, rt)))
+        print(io, " (world: ", b.params.world, ")")
+        return
+    end
+    println(io, "Cthulhu.Bookmark (world: ", b.params.world, ")")
+    cthulu_typed(io, debuginfo, CI, rt, b.mi, iswarn)
+end
+
+function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
+    (CI, rt, slottypes) = do_typeinf_slottypes(b.mi, optimize, b.params)
+    preprocess_ci!(CI, b.mi, optimize, CONFIG)
+    return CI => rt
+end
+
+InteractiveUtils.code_warntype(b::Bookmark; kw...) =
+    InteractiveUtils.code_warntype(stdout, b; kw...)
+function InteractiveUtils.code_warntype(io::IO, b::Bookmark; debuginfo = :source, kw...)
+    CI, rt = InteractiveUtils.code_typed(b; kw...)
+    cthulhu_warntype(io, CI, rt, debuginfo)
+end
+
+InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout, b)
+InteractiveUtils.code_llvm(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
+                           config = CONFIG) =
+    cthulhu_llvm(io, b.mi, optimize, debuginfo == :source, b.params, config)
+
+InteractiveUtils.code_native(b::Bookmark; kw...) =
+    InteractiveUtils.code_native(stdout, b; kw...)
+InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
+                             config = CONFIG) =
+    cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)

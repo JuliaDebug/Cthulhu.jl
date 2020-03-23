@@ -41,7 +41,7 @@ TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 function TerminalMenus.header(m::CthulhuMenu)
     m.sub_menu && return ""
     """
-    Select a call to descend into or ↩ to ascend. [q]uit.
+    Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.
     Toggles: [o]ptimize, [w]arn, [d]ebuginfo, [s]yntax highlight for Source/LLVM/Native.
     Show: [S]ource code, [A]ST, [L]LVM IR, [N]ative code
     Advanced: dump [P]arams cache.
@@ -76,6 +76,9 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('P')
         m.toggle = :dump_params
+        return true
+    elseif key == UInt32('b')
+        m.toggle = :bookmark
         return true
     end
     return false
