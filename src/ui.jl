@@ -1,5 +1,5 @@
-import TerminalMenus
-import TerminalMenus: request
+import REPL.TerminalMenus
+import REPL.TerminalMenus: request
 
 mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     options::Vector{String}
