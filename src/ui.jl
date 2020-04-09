@@ -86,6 +86,18 @@ function TerminalMenus.pick(menu::CthulhuMenu, cursor::Int)
     return true #break out of the menu
 end
 
+function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool)
+    cursor_len = length(TerminalMenus.CONFIG[:cursor])
+    # print a ">" on the selected entry
+    cursor ? print(buf, TerminalMenus.CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
+    print(buf, " ") # Space between cursor and text
+
+    line = replace(menu.options[idx], "\n" => "\\n")
+
+    print(buf, line)
+end
+
+# This used to be the original method, the above is for compatibility with Base.REPL
 function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool, term_width::Int)
     cursor_len = length(TerminalMenus.CONFIG[:cursor])
     # print a ">" on the selected entry
