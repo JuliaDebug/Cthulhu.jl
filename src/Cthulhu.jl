@@ -37,7 +37,7 @@ include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 
-export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
+export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype, @descend_str
 
 """
     @descend_code_typed
@@ -232,6 +232,22 @@ end
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
     mi = first_method_instance(F, TT; params=params)
     _descend(mi; params=params, kwargs...)
+end
+
+macro descend_str(abstract_call)
+    r = findfirst("(", abstract_call)
+    if r === nothing
+        error("Does not contain a '('")
+    end
+    fname = abstract_call[1:(first(r)-1)]
+    sig   = abstract_call[first(r):end]
+    sig   = replace(sig, "::" => "")
+    sig   = Meta.parse(sig)
+    func  = Meta.parse(fname)
+
+    quote
+        $descend($func, $Tuple{$sig...})
+    end
 end
 
 end
