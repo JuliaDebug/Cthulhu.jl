@@ -61,7 +61,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 callinfo = FailedCallInfo(sig, rt)
             end
         else
-            callinfo = FailedCallInfo((ft, argTs), rt)
+            callinfo = FailedCallInfo(Tuple{ft, argTs}, rt)
         end
         return Callsite(id, ReturnTypeCallInfo(callinfo))
     end
