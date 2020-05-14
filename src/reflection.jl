@@ -48,6 +48,9 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
         arg_base = is_call ? 0 : 1
         length(c.args) == (arg_base + 3) || return nothing
         ft = argextype(c.args[arg_base + 2], CI, sptypes, slottypes)
+        if isa(ft, Const)
+            ft = ft.val
+        end
         argTs = argextype(c.args[arg_base + 3], CI, sptypes, slottypes)
         if isa(argTs, Const)
             sig = Tuple{widenconst(ft), argTs.val.parameters...}
@@ -58,7 +61,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 callinfo = FailedCallInfo(sig, rt)
             end
         else
-            callinfo = FailedCallInfo((ft, argTs), rt)
+            callinfo = FailedCallInfo(Base.signature_type(ft, argTs), rt)
         end
         return Callsite(id, ReturnTypeCallInfo(callinfo))
     end
