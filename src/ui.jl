@@ -1,5 +1,5 @@
-import TerminalMenus
-import TerminalMenus: request
+import REPL.TerminalMenus
+import REPL.TerminalMenus: request
 
 mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     options::Vector{String}
@@ -79,6 +79,11 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('b')
         m.toggle = :bookmark
+    elseif key == UInt32('r')
+        m.toggle = :revise
+        return true
+    elseif key == UInt32('e')
+        m.toggle = :edit
         return true
     end
     return false
@@ -89,6 +94,18 @@ function TerminalMenus.pick(menu::CthulhuMenu, cursor::Int)
     return true #break out of the menu
 end
 
+function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool)
+    cursor_len = length(TerminalMenus.CONFIG[:cursor])
+    # print a ">" on the selected entry
+    cursor ? print(buf, TerminalMenus.CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
+    print(buf, " ") # Space between cursor and text
+
+    line = replace(menu.options[idx], "\n" => "\\n")
+
+    print(buf, line)
+end
+
+# This used to be the original method, the above is for compatibility with Base.REPL
 function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool, term_width::Int)
     cursor_len = length(TerminalMenus.CONFIG[:cursor])
     # print a ">" on the selected entry
