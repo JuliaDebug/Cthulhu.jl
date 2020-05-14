@@ -73,6 +73,7 @@ end
 
 """
     descend_code_typed(f, tt; kwargs...)
+    descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
 `code_typed` by descending into `invoke` statements. Type enter to select an
@@ -94,6 +95,7 @@ descend_code_typed(f, @nospecialize(tt); kwargs...) =
 
 """
     descend_code_warntype(f, tt)
+    descend_code_warntype(Cthulhu.BOOKMARKS[i])
 
 Given a function and a tuple-type, interactively explore the output of
 `code_warntype` by descending into `invoke` statements. Type enter to select an
@@ -113,9 +115,10 @@ descend_code_warntype(foo, Tuple{})
 descend_code_warntype(f, @nospecialize(tt); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(f, @nospecialize(tt); kwargs...)
+function _descend_with_error_handling(args...; kwargs...)
+    @nospecialize
     try
-        _descend(f, tt; kwargs...)
+        _descend(args...; kwargs...)
     catch x
         if x isa InterruptException
             return nothing
@@ -219,6 +222,10 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             Core.show(map(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
             Core.println()
             display_CI = false
+        elseif toggle === :bookmark
+            push!(BOOKMARKS, Bookmark(mi, params))
+            @info "The method is pushed at the end of `Cthulhu.BOOKMARKS`."
+            display_CI = false
         elseif toggle === :revise
             # Call Revise.revise() without introducing a dependency on Revise
             id = Base.PkgId(UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
@@ -247,6 +254,12 @@ function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), 
     mi = first_method_instance(F, TT; params=params)
     _descend(mi; params=params, kwargs...)
 end
+
+descend_code_typed(b::Bookmark; kw...) =
+    _descend_with_error_handling(b.mi; iswarn = false, params = b.params, kw...)
+
+descend_code_warntype(b::Bookmark; kw...) =
+    _descend_with_error_handling(b.mi; iswarn = true, params = b.params, kw...)
 
 function ascend(mi::MethodInstance)
     calls, mis = treelist(mi)

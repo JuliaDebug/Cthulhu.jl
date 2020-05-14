@@ -219,9 +219,11 @@ function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
 end
 
 if :trace_inference_limits in fieldnames(Core.Compiler.Params)
-    current_params() = Core.Compiler.CustomParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
+    const CompilerParams = Core.Compiler.CustomParams
+    current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
 else
-    current_params() = Core.Compiler.Params(ccall(:jl_get_world_counter, UInt, ()))
+    const CompilerParams = Core.Compiler.Params
+    current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()))
 end
 
 function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
