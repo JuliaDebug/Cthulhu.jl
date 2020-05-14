@@ -36,8 +36,10 @@ include("callsite.jl")
 include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
+include("backedges.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
+export ascend
 
 """
     @descend_code_typed
@@ -135,7 +137,7 @@ const descend = descend_code_typed
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, kwargs...)
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -163,7 +165,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 break
             end
             if cid == -1
-                throw(InterruptException())
+                interruptexc ? throw(InterruptException()) : break
             end
             callsite = callsites[cid]
 
@@ -179,7 +181,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                     continue
                 end
                 if cid == -1
-                    throw(InterruptException())
+                    interruptexc ? throw(InterruptException()) : break
                 end
                 callsite = sub_callsites[cid]
             end
@@ -232,6 +234,20 @@ end
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
     mi = first_method_instance(F, TT; params=params)
     _descend(mi; params=params, kwargs...)
+end
+
+function ascend(mi::MethodInstance)
+    calls, mis = treelist(mi)
+    menu = TerminalMenus.RadioMenu(calls)
+    choice = 1
+    while choice != -1
+        choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu)
+        if choice != -1
+            # The main application of `ascend` is finding cases of non-inferability, so the
+            # warn highlighting is useful.
+            _descend(mis[choice], iswarn=true, optimize=false, interruptexc=false)
+        end
+    end
 end
 
 end
