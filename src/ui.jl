@@ -77,6 +77,12 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('P')
         m.toggle = :dump_params
         return true
+    elseif key == UInt32('r')
+        m.toggle = :revise
+        return true
+    elseif key == UInt32('e')
+        m.toggle = :edit
+        return true
     end
     return false
 end

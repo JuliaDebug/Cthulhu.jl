@@ -1,7 +1,8 @@
 module Cthulhu
 
-using CodeTracking: definition
+using CodeTracking: definition, whereis
 using InteractiveUtils
+using UUIDs
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
@@ -218,6 +219,17 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             Core.show(map(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
             Core.println()
             display_CI = false
+        elseif toggle === :revise
+            # Call Revise.revise() without introducing a dependency on Revise
+            id = Base.PkgId(UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
+            mod = get(Base.loaded_modules, id, nothing)
+            if mod !== nothing
+                revise = getfield(mod, :revise)
+                revise()
+                mi = first_method_instance(mi.specTypes)
+            end
+        elseif toggle === :edit
+            edit(whereis(mi.def)...)
         else
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(codeviews, toggle, nothing)
