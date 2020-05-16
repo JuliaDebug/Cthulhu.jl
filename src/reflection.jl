@@ -194,19 +194,37 @@ function dce!(ci, mi)
 end
 end
 
-function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, params::Core.Compiler.Params)
-    ccall(:jl_typeinf_begin, Cvoid, ())
-    result = Core.Compiler.InferenceResult(mi)
-    frame = Core.Compiler.InferenceState(result, false, params)
-    frame === nothing && return (nothing, Any)
-    if Compiler.typeinf(frame) && run_optimizer
-        opt = Compiler.OptimizationState(frame)
-        Compiler.optimize(opt, result.result)
-        opt.src.inferred = true
+if isdefined(Core.Compiler, :AbstractInterpreter)
+    function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
+        ccall(:jl_typeinf_begin, Cvoid, ())
+        result = Core.Compiler.InferenceResult(mi)
+        frame = Core.Compiler.InferenceState(result, false, interp)
+        frame === nothing && return (nothing, Any)
+        if Compiler.typeinf(interp, frame) && run_optimizer
+            oparams = Core.Compiler.OptimizationParams(interp)
+            opt = Compiler.OptimizationState(frame, oparams, interp)
+            Compiler.optimize(opt, oparams, result.result)
+            opt.src.inferred = true
+        end
+        ccall(:jl_typeinf_end, Cvoid, ())
+        frame.inferred || return (nothing, Any)
+        return (frame.src, result.result, frame.slottypes)
     end
-    ccall(:jl_typeinf_end, Cvoid, ())
-    frame.inferred || return (nothing, Any)
-    return (frame.src, result.result, frame.slottypes)
+else
+    function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, params::Core.Compiler.Params)
+        ccall(:jl_typeinf_begin, Cvoid, ())
+        result = Core.Compiler.InferenceResult(mi)
+        frame = Core.Compiler.InferenceState(result, false, params)
+        frame === nothing && return (nothing, Any)
+        if Compiler.typeinf(frame) && run_optimizer
+            opt = Compiler.OptimizationState(frame)
+            Compiler.optimize(opt, result.result)
+            opt.src.inferred = true
+        end
+        ccall(:jl_typeinf_end, Cvoid, ())
+        frame.inferred || return (nothing, Any)
+        return (frame.src, result.result, frame.slottypes)
+    end
 end
 
 function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
@@ -218,12 +236,17 @@ function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
     end
 end
 
-if :trace_inference_limits in fieldnames(Core.Compiler.Params)
-    const CompilerParams = Core.Compiler.CustomParams
-    current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
+if isdefined(Core.Compiler, :AbstractInterpreter)
+    const CompilerParams = Core.Compiler.NativeInterpreter
+    current_params() = CompilerParams()
 else
-    const CompilerParams = Core.Compiler.Params
-    current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()))
+    if :trace_inference_limits in fieldnames(Core.Compiler.Params)
+        const CompilerParams = Core.Compiler.CustomParams
+        current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
+    else
+        const CompilerParams = Core.Compiler.Params
+        current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()))
+    end
 end
 
 function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
