@@ -133,7 +133,7 @@ end
     ioctx = IOContext(io, :color=>true)
     Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none)
     str = String(take!(io))
-    @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
+    VERSION >= v"1.2" && @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
 
 ##

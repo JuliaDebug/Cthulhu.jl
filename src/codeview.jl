@@ -84,7 +84,7 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-        show_variables(io, src, slotnames)
+        VERSION >= v"1.2" && show_variables(io, src, slotnames)
     end
     print(io, "Body")
     InteractiveUtils.warntype_type_printer(io, rettype, true)
