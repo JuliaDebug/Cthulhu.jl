@@ -15,7 +15,7 @@ struct FailedCallInfo <: CallInfo
     rt
 end
 
-function get_mi(ci::FailedCallInfo) 
+function get_mi(ci::FailedCallInfo)
     @error "MethodInstance extraction failed" ci.sig ci.rt
     return nothing
 end
@@ -25,7 +25,7 @@ struct GeneratedCallInfo <: CallInfo
     sig
     rt
 end
-function get_mi(genci::GeneratedCallInfo) 
+function get_mi(genci::GeneratedCallInfo)
     @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
     return nothing
 end
@@ -185,3 +185,16 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " >")
     end
 end
+
+is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
+is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
+is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
+is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
+function is_callsite(info::MultiCallInfo, mi::MethodInstance)
+    for csi in info.callinfos
+        is_callsite(csi, mi) && return true
+    end
+    return false
+end
+is_callsite(::CallInfo, mi::MethodInstance) = false
