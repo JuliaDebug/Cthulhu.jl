@@ -80,9 +80,11 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
         lineprinter = Base.IRShow.__debuginfo[debuginfo]
     end
 
-    lambda_io::IOContext = stdout
+    lambda_io::IOContext = io
     if src.slotnames !== nothing
-        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES =>  Base.sourceinfo_slotnames(src))
+        slotnames = Base.sourceinfo_slotnames(src)
+        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
+        VERSION >= v"1.2" && show_variables(io, src, slotnames)
     end
     print(io, "Body")
     InteractiveUtils.warntype_type_printer(io, rettype, true)
@@ -106,6 +108,19 @@ function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn)
         show(io, CI, debuginfo = debuginfo_key)
     else
         show(io, MIME"text/plain"(), CI=>rettype)
+    end
+    println(io)
+end
+
+function show_variables(io, src, slotnames)
+    println(io, "Variables")
+    slottypes = src.slottypes
+    for i = 1:length(slotnames)
+        print(io, "  ", slotnames[i])
+        if isa(slottypes, Vector{Any})
+            InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
+        end
+        println(io)
     end
     println(io)
 end
