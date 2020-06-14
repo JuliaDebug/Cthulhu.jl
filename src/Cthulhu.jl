@@ -146,7 +146,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
         # TODO: respect default
-        debuginfo = selected == :source
+        debuginfo = selected === :source
     end
 
     display_CI = true

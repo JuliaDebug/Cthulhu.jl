@@ -82,7 +82,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                     callsite = Callsite(id, MICallInfo(c.args[1], rt))
                 end
                 mi = get_mi(callsite)
-                if nameof(mi.def.module) == :CUDAnative && mi.def.name == :cufunction
+                if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
                 end
             elseif c.head === :call
@@ -147,7 +147,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                 else
                     ft = Base.unwrap_unionall(types[1])
                     name = ft.name
-                    ci = if nameof(name.module) == :CUDAnative && name.name == Symbol("#kw##cufunction")
+                    ci = if nameof(name.module) === :CUDAnative && name.name === Symbol("#kw##cufunction")
                         ft = types[4]
                         # XXX: Simplify
                         tt = types[5].parameters[1].parameters
