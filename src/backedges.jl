@@ -52,26 +52,61 @@ end
 function stripType(@nospecialize(typ))
     if isa(typ, UnionAll)
         typ = Base.unwrap_unionall(typ)
-    elseif isa(typ, TypeVar)
+    elseif isa(typ, TypeVar) || isa(typ, Union)
         return typ
     end
-    return typ <: Type ? typ.parameters[1] : typ
+    return typ <: Type && length(typ.parameters) == 1 ? typ.parameters[1] : typ
 end
 nonconcrete_red(@nospecialize(typ)) = isconcretetype(stripType(typ)) ? :nothing : :red
 
-treelist(mi::MethodInstance) = treelist!(String[], MethodInstance[], IOBuffer(), mi, "", Base.IdSet{MethodInstance}())
+const _emptybackedges = MethodInstance[]
+# Extension API
+backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _emptybackedges
+method(mi::MethodInstance) = mi.def
+specTypes(mi::MethodInstance) = mi.specTypes
+instance(mi::MethodInstance) = mi
 
-function treelist!(strs, mis, io::IO, mi::MethodInstance, indent::AbstractString, visited::Base.IdSet)
-    mi ∈ visited && return strs, mis
-    push!(visited, mi)
-    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), mi.def.name, mi.specTypes)
-    push!(strs, indent * String(take!(io)))
-    push!(mis, mi)
-    if isdefined(mi, :backedges)
+function callstring(io, mi)
+    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(mi).name, specTypes(mi))
+    return String(take!(io))
+end
+
+if has_treemenu
+    struct Data{T}
+        callstr::String
+        nd::T
+    end
+
+    function treelist(mi)
+        io = IOBuffer()
+        str = callstring(io, mi)
+        treelist!(Node(Data(str, mi)), io, mi, "", Base.IdSet{typeof(mi)}())
+    end
+    function treelist!(parent::Node, io, mi, indent::AbstractString, visited::Base.IdSet)
+        mi ∈ visited && return parent
+        push!(visited, mi)
         indent *= " "
-        for edge in mi.backedges
+        for edge in backedges(mi)
+            str = indent * callstring(io, edge)
+            child = Node(Data(str, edge), parent)
+            treelist!(child, io, edge, indent, visited)
+        end
+        return parent
+    end
+else
+    # TreeMenu can't be implemented, fallback to non-folding menu
+    treelist(mi) = treelist!(String[], typeof(mi)[], IOBuffer(), mi, "", Base.IdSet{typeof(mi)}())
+
+    function treelist!(strs, mis, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
+        mi ∈ visited && return strs, mis
+        push!(visited, mi)
+        str = indent * callstring(io, mi)
+        push!(strs, str)
+        push!(mis, mi)
+        indent *= " "
+        for edge in backedges(mi)
             treelist!(strs, mis, io, edge, indent, visited)
         end
+        return strs, mis
     end
-    return strs, mis
 end

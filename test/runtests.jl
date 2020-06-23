@@ -1,4 +1,6 @@
 using Cthulhu
+using REPL
+using InteractiveUtils
 using Test
 
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
@@ -134,6 +136,25 @@ end
     Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none)
     str = String(take!(io))
     VERSION >= v"1.2" && @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
+end
+
+##
+# backedges & treelist
+##
+fbackedge1() = 1
+fbackedge2(x) = x > 0 ? fbackedge1() : -fbackedge1()
+@test fbackedge2(0.2) == 1
+@test fbackedge2(-0.2) == -1
+mspec = @which(fbackedge1()).specializations
+mi = isa(mspec, Core.SimpleVector) ? mspec[1] : mspec.func
+if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
+    root = Cthulhu.treelist(mi)
+    @test Cthulhu.count_open_leaves(root) == 2
+    @test root.data.callstr == "fbackedge1()"
+    @test root.children[1].data.callstr == " fbackedge2(::Float64)"
+else
+    strs, mis = Cthulhu.treelist(mi)
+    @test strs == ["fbackedge1()", " fbackedge2(::Float64)"]
 end
 
 ##

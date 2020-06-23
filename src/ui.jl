@@ -1,5 +1,11 @@
-import REPL.TerminalMenus
+using REPL.TerminalMenus
 import REPL.TerminalMenus: request
+
+const has_treemenu = isdefined(TerminalMenus, :ConfiguredMenu)
+
+if has_treemenu
+    using FoldingTrees
+end
 
 mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     options::Vector{String}

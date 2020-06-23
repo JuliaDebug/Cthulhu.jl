@@ -146,7 +146,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
         # TODO: respect default
-        debuginfo = selected == :source
+        debuginfo = selected === :source
     end
 
     display_CI = true
@@ -201,7 +201,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
 
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -261,16 +261,79 @@ descend_code_typed(b::Bookmark; kw...) =
 descend_code_warntype(b::Bookmark; kw...) =
     _descend_with_error_handling(b.mi; iswarn = true, params = b.params, kw...)
 
-function ascend(mi::MethodInstance)
-    calls, mis = treelist(mi)
-    menu = TerminalMenus.RadioMenu(calls)
-    choice = 1
-    while choice != -1
-        choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu)
-        if choice != -1
-            # The main application of `ascend` is finding cases of non-inferability, so the
-            # warn highlighting is useful.
-            _descend(mis[choice], iswarn=true, optimize=false, interruptexc=false)
+if has_treemenu
+    FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
+
+    function ascend(mi)
+        root = treelist(mi)
+        menu = TreeMenu(root)
+        choice = menu.current
+        while choice !== nothing
+            menu.chosen = false
+            choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu; cursor=menu.currentidx)
+            browsecodetyped = true
+            if choice !== nothing
+                node = menu.current
+                mi = instance(node.data.nd)
+                if !isroot(node)
+                    # Help user find the sites calling the parent
+                    miparent = instance(node.parent.data.nd)
+                    params = current_params()
+                    locs = []
+                    for optimize in (true,)
+                        (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
+                        preprocess_ci!(CI, mi, optimize, CONFIG)
+                        callsites = find_callsites(CI, mi, slottypes; params=params)
+                        callsites = filter(cs->is_callsite(cs, miparent), callsites)
+                        append!(locs, CI.linetable[CI.codelocs[(cs->cs.id).(callsites)]])
+                    end
+                    if !isempty(locs)
+                        ulocs = Dict{Tuple{Symbol,Symbol},Vector{Int}}()
+                        for loc in locs
+                            lines = get!(Vector{Int}, ulocs, (loc.method, loc.file))
+                            line = loc.line
+                            if line ∉ lines
+                                push!(lines, line)
+                            end
+                        end
+                        vlocs = collect(ulocs)
+                        strlocs = [string('"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
+                        perm = sortperm(strlocs)
+                        strlocs, vlocs = strlocs[perm], vlocs[perm]
+                        push!(strlocs, "Browse typed code")
+                        linemenu = TerminalMenus.RadioMenu(strlocs)
+                        browsecodetyped = false
+                        choice2 = 1
+                        while choice2 != -1
+                            choice2 = TerminalMenus.request("\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                            if 0 < choice2 < length(strlocs)
+                                loc = vlocs[choice2]
+                                edit(String(loc[1][2]), first(loc[2]))
+                            elseif choice2 == length(strlocs)
+                                browsecodetyped = true
+                                break
+                            end
+                        end
+                    end
+                end
+                # The main application of `ascend` is finding cases of non-inferrability, so the
+                # warn highlighting is useful.
+                browsecodetyped && _descend(mi, iswarn=true, optimize=false, interruptexc=false)
+            end
+        end
+    end
+else
+    function ascend(mi)
+        calls, mis = treelist(mi)
+        menu = TerminalMenus.RadioMenu(calls)
+        choice = 1
+        while choice != -1
+            choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu)
+            if choice != -1
+                # The main application of `ascend` is finding cases of non-inferrability, so the
+                # warn highlighting is useful.
+                _descend(instance(mis[choice]), iswarn=true, optimize=false, interruptexc=false)
+            end
         end
     end
 end
