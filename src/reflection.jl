@@ -267,6 +267,11 @@ function first_method_instance(@nospecialize(sig); params=current_params())
     end
 end
 
+function choose_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
+    sig = Base.signature_type(F, TT)
+    choose_method_instance(sig; params=params)
+end
+
 function callinfo(sig, rt, max=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, -1, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
