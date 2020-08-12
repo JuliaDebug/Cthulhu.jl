@@ -50,6 +50,7 @@ function TerminalMenus.header(m::CthulhuMenu)
     Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.
     Toggles: [o]ptimize, [w]arn, [d]ebuginfo, [s]yntax highlight for Source/LLVM/Native.
     Show: [S]ource code, [A]ST, [L]LVM IR, [N]ative code
+    Actions: [E]dit source code, [R]evise and redisplay
     Advanced: dump [P]arams cache.
     """
 end
