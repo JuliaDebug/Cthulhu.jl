@@ -251,7 +251,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
 end
 
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    mi = first_method_instance(F, TT; params=params)
+    mi = choose_method_instance(F, TT; params=params)
     _descend(mi; params=params, kwargs...)
 end
 
