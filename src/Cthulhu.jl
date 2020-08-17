@@ -280,7 +280,7 @@ if has_treemenu
                     miparent = instance(node.parent.data.nd)
                     params = current_params()
                     locs = []
-                    for optimize in (true,)
+                    for optimize in (true, false)
                         (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
                         preprocess_ci!(CI, mi, optimize, CONFIG)
                         callsites = find_callsites(CI, mi, slottypes; params=params)
