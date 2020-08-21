@@ -38,7 +38,7 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
 end
 
-function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
+function find_callsites(CI, mi, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -54,9 +54,9 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
         argTs = argextype(c.args[arg_base + 3], CI, sptypes, slottypes)
         if isa(argTs, Const)
             sig = Tuple{widenconst(ft), argTs.val.parameters...}
-            mi = first_method_instance(sig)
-            if mi !== nothing
-                callinfo = MICallInfo(mi, rt.val)
+            miinner = multichoose ? choose_method_instance(sig) : first_method_instance(sig)
+            if miinner !== nothing
+                callinfo = MICallInfo(miinner, rt.val)
             else
                 callinfo = FailedCallInfo(sig, rt)
             end
@@ -141,8 +141,10 @@ function find_callsites(CI, mi, slottypes; params=current_params(), kwargs...)
                         end
                     end
                     thatcher(types[1])
-                    sigs = map(ft-> [ft, types[2:end]...], fts)
-                    cis = map(types -> callinfo(Tuple{types...}, rt, params=params), sigs)
+                    sigs = let types=types
+                        map(ft-> [ft, types[2:end]...], fts)
+                    end
+                    cis = map(t -> callinfo(Tuple{t...}, rt, params=params), sigs)
                     callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
                 else
                     ft = Base.unwrap_unionall(types[1])
