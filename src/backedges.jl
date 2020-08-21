@@ -12,7 +12,7 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, si
         env_io = IOContext(env_io, :unionall_env => sig.var)
         sig = sig.body
     end
-    sig = sig.parameters
+    sig = (sig::DataType).parameters
 
     ft = sig[1]
     uw = Base.unwrap_unionall(ft)
