@@ -137,14 +137,14 @@ end
 
 function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
-    tt = Base.unwrap_unionall(mi.specTypes).parameters[2:end]
+    tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     name = mi.def.name
     rt = mici.rt
     __show_limited(limiter, name, tt, rt)
 end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
-    types = ci.sig.parameters
+    types = (ci.sig::DataType).parameters
     f = types[1]
     if f isa Union
         name = string(f)
