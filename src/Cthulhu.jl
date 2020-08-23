@@ -7,6 +7,12 @@ using UUIDs
 using Core: MethodInstance
 const Compiler = Core.Compiler
 
+if isdefined(Base, :mapany)
+    const mapany = Base.mapany
+else
+    mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)::Int), itr)  # convenient for Expr.args
+end
+
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
@@ -174,7 +180,9 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             callsite = callsites[cid]
 
             if callsite.info isa MultiCallInfo
-                sub_callsites = map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
+                sub_callsites = let callsite=callsite
+                    map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
+                end
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
                     continue
@@ -231,7 +239,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             id = Base.PkgId(UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
             mod = get(Base.loaded_modules, id, nothing)
             if mod !== nothing
-                revise = getfield(mod, :revise)
+                revise = getfield(mod, :revise)::Function
                 revise()
                 mi = first_method_instance(mi.specTypes)
             end
