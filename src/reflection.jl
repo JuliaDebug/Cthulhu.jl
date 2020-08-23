@@ -38,7 +38,7 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
 end
 
-function find_callsites(CI, mi, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
+function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -87,7 +87,7 @@ function find_callsites(CI, mi, slottypes; params=current_params(), multichoose:
                 end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                types = map(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
+                types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
 
                 # Look through _apply
                 ok = true
@@ -142,9 +142,9 @@ function find_callsites(CI, mi, slottypes; params=current_params(), multichoose:
                     end
                     thatcher(types[1])
                     sigs = let types=types
-                        map(ft-> [ft, types[2:end]...], fts)
+                        mapany(ft-> Any[ft, types[2:end]...], fts)
                     end
-                    cis = map(t -> callinfo(Tuple{t...}, rt, params=params), sigs)
+                    cis = CallInfo[callinfo(Tuple{t...}, rt, params=params) for t in sigs]
                     callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
                 else
                     ft = Base.unwrap_unionall(types[1])
@@ -201,7 +201,7 @@ if isdefined(Core.Compiler, :AbstractInterpreter)
         ccall(:jl_typeinf_begin, Cvoid, ())
         result = Core.Compiler.InferenceResult(mi)
         frame = Core.Compiler.InferenceState(result, false, interp)
-        frame === nothing && return (nothing, Any)
+        frame === nothing && return (nothing, Any, Any[])
         if Compiler.typeinf(interp, frame) && run_optimizer
             oparams = Core.Compiler.OptimizationParams(interp)
             opt = Compiler.OptimizationState(frame, oparams, interp)
@@ -209,7 +209,7 @@ if isdefined(Core.Compiler, :AbstractInterpreter)
             opt.src.inferred = true
         end
         ccall(:jl_typeinf_end, Cvoid, ())
-        frame.inferred || return (nothing, Any)
+        frame.inferred || return (nothing, Any, Any[])
         return (frame.src, result.result, frame.slottypes)
     end
 else
@@ -217,14 +217,14 @@ else
         ccall(:jl_typeinf_begin, Cvoid, ())
         result = Core.Compiler.InferenceResult(mi)
         frame = Core.Compiler.InferenceState(result, false, params)
-        frame === nothing && return (nothing, Any)
+        frame === nothing && return (nothing, Any, Any[])
         if Compiler.typeinf(frame) && run_optimizer
             opt = Compiler.OptimizationState(frame)
             Compiler.optimize(opt, result.result)
             opt.src.inferred = true
         end
         ccall(:jl_typeinf_end, Cvoid, ())
-        frame.inferred || return (nothing, Any)
+        frame.inferred || return (nothing, Any, Any[])
         return (frame.src, result.result, frame.slottypes)
     end
 end
