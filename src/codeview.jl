@@ -231,6 +231,18 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
             continue
         end
         stmt = stmts[idx]
+        show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
+        if types isa Vector{Any} # ignore types for pre-inference code
+            if isassigned(types, idx) && show_type
+                typ = types[idx]
+                if (idx in used) && typ isa Type && (!Base.isdispatchelem(typ) || typ == Core.Box)
+                else
+                    continue
+                end
+            else
+                continue
+            end
+        end
         # Compute BB guard rail
         if bb_idx > length(cfg.blocks)
             # If invariants are violated, print a special leader
@@ -274,21 +286,17 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
             e = stmt.edges
             stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
         end
-        show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if types isa Vector{Any} # ignore types for pre-inference code
             if !isassigned(types, idx)
                 # This is an error, but can happen if passes don't update their type information
                 printstyled(io, "::#UNDEF", color=:red)
             elseif show_type
-                ty = typ = types[idx]
-                #line_info_postprinter(io, typ, idx in used)
-                if (idx in used) && ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
-                    if ty isa Union && Base.is_expected_union(ty)
-                        Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
-                    else
-                        Base.emphasize(io, "::$ty")
-                    end
+                typ = types[idx]
+                if typ isa Union && Base.is_expected_union(typ)
+                    Base.emphasize(io, "::$typ", Base.warn_color()) # more mild user notification
+                else
+                    Base.emphasize(io, "::$typ")
                 end
             end
         end
