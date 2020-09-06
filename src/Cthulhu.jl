@@ -147,7 +147,7 @@ const descend = descend_code_typed
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, kwargs...)
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, stable_code::Bool=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -162,7 +162,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         preprocess_ci!(CI, mi, optimize, CONFIG)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn)
+        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn, stable_code)
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
@@ -209,7 +209,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
 
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, stable_code=stable_code, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -249,7 +249,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(codeviews, toggle, nothing)
             if view_cmd !== nothing
-                view_cmd(stdout, mi, optimize, debuginfo, params, CONFIG)
+                view_cmd(stdout, mi, optimize, debuginfo, params, stable_code, CONFIG)
                 display_CI = false
             else
                 error("Unknown option $toggle")

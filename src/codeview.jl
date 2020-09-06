@@ -71,7 +71,7 @@ function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
 end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
-function cthulhu_warntype(io::IO, src, rettype, debuginfo)
+function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     if VERSION < v"1.1.0-DEV.762"
     elseif VERSION < v"1.2.0-DEV.229"
         lineprinter = Base.IRShow.debuginfo[debuginfo]
@@ -91,19 +91,21 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
     println(io)
     if VERSION < v"1.1.0-DEV.762"
         Base.IRShow.show_ir(lambda_io, src, InteractiveUtils.warntype_type_printer)
+
     else
-        show_ir(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
+        ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
+        ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
     end
     return nothing
 end
 
 
-function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn)
+function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_code)
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
 
     if iswarn
-        cthulhu_warntype(io, CI, rettype, debuginfo_key)
+        cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
     elseif VERSION >= v"1.1.0-DEV.762"
         show(io, CI, debuginfo = debuginfo_key)
     else
