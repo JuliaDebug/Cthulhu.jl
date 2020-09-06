@@ -209,7 +209,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
 
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, stable_code=stable_code, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
