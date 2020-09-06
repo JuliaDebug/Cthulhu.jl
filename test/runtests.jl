@@ -133,7 +133,7 @@ end
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
-    Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none)
+    Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none, true)
     str = String(take!(io))
     VERSION >= v"1.2" && @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
