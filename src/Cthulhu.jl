@@ -251,7 +251,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(codeviews, toggle, nothing)
             if view_cmd !== nothing
-                view_cmd(stdout, mi, optimize, debuginfo, params, stable_code, CONFIG)
+                view_cmd(stdout, mi, optimize, debuginfo, params, CONFIG)
                 display_CI = false
             else
                 error("Unknown option $toggle")
