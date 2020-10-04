@@ -51,6 +51,9 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
         if isa(ft, Const)
             ft = ft.val
         end
+        if isa(ft, Function)
+            ft = typeof(ft)
+        end
         argTs = argextype(c.args[arg_base + 3], CI, sptypes, slottypes)
         if isa(argTs, Const)
             sig = Tuple{widenconst(ft), argTs.val.parameters...}

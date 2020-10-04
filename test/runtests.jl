@@ -103,12 +103,16 @@ end
 callf(f::F, x) where F = f(x)
 let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos)}, Float64})
     @test !isempty(callsites)
-    @test first(callsites).info isa Cthulhu.MultiCallInfo
-    callinfos = first(callsites).info.callinfos
-    @test !isempty(callinfos)
-    mis = map(Cthulhu.get_mi, callinfos)
-    @test any(mi->mi.def.name == :cos, mis)
-    @test any(mi->mi.def.name == :sin, mis)
+    if length(callsites) == 1
+        @test first(callsites).info isa Cthulhu.MultiCallInfo
+        callinfos = first(callsites).info.callinfos
+        @test !isempty(callinfos)
+        mis = map(Cthulhu.get_mi, callinfos)
+        @test any(mi->mi.def.name == :cos, mis)
+        @test any(mi->mi.def.name == :sin, mis)
+    else
+        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+    end
 end
 
 function toggler(toggle)
@@ -121,12 +125,16 @@ function toggler(toggle)
 end
 let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
     @test !isempty(callsites)
-    @test first(callsites).info isa Cthulhu.MultiCallInfo
-    callinfos = first(callsites).info.callinfos
-    @test !isempty(callinfos)
-    mis = map(Cthulhu.get_mi, callinfos)
-    @test any(mi->mi.def.name == :cos, mis)
-    @test any(mi->mi.def.name == :sin, mis)
+    if length(callsites) == 1
+        @test first(callsites).info isa Cthulhu.MultiCallInfo
+        callinfos = first(callsites).info.callinfos
+        @test !isempty(callinfos)
+        mis = map(Cthulhu.get_mi, callinfos)
+        @test any(mi->mi.def.name == :cos, mis)
+        @test any(mi->mi.def.name == :sin, mis)
+    else
+        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+    end
 end
 
 @testset "warntype variables" begin
