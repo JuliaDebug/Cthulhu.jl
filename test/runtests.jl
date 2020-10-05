@@ -2,6 +2,7 @@ using Cthulhu
 using REPL
 using InteractiveUtils
 using Test
+using StaticArrays
 
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     mi = Cthulhu.first_method_instance(f, TT)
@@ -134,6 +135,30 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         @test any(mi->mi.def.name == :sin, mis)
     else
         @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+    end
+end
+
+# Splatting
+function fsplat(::Type{Int}, a...)
+    z = zero(Int)
+    for v in a
+        z += v
+    end
+    return z
+end
+gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
+hsplat1(A) = gsplat1(eltype(A), A...)
+for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
+                        (Tuple{Vector{Int}}, false),
+                        (Tuple{SVector{3,Int}}, true))
+    let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
+        if VERSION >= v"1.4.0-DEV.304"
+            @test !isempty(callsites)
+            cs = callsites[end]
+            @test cs isa Cthulhu.Callsite
+            mi = cs.info.mi
+            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+        end
     end
 end
 

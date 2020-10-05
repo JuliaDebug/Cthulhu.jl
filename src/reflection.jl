@@ -113,7 +113,19 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     if types[1] === typeof(Core._apply_iterate)
                         ok = true
                         new_types = Any[types[3]]
-                        for t in types[4:end]
+                        for i = 4:length(types)
+                            t = types[i]
+                            if t <: AbstractArray
+                                if hasmethod(length, (Type{t},))
+                                    for i = 1:length(t)
+                                        push!(new_types, eltype(t))
+                                    end
+                                else
+                                    push!(new_types, Vararg{eltype(t)})
+                                    i == length(types) || (ok = false)
+                                end
+                                continue
+                            end
                             if !(t <: Tuple) || t isa Union
                                 ok = false
                                 break
