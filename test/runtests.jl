@@ -152,11 +152,13 @@ for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
                         (Tuple{Vector{Int}}, false),
                         (Tuple{SVector{3,Int}}, true))
     let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
-        @test !isempty(callsites)
-        cs = callsites[end]
-        @test cs isa Cthulhu.Callsite
-        mi = cs.info.mi
-        @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+        if VERSION >= v"1.4.0-DEV.304"
+            @test !isempty(callsites)
+            cs = callsites[end]
+            @test cs isa Cthulhu.Callsite
+            mi = cs.info.mi
+            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+        end
     end
 end
 
