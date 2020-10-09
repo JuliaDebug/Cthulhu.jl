@@ -90,7 +90,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
-                types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), c.args)
+                types = mapany(arg -> widenconst_t(argextype(arg, CI, sptypes, slottypes)), c.args)
 
                 # Look through _apply
                 ok = true
@@ -194,6 +194,19 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
     end
     return callsites
 end
+
+function widenconst_t(c::Const)
+    if isa(c.val, Type)
+        if Core.Compiler.isvarargtype(c.val)
+            return Type
+        end
+        return Type{c.val}
+    else
+        cv = c.val
+        return isa(cv, Tuple) ? Tuple{map(Core.Typeof, cv)...} : Core.Typeof(cv)
+    end
+end
+widenconst_t(t) = widenconst(t)
 
 if VERSION >= v"1.1.0-DEV.215"
 function dce!(ci, mi)
