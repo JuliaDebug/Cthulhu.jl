@@ -86,10 +86,10 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('b')
         m.toggle = :bookmark
-    elseif key == UInt32('r')
+    elseif key == UInt32('r') || key == UInt32('R')
         m.toggle = :revise
         return true
-    elseif key == UInt32('e')
+    elseif key == UInt32('e') || key == UInt32('E')
         m.toggle = :edit
         return true
     end
