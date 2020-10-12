@@ -17,9 +17,10 @@ FoldingTrees = "1"
 julia = "1"
 
 [extras]
+MethodAnalysis = "85b6ec6f-f7df-4429-9514-a64bcd9ee824"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Revise", "StaticArrays"]
+test = ["Test", "MethodAnalysis", "Revise", "StaticArrays"]

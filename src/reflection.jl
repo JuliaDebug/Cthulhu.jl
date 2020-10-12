@@ -302,14 +302,23 @@ function choose_method_instance(@nospecialize(F), @nospecialize(TT); params=curr
     choose_method_instance(sig; params=params)
 end
 
-function callinfo(sig, rt, max=-1; params=current_params())
+function callinfo(@nospecialize(sig), @nospecialize(rt), max=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, -1, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
+    ucalls = Set()
     for x in methds
+        x ∈ ucalls && continue   # prevent duplicates
+        push!(ucalls, x)
         meth = x[3]
         atypes = x[1]
         sparams = x[2]
+        if isdefined(Core.Compiler, :get_compileable_sig)
+            atypes_new = Core.Compiler.get_compileable_sig(meth, atypes, sparams)
+            if atypes_new !== nothing
+                atypes = atypes_new
+            end
+        end
         if isdefined(meth, :generator) && !may_invoke_generator(meth, atypes, sparams)
             push!(callinfos, GeneratedCallInfo(sig, rt))
         else

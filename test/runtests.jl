@@ -1,6 +1,7 @@
 using Cthulhu
 using REPL
 using InteractiveUtils
+using MethodAnalysis
 using Test
 using StaticArrays
 
@@ -157,7 +158,12 @@ for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
             cs = callsites[end]
             @test cs isa Cthulhu.Callsite
             mi = cs.info.mi
-            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+            if haslen
+                # result depends on availability of Core.Compiler.get_compileable_sig
+                @test mi.specTypes.parameters[end] === Int || mi.specTypes.parameters[end] === Vararg{Int}
+            else
+                @test mi.specTypes.parameters[end] === Vararg{Int}
+            end
         end
     end
 end
@@ -169,6 +175,24 @@ end
     Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none)
     str = String(take!(io))
     VERSION >= v"1.2" && @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
+end
+
+# Specialization
+fspec1(f::F, ::Type{T}) where {F<:Function,T} = f(T)  # fully specialized
+fspec2(f::Function, T::Type) = f(T)                   # partial specialization
+gspec1(f::F, a) where F<:Function = fspec1(f, eltype(a))
+gspec2(f, a) = fspec2(f, eltype(a))
+@test gspec1(zero, [1,2,3]) === gspec2(zero, [1,2,3]) === 0
+if isdefined(Core.Compiler, :get_compileable_sig)
+    fmis = (methodinstances(fspec1), methodinstances(fspec2))
+    for (gfunc, mis) in ((gspec1, fmis[1]), (gspec2, fmis[2]))
+        let callsites = find_callsites_by_ftt(gfunc, Tuple{typeof(zero),Vector{Int}}; optimize=false)
+            cs = callsites[end]
+            @test cs isa Cthulhu.Callsite
+            mi = cs.info.mi
+            @test mi ∈ mis
+        end
+    end
 end
 
 ##
