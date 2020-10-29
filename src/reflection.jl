@@ -194,9 +194,10 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 if c.args[1] isa QuoteNode
                     cfunc = c.args[1].value
                     if cfunc === :jl_new_task
-                        func = c.args[7]
+                        func = c.args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
-                        callsite = Callsite(id, TaskCallInfo(callinfo(ftype, nothing, params=params)))
+                        sig = Tuple{ftype}
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing, params=params)))
                     end
                 end
             end
