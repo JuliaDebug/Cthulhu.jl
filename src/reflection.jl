@@ -87,6 +87,20 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 mi = get_mi(callsite)
                 if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
+                elseif callsite.info isa MICallInfo
+                    argtypes_ssa = map(c.args[3:end]) do a
+                        if isa(a, Core.SSAValue)
+                            a = CI.ssavaluetypes[a.id]
+                            if isa(a, Const)
+                                a = a.val
+                            end
+                        end
+                        Core.Typeof(a)
+                    end
+                    sig_ssa = Tuple{Base.tuple_type_head(mi.def.sig), argtypes_ssa...}
+                    if sig_ssa !== mi.def.sig
+                        callsite = Callsite(id, DeoptimizedCallInfo(callinfo(sig_ssa, rt), callsite.info))
+                    end
                 end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]
