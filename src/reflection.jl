@@ -29,6 +29,15 @@ else
     code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 end
 
+# https://github.com/JuliaLang/julia/pull/36318
+_id(x) = x.id
+if VERSION < v"1.6.0-DEV.272"
+    const SlotOrArgument = Core.Slot
+else
+    _id(x::Core.Argument) = x.n
+    const SlotOrArgument = Union{Core.Argument,Core.Slot}
+end
+
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
@@ -91,9 +100,12 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     argtypes_ssa = map(c.args[3:end]) do a
                         if isa(a, Core.SSAValue)
                             a = CI.ssavaluetypes[a.id]
-                            if isa(a, Const)
-                                a = a.val
-                            end
+                            isa(a, Const) || return a
+                            a = a.val
+                        elseif isa(a, SlotOrArgument)
+                            a = CI.slottypes[_id(a)]
+                            isa(a, Const) || return a
+                            a = a.val
                         end
                         Core.Typeof(a)
                     end
