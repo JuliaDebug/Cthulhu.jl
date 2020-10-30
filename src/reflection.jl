@@ -111,7 +111,10 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     end
                     sig_ssa = Tuple{Base.tuple_type_head(mi.def.sig), argtypes_ssa...}
                     if sig_ssa !== mi.def.sig
-                        callsite = Callsite(id, DeoptimizedCallInfo(callinfo(sig_ssa, rt), callsite.info))
+                        sig_callinfo = callinfo(sig_ssa, rt)
+                        if get_mi(sig_callinfo) !== mi
+                            callsite = Callsite(id, DeoptimizedCallInfo(sig_callinfo, callsite.info))
+                        end
                     end
                 end
             elseif c.head === :call
