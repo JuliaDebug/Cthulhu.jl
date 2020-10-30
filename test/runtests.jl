@@ -164,6 +164,30 @@ for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
     end
 end
 
+@testset "deoptimized calls" begin
+    @noinline function f(@nospecialize(t))
+        s = 0
+        for k in t
+            s += k
+        end
+        return s
+    end
+    g() = f((1, 2, 3))
+
+    callsites = find_callsites_by_ftt(g, Tuple{})
+    infotypes = [typeof(x.info) for x in callsites]
+    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
+
+    @noinline f2(@nospecialize(a), @nospecialize(b), @nospecialize(c)) =
+        (read("/dev/null"); nothing)
+    h2() = __undef__::Int
+    g2(a) = f2(a, h2(), 3)
+
+    callsites = find_callsites_by_ftt(g2, Tuple{Int})
+    infotypes = [typeof(x.info) for x in callsites]
+    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
+end
+
 @testset "warntype variables" begin
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
     io = IOBuffer()
