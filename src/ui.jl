@@ -18,8 +18,11 @@ end
 
 function show_as_line(el)
     reduced_displaysize = displaysize(stdout) .- (0, 3)
-    buf = IOBuffer()
-    show(IOContext(buf, :limit=>true, :displaysize=>reduced_displaysize), el)
+    buf = ctx = IOBuffer()
+    if (color = get(stdout, :color, nothing)) !== nothing
+        ctx = IOContext(ctx, :color=>color)
+    end
+    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize), el)
     String(take!(buf))
 end
 

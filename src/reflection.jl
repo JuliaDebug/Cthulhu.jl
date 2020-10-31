@@ -29,6 +29,15 @@ else
     code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 end
 
+# https://github.com/JuliaLang/julia/pull/36318
+_id(x) = x.id
+if VERSION < v"1.6.0-DEV.272"
+    const SlotOrArgument = Core.Slot
+else
+    _id(x::Core.Argument) = x.n
+    const SlotOrArgument = Union{Core.Argument,Core.Slot}
+end
+
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
@@ -87,6 +96,26 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 mi = get_mi(callsite)
                 if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
+                elseif callsite.info isa MICallInfo
+                    argtypes_ssa = map(c.args[3:end]) do a
+                        if isa(a, Core.SSAValue)
+                            a = CI.ssavaluetypes[a.id]
+                            isa(a, Const) || return a
+                            a = a.val
+                        elseif isa(a, SlotOrArgument)
+                            a = slottypes[_id(a)]
+                            isa(a, Const) || return a
+                            a = a.val
+                        end
+                        Core.Typeof(a)
+                    end
+                    sig_ssa = Tuple{Base.tuple_type_head(mi.def.sig), argtypes_ssa...}
+                    if sig_ssa !== mi.def.sig
+                        sig_callinfo = callinfo(sig_ssa, rt)
+                        if get_mi(sig_callinfo) !== mi
+                            callsite = Callsite(id, DeoptimizedCallInfo(sig_callinfo, callsite.info))
+                        end
+                    end
                 end
             elseif c.head === :call
                 rt = CI.ssavaluetypes[id]

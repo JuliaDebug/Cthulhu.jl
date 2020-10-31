@@ -179,9 +179,14 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
             callsite = callsites[cid]
 
-            if callsite.info isa MultiCallInfo
+            if callsite.info isa Union{MultiCallInfo,DeoptimizedCallInfo}
+                callinfos = if callsite.info isa DeoptimizedCallInfo
+                    [callsite.info.accurate, callsite.info.deoptimized]
+                else
+                    callsite.info.callinfos
+                end
                 sub_callsites = let callsite=callsite
-                    map(ci->Callsite(callsite.id, ci), callsite.info.callinfos)
+                    map(ci->Callsite(callsite.id, ci), callinfos)
                 end
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info

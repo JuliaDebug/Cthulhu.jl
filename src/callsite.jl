@@ -38,6 +38,12 @@ end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 
+struct DeoptimizedCallInfo <: CallInfo
+    accurate::CallInfo
+    deoptimized::CallInfo
+end
+get_mi(ci::DeoptimizedCallInfo) = get_mi(ci.accurate)
+
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
 end
@@ -167,6 +173,14 @@ function Base.show(io::IO, c::Callsite)
     elseif c.info isa MultiCallInfo
         print(limiter, " = call ")
         show_callinfo(limiter, c.info)
+    elseif isa(c.info, DeoptimizedCallInfo)
+        deoptstr = sprint(context = IOContext(io, :color => true)) do tmpio
+            print(tmpio, " = ")
+            printstyled(tmpio, "deoptimized"; color = :red)
+            print(tmpio, " ")
+        end
+        print(limiter, deoptstr)
+        show_callinfo(limiter, c.info.accurate)
     elseif c.info isa FailedCallInfo ||
            c.info isa GeneratedCallInfo
         print(limiter, " = call ")
@@ -188,6 +202,7 @@ end
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::DeoptimizedCallInfo, mi::MethodInstance) = is_callsite(info.accurate, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
 is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
