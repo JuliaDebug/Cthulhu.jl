@@ -103,7 +103,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                             isa(a, Const) || return a
                             a = a.val
                         elseif isa(a, SlotOrArgument)
-                            a = CI.slottypes[_id(a)]
+                            a = slottypes[_id(a)]
                             isa(a, Const) || return a
                             a = a.val
                         end
