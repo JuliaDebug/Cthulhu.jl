@@ -223,7 +223,7 @@ let config = Cthulhu.CthulhuConfig(enable_highlighter=false)
     for lexer in ["llvm", "asm"]
         @test sprint() do io
             Cthulhu.highlight(io, "INPUT", lexer, config)
-        end == "INPUT"
+        end == "INPUT\n"
     end
 end
 
@@ -236,7 +236,7 @@ let config = Cthulhu.CthulhuConfig(
             @test_logs (:warn, r"Highlighter command .* does not exist.") begin
                 sprint() do io
                     Cthulhu.highlight(io, "INPUT", lexer, config)
-                end == "INPUT"
+                end == "INPUT\n"
             end
         end
     end
@@ -251,7 +251,10 @@ if VERSION >= v"1.1-"
         for lexer in ["llvm", "asm"]
             @test sprint() do io
                 Cthulhu.highlight(io, "INPUT", lexer, config)
-            end == "INPUT"
+            end == "INPUT\n"
+            @test sprint() do io
+                Cthulhu.highlight(io, "INPUT\n", lexer, config)
+            end == "INPUT\n"
         end
     end
 end
