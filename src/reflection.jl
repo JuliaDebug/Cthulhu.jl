@@ -250,7 +250,8 @@ if isdefined(Core.Compiler, :AbstractInterpreter)
         if Compiler.typeinf(interp, frame) && run_optimizer
             oparams = Core.Compiler.OptimizationParams(interp)
             opt = Compiler.OptimizationState(frame, oparams, interp)
-            Compiler.optimize(opt, oparams, result.result)
+            Base.VERSION >= v"1.6.0-DEV.1410" ? Compiler.optimize(interp, opt, oparams, result.result) :
+                                                Compiler.optimize(opt, oparams, result.result)
             opt.src.inferred = true
         end
         ccall(:jl_typeinf_end, Cvoid, ())
