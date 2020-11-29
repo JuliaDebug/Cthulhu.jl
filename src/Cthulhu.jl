@@ -142,6 +142,8 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
+descend(mi::MethodInstance; kwargs...) = _descend(mi; iswarn=false, interruptexc=false, kwargs...)
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
