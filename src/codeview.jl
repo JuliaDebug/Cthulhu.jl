@@ -4,14 +4,15 @@ highlighter_exists(config::CthulhuConfig) =
 __init__() = CONFIG.enable_highlighter = highlighter_exists(CONFIG)
 
 function highlight(io, x, lexer, config::CthulhuConfig)
-    config.enable_highlighter || return print(io, x)
+    _print = endswith(x, '\n') ? print : println
+    config.enable_highlighter || return _print(io, x)
     if !highlighter_exists(config)
         @warn "Highlighter command $(config.highlighter.exec[1]) does not exist."
-        return print(io, x)
+        return _print(io, x)
     end
     cmd = `$(config.highlighter) $lexer`
     open(pipeline(cmd; stdout=io, stderr=stderr), "w") do io
-        print(io, x)
+        _print(io, x)
     end
 end
 
