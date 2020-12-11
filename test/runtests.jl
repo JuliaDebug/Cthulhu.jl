@@ -2,6 +2,7 @@ using Cthulhu
 using REPL
 using InteractiveUtils
 using Test
+using StaticArrays
 
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     mi = Cthulhu.first_method_instance(f, TT)
@@ -94,7 +95,9 @@ end
 # tasks
 ftask() = @sync @async show(io, "Hello")
 let callsites = find_callsites_by_ftt(ftask, Tuple{})
-    @test !isempty(filter(c->c.info isa Cthulhu.TaskCallInfo, callsites))
+    task_callsites = filter(c->c.info isa Cthulhu.TaskCallInfo, callsites)
+    @test !isempty(task_callsites)
+    @test filter(c -> c.info.ci isa Cthulhu.FailedCallInfo, task_callsites) == []
 end
 
 ##
@@ -103,12 +106,16 @@ end
 callf(f::F, x) where F = f(x)
 let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos)}, Float64})
     @test !isempty(callsites)
-    @test first(callsites).info isa Cthulhu.MultiCallInfo
-    callinfos = first(callsites).info.callinfos
-    @test !isempty(callinfos)
-    mis = map(Cthulhu.get_mi, callinfos)
-    @test any(mi->mi.def.name == :cos, mis)
-    @test any(mi->mi.def.name == :sin, mis)
+    if length(callsites) == 1
+        @test first(callsites).info isa Cthulhu.MultiCallInfo
+        callinfos = first(callsites).info.callinfos
+        @test !isempty(callinfos)
+        mis = map(Cthulhu.get_mi, callinfos)
+        @test any(mi->mi.def.name == :cos, mis)
+        @test any(mi->mi.def.name == :sin, mis)
+    else
+        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+    end
 end
 
 function toggler(toggle)
@@ -121,12 +128,64 @@ function toggler(toggle)
 end
 let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
     @test !isempty(callsites)
-    @test first(callsites).info isa Cthulhu.MultiCallInfo
-    callinfos = first(callsites).info.callinfos
-    @test !isempty(callinfos)
-    mis = map(Cthulhu.get_mi, callinfos)
-    @test any(mi->mi.def.name == :cos, mis)
-    @test any(mi->mi.def.name == :sin, mis)
+    if length(callsites) == 1
+        @test first(callsites).info isa Cthulhu.MultiCallInfo
+        callinfos = first(callsites).info.callinfos
+        @test !isempty(callinfos)
+        mis = map(Cthulhu.get_mi, callinfos)
+        @test any(mi->mi.def.name == :cos, mis)
+        @test any(mi->mi.def.name == :sin, mis)
+    else
+        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+    end
+end
+
+# Splatting
+function fsplat(::Type{Int}, a...)
+    z = zero(Int)
+    for v in a
+        z += v
+    end
+    return z
+end
+gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
+hsplat1(A) = gsplat1(eltype(A), A...)
+for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
+                        (Tuple{Vector{Int}}, false),
+                        (Tuple{SVector{3,Int}}, true))
+    let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
+        if VERSION >= v"1.4.0-DEV.304"
+            @test !isempty(callsites)
+            cs = callsites[end]
+            @test cs isa Cthulhu.Callsite
+            mi = cs.info.mi
+            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+        end
+    end
+end
+
+@testset "deoptimized calls" begin
+    @noinline function f(@nospecialize(t))
+        s = 0
+        for k in t
+            s += k
+        end
+        return s
+    end
+    g() = f((1, 2, 3))
+
+    callsites = find_callsites_by_ftt(g, Tuple{})
+    infotypes = [typeof(x.info) for x in callsites]
+    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
+
+    @noinline f2(@nospecialize(a), @nospecialize(b), @nospecialize(c)) =
+        (read("/dev/null"); nothing)
+    h2() = __undef__::Int
+    g2(a) = f2(a, h2(), 3)
+
+    callsites = find_callsites_by_ftt(g2, Tuple{Int})
+    infotypes = [typeof(x.info) for x in callsites]
+    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
 end
 
 @testset "warntype variables" begin
@@ -164,7 +223,7 @@ let config = Cthulhu.CthulhuConfig(enable_highlighter=false)
     for lexer in ["llvm", "asm"]
         @test sprint() do io
             Cthulhu.highlight(io, "INPUT", lexer, config)
-        end == "INPUT"
+        end == "INPUT\n"
     end
 end
 
@@ -177,7 +236,7 @@ let config = Cthulhu.CthulhuConfig(
             @test_logs (:warn, r"Highlighter command .* does not exist.") begin
                 sprint() do io
                     Cthulhu.highlight(io, "INPUT", lexer, config)
-                end == "INPUT"
+                end == "INPUT\n"
             end
         end
     end
@@ -192,7 +251,10 @@ if VERSION >= v"1.1-"
         for lexer in ["llvm", "asm"]
             @test sprint() do io
                 Cthulhu.highlight(io, "INPUT", lexer, config)
-            end == "INPUT"
+            end == "INPUT\n"
+            @test sprint() do io
+                Cthulhu.highlight(io, "INPUT\n", lexer, config)
+            end == "INPUT\n"
         end
     end
 end

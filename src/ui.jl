@@ -18,8 +18,11 @@ end
 
 function show_as_line(el)
     reduced_displaysize = displaysize(stdout) .- (0, 3)
-    buf = IOBuffer()
-    show(IOContext(buf, :limit=>true, :displaysize=>reduced_displaysize), el)
+    buf = ctx = IOBuffer()
+    if (color = get(stdout, :color, nothing)) !== nothing
+        ctx = IOContext(ctx, :color=>color)
+    end
+    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize), el)
     String(take!(buf))
 end
 
@@ -89,10 +92,11 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('b')
         m.toggle = :bookmark
-    elseif key == UInt32('r')
+        return true
+    elseif key == UInt32('r') || key == UInt32('R')
         m.toggle = :revise
         return true
-    elseif key == UInt32('e')
+    elseif key == UInt32('e') || key == UInt32('E')
         m.toggle = :edit
         return true
     end

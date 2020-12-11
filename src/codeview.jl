@@ -4,29 +4,31 @@ highlighter_exists(config::CthulhuConfig) =
 __init__() = CONFIG.enable_highlighter = highlighter_exists(CONFIG)
 
 function highlight(io, x, lexer, config::CthulhuConfig)
-    config.enable_highlighter || return print(io, x)
+    _print = endswith(x, '\n') ? print : println
+    config.enable_highlighter || return _print(io, x)
     if !highlighter_exists(config)
         @warn "Highlighter command $(config.highlighter.exec[1]) does not exist."
-        return print(io, x)
+        return _print(io, x)
     end
     cmd = `$(config.highlighter) $lexer`
     open(pipeline(cmd; stdout=io, stderr=stderr), "w") do io
-        print(io, x)
+        _print(io, x)
     end
 end
 
-function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig,
+                      dump_module = false)
     @static if VERSION >= v"1.5.0-DEV.393"
         dump = InteractiveUtils._dump_function_linfo_llvm(
             mi, params.world,
             #=wrapper=# false, #=strip_ir_metadata=# true,
-            #=dump_module=# false,
+            dump_module,
             optimize, debuginfo ? :source : :none, Base.CodegenParams())
     else
         dump = InteractiveUtils._dump_function_linfo(
             mi, params.world, #=native=# false,
             #=wrapper=# false, #=strip_ir_metadata=# true,
-            #=dump_module=# false, #=syntax=# config.asm_syntax,
+            dump_module, #=syntax=# config.asm_syntax,
             optimize, debuginfo ? :source : :none)
     end
     highlight(io, dump, "llvm", config)
@@ -196,8 +198,8 @@ end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout, b)
 InteractiveUtils.code_llvm(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
-                           config = CONFIG) =
-    cthulhu_llvm(io, b.mi, optimize, debuginfo == :source, b.params, config)
+                           dump_module = false, config = CONFIG) =
+    cthulhu_llvm(io, b.mi, optimize, debuginfo == :source, b.params, config, dump_module)
 
 InteractiveUtils.code_native(b::Bookmark; kw...) =
     InteractiveUtils.code_native(stdout, b; kw...)
