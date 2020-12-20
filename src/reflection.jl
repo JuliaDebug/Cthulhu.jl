@@ -38,6 +38,24 @@ else
     const SlotOrArgument = Union{Core.Argument,Core.Slot}
 end
 
+if VERSION < v"1.2.0-DEV.354"
+    function unwrapconst(a)
+        if isa(a, Const)
+            a = Core.Typeof(a.val)
+        end
+        return a
+    end
+else
+    function unwrapconst(a)
+        if isa(a, Const)
+            a = Core.Typeof(a.val)
+        elseif isa(a, Core.Compiler.PartialStruct)
+            a = Core.Typeof(a.typ)
+        end
+        return a
+    end
+end
+
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
@@ -100,12 +118,10 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     argtypes_ssa = map(c.args[3:end]) do a
                         if isa(a, Core.SSAValue)
                             a = CI.ssavaluetypes[a.id]
-                            isa(a, Const) || return a
-                            a = a.val
+                            return unwrapconst(a)
                         elseif isa(a, SlotOrArgument)
                             a = slottypes[_id(a)]
-                            isa(a, Const) || return a
-                            a = a.val
+                            return unwrapconst(a)
                         end
                         Core.Typeof(a)
                     end
