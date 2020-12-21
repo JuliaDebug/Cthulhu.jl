@@ -258,3 +258,20 @@ if VERSION >= v"1.1-"
         end
     end
 end
+
+###
+### Printer test:
+###
+if VERSION >= v"1.1.0-DEV.762"
+    function foo()
+        T = rand() > 0.5 ? Int64 : Float64
+        sum(rand(T, 100))
+    end
+    ci, mi, rt, st = process(foo, Tuple{});
+    io = IOBuffer()
+    Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
+    str = String(take!(io))
+    print(str)
+    # test by bounding the number of lines printed
+    @test count(isequal('\n'), str) <= 50
+end
