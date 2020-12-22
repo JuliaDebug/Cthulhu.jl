@@ -149,7 +149,7 @@ descend(mi::MethodInstance; kwargs...) = _descend(mi; iswarn=false, interruptexc
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, kwargs...)
+function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -164,7 +164,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         preprocess_ci!(CI, mi, optimize, CONFIG)
         callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn)
+        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn, verbose)
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
@@ -216,10 +216,12 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
             end
 
             _descend(next_mi; params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
+        elseif toggle === :verbose
+            verbose ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
         elseif toggle === :debuginfo

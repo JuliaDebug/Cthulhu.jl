@@ -73,7 +73,7 @@ function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
 end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
-function cthulhu_warntype(io::IO, src, rettype, debuginfo)
+function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     if VERSION < v"1.1.0-DEV.762"
     elseif VERSION < v"1.2.0-DEV.229"
         lineprinter = Base.IRShow.debuginfo[debuginfo]
@@ -94,18 +94,19 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo)
     if VERSION < v"1.1.0-DEV.762"
         Base.IRShow.show_ir(lambda_io, src, InteractiveUtils.warntype_type_printer)
     else
-        Base.IRShow.show_ir(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
+        ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
+        ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
     end
     return nothing
 end
 
 
-function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn)
+function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_code)
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
 
     if iswarn
-        cthulhu_warntype(io, CI, rettype, debuginfo_key)
+        cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
     elseif VERSION >= v"1.1.0-DEV.762"
         show(io, CI, debuginfo = debuginfo_key)
     else
@@ -204,3 +205,126 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
 InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
                              config = CONFIG) =
     cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)
+
+@nospecialize
+using Base.IRShow: compute_basic_blocks, scan_ssa_use!, should_print_ssa_type, print_stmt, GotoIfNot, GotoNode, PhiNode, block_for_inst
+function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_postprinter)
+    newprinter = VERSION >= v"1.6.0-DEV.852"
+    cols = displaysize(io)[2]
+    used = BitSet()
+    stmts = code.code
+    types = code.ssavaluetypes
+    cfg = compute_basic_blocks(stmts)
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    for stmt in stmts
+        scan_ssa_use!(push!, used, stmt)
+    end
+    bb_idx = 1
+
+    if isempty(used)
+        maxlength_idx = 0
+    else
+        maxused = maximum(used)
+        maxlength_idx = length(string(maxused))
+    end
+    for idx in eachindex(stmts)
+        if !isassigned(stmts, idx)
+            # This is invalid, but do something useful rather
+            # than erroring, to make debugging easier
+            printstyled(io, "#UNDEF\n", color=:red)
+            continue
+        end
+        stmt = stmts[idx]
+        show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
+        if types isa Vector{Any} # ignore types for pre-inference code
+            if isassigned(types, idx) && show_type
+                typ = types[idx]
+                if (idx in used) && typ isa Type && (!Base.isdispatchelem(typ) || typ == Core.Box)
+                else
+                    continue
+                end
+            else
+                continue
+            end
+        end
+        # Compute BB guard rail
+        if bb_idx > length(cfg.blocks)
+            # If invariants are violated, print a special leader
+            linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
+            if newprinter
+                inlining_indent = line_info_preprinter(io, linestart, idx)
+            else
+                inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+            end
+            printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
+        else
+            bbrange = cfg.blocks[bb_idx].stmts
+            bbrange = bbrange.start:bbrange.stop
+            # Print line info update
+            linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
+            linestart *= " "^max_bb_idx_size
+            if newprinter
+                inlining_indent = line_info_preprinter(io, linestart, idx)
+            else
+                inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+            end
+            if idx == first(bbrange)
+                bb_idx_str = string(bb_idx)
+                bb_pad = max_bb_idx_size - length(bb_idx_str)
+                bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+                printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:light_black)
+            elseif idx == last(bbrange) # print separator
+                printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:light_black)
+            else
+                printstyled(io, "│ ", " "^max_bb_idx_size, color=:light_black)
+            end
+            if idx == last(bbrange)
+                bb_idx += 1
+            end
+        end
+        print(io, inlining_indent, " ")
+        # convert statement index to labels, as expected by print_stmt
+        if stmt isa Expr
+            if stmt.head === :gotoifnot && length(stmt.args) == 2 && stmt.args[2] isa Int
+                stmt = GotoIfNot(stmt.args[1], block_for_inst(cfg, stmt.args[2]::Int))
+            elseif stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
+                stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+            end
+        elseif isa(stmt, GotoIfNot)
+            stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        elseif stmt isa GotoNode
+            stmt = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif stmt isa PhiNode
+            e = stmt.edges
+            if VERSION >= v"1.6.0-DEV.732"
+                stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
+            else
+                stmt = PhiNode(Any[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
+            end
+        end
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        if types isa Vector{Any} # ignore types for pre-inference code
+            if !isassigned(types, idx)
+                # This is an error, but can happen if passes don't update their type information
+                printstyled(io, "::#UNDEF", color=:red)
+            elseif show_type
+                typ = types[idx]
+                if typ isa Union && Base.is_expected_union(typ)
+                    Base.emphasize(io, "::$typ", Base.warn_color()) # more mild user notification
+                else
+                    Base.emphasize(io, "::$typ")
+                end
+            end
+        end
+        println(io)
+    end
+    let linestart = " "^(max_bb_idx_size + 2)
+        if newprinter
+            line_info_preprinter(io, linestart, 0)
+        else
+            line_info_preprinter(io, linestart, typemin(Int32))
+        end
+    end
+    nothing
+end
+@specialize
