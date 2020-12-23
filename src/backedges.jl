@@ -100,7 +100,8 @@ function callstring(io, sfs::Vector{StackTraces.StackFrame})
         sf = sfs[i]
         print(io, sf.func, " at ", sf.file, ':', sf.line, " => ")
     end
-    return callstring(io, instance(sfs))
+    sf = sfs[end]
+    return callstring(io, instance(sfs)) * string(" at ", sf.file, ':', sf.line)
 end
 callstring(io, ipframes::Vector{IPFrames}) = callstring(io, ipframes[1].sfs)
 
