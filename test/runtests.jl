@@ -216,6 +216,24 @@ else
     @test strs == ["fbackedge1()", " fbackedge2(::Float64)"]
 end
 
+# treelist for stacktraces
+fst1(x) = backtrace()
+@inline fst2(x) = fst1(x)
+@noinline fst3(x) = fst2(x)
+@inline fst4(x) = fst3(x)
+fst5(x) = fst4(x)
+tree = Cthulhu.treelist(fst5(1.0))
+if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
+    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\)", tree.data.callstr) !== nothing
+    @test length(tree.children) == 1
+    child = tree.children[1]
+    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\)", child.data.callstr) !== nothing
+else
+    treestrings = tree[1]
+    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\)", treestrings[1]) !== nothing
+    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\)", treestrings[2]) !== nothing
+end
+
 ##
 # Cthulhu config test
 ##

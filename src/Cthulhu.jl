@@ -355,4 +355,13 @@ else
     end
 end
 
+"""
+    ascend(mi::MethodInstance)
+    ascend(bt)
+
+Follow a chain of calls (either through a backtrace `bt` or the backedges of a `MethodInstance`),
+with the option to `descend` into intermediate calls.
+"""
+ascend
+
 end

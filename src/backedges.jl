@@ -60,16 +60,49 @@ end
 nonconcrete_red(@nospecialize(typ)) = isconcretetype(stripType(typ)) ? :nothing : :red
 
 const _emptybackedges = MethodInstance[]
+
+# For handling stacktraces with ascend
+struct IPFrames
+    sfs::Vector{StackTraces.StackFrame}
+end
+function buildframes(bt)
+    ipframes = IPFrames[]
+    for ip in bt
+        sfs = Base.StackTraces.lookup(ip)
+        sf = sfs[end]
+        sf.from_c && continue
+        mi = sf.linfo
+        isa(mi, Core.MethodInstance) || continue
+        push!(ipframes, IPFrames(sfs))
+    end
+    return ipframes
+end
+
 # Extension API
 backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _emptybackedges
 method(mi::MethodInstance) = mi.def
 specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
+nextnode(mi, edge) = edge
+
+instance(sfs::Vector{StackTraces.StackFrame}) = sfs[end].linfo
+method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
+
+instance(ipframes::Vector{IPFrames}) = instance(ipframes[1].sfs)
+backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
 function callstring(io, mi)
     show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(mi).name, specTypes(mi))
     return String(take!(io))
 end
+function callstring(io, sfs::Vector{StackTraces.StackFrame})
+    for i = 1:length(sfs)-1
+        sf = sfs[i]
+        print(io, sf.func, " at ", sf.file, ':', sf.line, " => ")
+    end
+    return callstring(io, instance(sfs))
+end
+callstring(io, ipframes::Vector{IPFrames}) = callstring(io, ipframes[1].sfs)
 
 if has_treemenu
     struct Data{T}
@@ -80,19 +113,20 @@ if has_treemenu
     function treelist(mi)
         io = IOBuffer()
         str = callstring(io, mi)
-        treelist!(Node(Data(str, mi)), io, mi, "", Base.IdSet{typeof(mi)}())
+        treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
     end
-    function treelist!(parent::Node, io, mi, indent::AbstractString, visited::Base.IdSet)
+    function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
         mi ∈ visited && return parent
-        push!(visited, mi)
+        push!(visited, instance(mi))
         indent *= " "
         for edge in backedges(mi)
             str = indent * callstring(io, edge)
-            child = Node(Data(str, edge), parent)
-            treelist!(child, io, edge, indent, visited)
+            child = Node(Data(str, instance(edge)), parent)
+            treelist!(child, io, nextnode(mi, edge), indent, visited)
         end
         return parent
     end
+    treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 else
     # TreeMenu can't be implemented, fallback to non-folding menu
     treelist(mi) = treelist!(String[], typeof(mi)[], IOBuffer(), mi, "", Base.IdSet{typeof(mi)}())
@@ -109,4 +143,7 @@ else
         end
         return strs, mis
     end
+    treelist!(strs, mis, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 end
+
+treelist(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = treelist(buildframes(bt))
