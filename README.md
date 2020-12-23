@@ -28,6 +28,7 @@ end
 descend(foo, Tuple{})
 @descend foo()
 ```
+
 ## Methods: descend
 
 - `@descend_code_typed`
@@ -68,7 +69,7 @@ Choose a call for analysis (q to quit):
            union(::Set{Symbol}, ::Set{Symbol})
 ```
 You use the up/down arrows to navigate this menu, enter to select a call to `descend` into,
-and your space bar to "fold" a branch of the tree.
+and your space bar to toggle branch-folding.
 
 It also works on stacktraces:
 
@@ -81,11 +82,11 @@ julia> bt = try
 
 julia> ascend(bt)
 Choose a call for analysis (q to quit):
- >   throw_complex_domainerror(::Symbol, ::Float64)
-       sqrt at ./math.jl:582 => sqrt at ./math.jl:608 => iterate at ./generator.jl:47 => collect_to! at ./array.jl:710 => collect_to_with_first!(::Vector{Float64}, ::Float64, ::Base.Generator{Vector{Int64}, typeof(sqrt)}, ::Int64)
-         collect(::Base.Generator{Vector{Int64}, typeof(sqrt)})
-           eval(::Module, ::Any)
-             eval_user_input(::Any, ::REPL.REPLBackend)
+ >   throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:33
+       sqrt at ./math.jl:582 => sqrt at ./math.jl:608 => iterate at ./generator.jl:47 => collect_to! at ./array.jl:710 => collect_to_with_first!(::Vector{Float64}, ::Float64, ::Base.Generator{Vector{Int64}, typeof(sqrt)}, ::Int64) at ./array.jl:688
+         collect(::Base.Generator{Vector{Int64}, typeof(sqrt)}) at ./array.jl:669
+           eval(::Module, ::Any) at ./boot.jl:360
+             eval_user_input(::Any, ::REPL.REPLBackend) at /home/tim/src/julia-master/usr/share/julia/stdlib/v1.6/REPL/src/REPL.jl:139
 ...
 ```
 
