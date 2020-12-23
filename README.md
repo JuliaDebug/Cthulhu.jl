@@ -17,6 +17,12 @@ statements correspond to static dispatch, whereas `call` statements correspond
 to dynamic dispatch.) Press enter to select an `invoke` or `call` to descend
 into, select ↩  to ascend, and press q or control-c to quit.
 
+### JuliaCon 2019 Talk and Demo
+[Watch on YouTube](https://www.youtube.com/watch?v=qf9oA09wxXY)  
+[![Click to watch video](https://img.youtube.com/vi/qf9oA09wxXY/0.jpg)](https://www.youtube.com/watch?v=qf9oA09wxXY)
+
+The version of Cthulu in the demo is a little outdated, without the newest features, but largely it has not changed too much.
+
 ## Usage: descend
 
 ```julia
