@@ -188,7 +188,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                     callsite.info.callinfos
                 end
                 sub_callsites = let callsite=callsite
-                    map(ci->Callsite(callsite.id, ci), callinfos)
+                    map(ci->Callsite(callsite.id, ci), callinfos, callsite.head)
                 end
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info

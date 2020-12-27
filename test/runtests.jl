@@ -34,6 +34,23 @@ let callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
     @test length(callsites) == 4
 end
 
+# Check that the Expr head (:invoke or :call) is preserved
+@noinline twice(x::Real) = 2x
+calltwice(c) = twice(c[1])
+let callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{Float64}})
+    @test length(callsites) == 1 && callsites[1].head === :invoke
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("invoke twice(::Float64)::Float64", String(take!(io)))
+end
+let callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{AbstractFloat}})
+    @test length(callsites) == 1 && callsites[1].head === :call
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("call twice(::AbstractFloat)", String(take!(io)))
+end
+
+
 # Check that we see callsites that are the rhs of assignments
 @noinline bar_callsite_assign() = nothing
 function foo_callsite_assign()

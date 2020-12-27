@@ -103,7 +103,7 @@ end
 
 function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_code)
     println(io)
-    println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype))))")
+    println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
 
     if iswarn
         cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
@@ -174,7 +174,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
                    optimize = false, debuginfo = :none, iswarn=false)
     CI, rt = InteractiveUtils.code_typed(b, optimize = optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt)))
+        print(io, Callsite(-1, MICallInfo(b.mi, rt)), :invoke)
         print(io, " (world: ", b.params.world, ")")
         return
     end

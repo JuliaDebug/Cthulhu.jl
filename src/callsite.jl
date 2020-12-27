@@ -64,6 +64,7 @@ get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 struct Callsite
     id::Int # ssa-id
     info::CallInfo
+    head::Symbol
 end
 get_mi(c::Callsite) = get_mi(c.info)
 
@@ -168,7 +169,7 @@ function Base.show(io::IO, c::Callsite)
     limiter = TextWidthLimiter(io, cols)
     print(limiter, string("%", c.id, " "))
     if isa(c.info, MICallInfo)
-        print(limiter, " = invoke ")
+        print(limiter, string(" = ", c.head, ' '))
         show_callinfo(limiter, c.info)
     elseif c.info isa MultiCallInfo
         print(limiter, " = call ")
