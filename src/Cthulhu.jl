@@ -281,7 +281,7 @@ descend_code_warntype(b::Bookmark; kw...) =
 if has_treemenu
     FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-    function ascend(mi)
+    function ascend(mi; kwargs...)
         root = treelist(mi)
         menu = TreeMenu(root)
         choice = menu.current
@@ -335,12 +335,12 @@ if has_treemenu
                 end
                 # The main application of `ascend` is finding cases of non-inferrability, so the
                 # warn highlighting is useful.
-                browsecodetyped && _descend(mi, iswarn=true, optimize=false, interruptexc=false)
+                browsecodetyped && _descend(mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
             end
         end
     end
 else
-    function ascend(mi)
+    function ascend(mi; kwargs...)
         calls, mis = treelist(mi)
         menu = TerminalMenus.RadioMenu(calls)
         choice = 1
@@ -349,18 +349,18 @@ else
             if choice != -1
                 # The main application of `ascend` is finding cases of non-inferrability, so the
                 # warn highlighting is useful.
-                _descend(instance(mis[choice]), iswarn=true, optimize=false, interruptexc=false)
+                _descend(instance(mis[choice]); iswarn=true, optimize=false, interruptexc=false, kwargs...)
             end
         end
     end
 end
 
 """
-    ascend(mi::MethodInstance)
-    ascend(bt)
+    ascend(mi::MethodInstance; kwargs...)
+    ascend(bt; kwargs...)
 
-Follow a chain of calls (either through a backtrace `bt` or the backedges of a `MethodInstance`),
-with the option to `descend` into intermediate calls.
+Follow a chain of calls (either through a backtrace `bt` or the backedges of a `MethodInstance` `mi`),
+with the option to `descend` into intermediate calls. `kwargs` are passed to [`descend`](@ref).
 """
 ascend
 
