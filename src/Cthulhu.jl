@@ -168,7 +168,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
-        menu = CthulhuMenu(callsites)
+        menu = CthulhuMenu(callsites, optimize)
         cid = request(menu)
         toggle = menu.toggle
 
@@ -188,13 +188,13 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                     callsite.info.callinfos
                 end
                 sub_callsites = let callsite=callsite
-                    map(ci->Callsite(callsite.id, ci), callinfos)
+                    map(ci->Callsite(callsite.id, ci, callsite.head), callinfos)
                 end
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, sub_menu=true)
+                menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true)
                 cid = request(menu)
                 if cid == length(sub_callsites) + 1
                     continue

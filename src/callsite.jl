@@ -64,6 +64,7 @@ get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 struct Callsite
     id::Int # ssa-id
     info::CallInfo
+    head::Symbol
 end
 get_mi(c::Callsite) = get_mi(c.info)
 
@@ -163,12 +164,13 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
 end
 
 function Base.show(io::IO, c::Callsite)
-    limit = get(io, :limit, false)
-    cols = limit ? displaysize(io)[2] : typemax(Int)
+    limit = get(io, :limit, false)::Bool
+    cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
+    optimize = get(io, :optimize, true)::Bool
     limiter = TextWidthLimiter(io, cols)
     print(limiter, string("%", c.id, " "))
     if isa(c.info, MICallInfo)
-        print(limiter, " = invoke ")
+        optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, c.info)
     elseif c.info isa MultiCallInfo
         print(limiter, " = call ")

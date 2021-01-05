@@ -34,6 +34,27 @@ let callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
     @test length(callsites) == 4
 end
 
+@testset "Expr heads" begin
+    # Check that the Expr head (:invoke or :call) is preserved
+    @noinline twice(x::Real) = 2x
+    calltwice(c) = twice(c[1])
+
+    callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{Float64}})
+    @test length(callsites) == 1 && callsites[1].head === :invoke
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("invoke twice(::Float64)::Float64", String(take!(io)))
+
+    callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{AbstractFloat}})
+    @test length(callsites) == 1 && callsites[1].head === :call
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("call twice(::AbstractFloat)", String(take!(io)))
+
+    # Note the failure of `callinfo` to properly handle specialization
+    @test_broken Cthulhu.callinfo(Tuple{typeof(twice), AbstractFloat}) isa Cthulhu.MultiCallInfo
+end
+
 # Check that we see callsites that are the rhs of assignments
 @noinline bar_callsite_assign() = nothing
 function foo_callsite_assign()

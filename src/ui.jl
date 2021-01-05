@@ -16,19 +16,19 @@ mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     sub_menu::Bool
 end
 
-function show_as_line(el)
-    reduced_displaysize = displaysize(stdout) .- (0, 3)
+function show_as_line(el, optimize::Bool)
+    reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     buf = ctx = IOBuffer()
     if (color = get(stdout, :color, nothing)) !== nothing
         ctx = IOContext(ctx, :color=>color)
     end
-    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize), el)
+    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize), el)
     String(take!(buf))
 end
 
 
-function CthulhuMenu(callsites; pagesize::Int=10, sub_menu = false)
-    options = vcat(map(show_as_line, callsites), ["↩"])
+function CthulhuMenu(callsites, optimize::Bool; pagesize::Int=10, sub_menu = false)
+    options = vcat(map(site->show_as_line(site, optimize), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging

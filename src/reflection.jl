@@ -62,7 +62,7 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
     isa(tt, Const) || return callsite
-    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)))
+    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)), callsite.head)
 end
 
 function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
@@ -93,7 +93,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
         else
             callinfo = FailedCallInfo(Base.signature_type(ft, argTs), rt)
         end
-        return Callsite(id, ReturnTypeCallInfo(callinfo))
+        return Callsite(id, ReturnTypeCallInfo(callinfo), c.head)
     end
 
     for (id, c) in enumerate(CI.code)
@@ -109,7 +109,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 if isa(at, Const) && is_return_type(at.val)
                     callsite = process_return_type(id, c, rt)
                 else
-                    callsite = Callsite(id, MICallInfo(c.args[1], rt))
+                    callsite = Callsite(id, MICallInfo(c.args[1], rt), c.head)
                 end
                 mi = get_mi(callsite)
                 if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
@@ -129,7 +129,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     if sig_ssa !== mi.def.sig
                         sig_callinfo = callinfo(sig_ssa, rt)
                         if get_mi(sig_callinfo) !== mi
-                            callsite = Callsite(id, DeoptimizedCallInfo(sig_callinfo, callsite.info))
+                            callsite = Callsite(id, DeoptimizedCallInfo(sig_callinfo, callsite.info), c.head)
                         end
                     end
                 end
@@ -205,7 +205,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                         mapany(ft-> Any[ft, types[2:end]...], fts)
                     end
                     cis = CallInfo[callinfo(Tuple{t...}, rt, params=params) for t in sigs]
-                    callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis))
+                    callsite = Callsite(id, MultiCallInfo(Tuple{types...}, rt, cis), c.head)
                 else
                     ft = Base.unwrap_unionall(types[1])
                     name = ft.name
@@ -217,7 +217,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     else
                         callinfo(Tuple{types...}, rt, params=params)
                     end
-                    callsite = Callsite(id, ci)
+                    callsite = Callsite(id, ci, c.head)
                 end
             else c.head === :foreigncall
                 # special handling of jl_new_task
@@ -228,7 +228,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                         func = c.args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing, params=params)))
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing, params=params)), c.head)
                     end
                 end
             end
