@@ -194,7 +194,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, sub_menu=true)
+                menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true)
                 cid = request(menu)
                 if cid == length(sub_callsites) + 1
                     continue
