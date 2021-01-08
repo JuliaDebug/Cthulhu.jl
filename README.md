@@ -1,6 +1,9 @@
 # Cthulhu.jl
 *The slow descent into madness*
 
+[![Build Status](https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg)](https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster)
+[![Codecov](https://codecov.io/github/JuliaDebug/Cthulhu.jl/coverage.svg)](https://codecov.io/gh/JuliaDebug/Cthulhu.jl)
+
 Cthulhu can help you debug type inference issues by recursively showing the
 `code_typed` output until you find the exact point where inference gave up,
 messed up, or did something unexpected. Using the Cthulhu interface you can
