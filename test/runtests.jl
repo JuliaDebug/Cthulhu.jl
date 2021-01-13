@@ -4,6 +4,23 @@ using InteractiveUtils
 using Test
 using StaticArrays
 
+function firstassigned(specializations::Core.SimpleVector)
+    # the methodinstance may not be first (annoying)
+    for i = 1:length(specializations)
+        if isassigned(specializations, i)
+            return specializations[i]
+        end
+    end
+    return nothing
+end
+function firstassigned(specializations)
+    mis = []
+    Base.visit(specializations) do mi
+        isempty(mis) && push!(mis, mi)
+    end
+    return mis[1]
+end
+
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     mi = Cthulhu.first_method_instance(f, TT)
     (ci, rt, slottypes) = Cthulhu.do_typeinf_slottypes(mi, optimize, Cthulhu.current_params())
@@ -235,6 +252,18 @@ if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
 else
     strs, mis = Cthulhu.treelist(mi)
     @test strs == ["fbackedge1()", " fbackedge2(::Float64)"]
+end
+
+# issue #114
+unspecva(@nospecialize(i::Int...)) = 1
+@test unspecva(1, 2) == 1
+mi = firstassigned(first(methods(unspecva)).specializations)
+if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
+    root = Cthulhu.treelist(mi)
+    @test occursin("Vararg", root.data.callstr)
+else
+    strs, mis = Cthulhu.treelist(mi)
+    @test occursin("Vararg", strs[1])
 end
 
 # treelist for stacktraces
