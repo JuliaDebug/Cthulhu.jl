@@ -55,6 +55,7 @@ function stripType(@nospecialize(typ))
     elseif isa(typ, TypeVar) || isa(typ, Union)
         return typ
     end
+    Base.isvarargtype(typ) && return typ
     return typ <: Type && length(typ.parameters) == 1 ? typ.parameters[1] : typ
 end
 nonconcrete_red(@nospecialize(typ)) = isconcretetype(stripType(typ)) ? :nothing : :red
