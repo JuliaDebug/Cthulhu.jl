@@ -50,7 +50,7 @@ else
         if isa(a, Const)
             a = Core.Typeof(a.val)
         elseif isa(a, Core.Compiler.PartialStruct)
-            a = Core.Typeof(a.typ)
+            a = a.typ
         end
         return a
     end
@@ -122,6 +122,8 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                         elseif isa(a, SlotOrArgument)
                             a = slottypes[_id(a)]
                             return unwrapconst(a)
+                        elseif isa(a, QuoteNode)
+                            return Core.Typeof(a.value)
                         end
                         Core.Typeof(a)
                     end
