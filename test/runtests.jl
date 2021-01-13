@@ -4,7 +4,7 @@ using InteractiveUtils
 using Test
 using StaticArrays
 
-function firstassigned(specializations)
+function firstassigned(specializations::Core.SimpleVector)
     # the methodinstance may not be first (annoying)
     for i = 1:length(specializations)
         if isassigned(specializations, i)
@@ -12,6 +12,13 @@ function firstassigned(specializations)
         end
     end
     return nothing
+end
+function firstassigned(specializations)
+    mis = []
+    Base.visit(specializations) do mi
+        isempty(mis) && push!(mis, mi)
+    end
+    return mis[1]
 end
 
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
