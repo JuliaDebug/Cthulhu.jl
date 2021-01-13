@@ -50,7 +50,7 @@ else
         if isa(a, Const)
             a = Core.Typeof(a.val)
         elseif isa(a, Core.Compiler.PartialStruct)
-            a = Core.Typeof(a.typ)
+            a = a.typ
         end
         return a
     end
