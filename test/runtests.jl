@@ -69,7 +69,7 @@ end
     @test occursin("call twice(::AbstractFloat)", String(take!(io)))
 
     # Note the failure of `callinfo` to properly handle specialization
-    @test_broken Cthulhu.callinfo(Tuple{typeof(twice), AbstractFloat}) isa Cthulhu.MultiCallInfo
+    @test_broken Cthulhu.callinfo(Tuple{typeof(twice), AbstractFloat}, AbstractFloat) isa Cthulhu.MultiCallInfo
 end
 
 # Check that we see callsites that are the rhs of assignments
@@ -178,26 +178,31 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
     end
 end
 
-# Splatting
-function fsplat(::Type{Int}, a...)
-    z = zero(Int)
-    for v in a
-        z += v
+@testset "Varargs" begin
+    function fsplat(::Type{Int}, a...)
+        z = zero(Int)
+        for v in a
+            z += v
+        end
+        return z
     end
-    return z
-end
-gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
-hsplat1(A) = gsplat1(eltype(A), A...)
-for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
-                        (Tuple{Vector{Int}}, false),
-                        (Tuple{SVector{3,Int}}, true))
-    let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
-        if VERSION >= v"1.4.0-DEV.304"
-            @test !isempty(callsites)
-            cs = callsites[end]
-            @test cs isa Cthulhu.Callsite
-            mi = cs.info.mi
-            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+    gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
+    hsplat1(A) = gsplat1(eltype(A), A...)
+    io = IOBuffer()
+    iolim = Cthulhu.TextWidthLimiter(io, 80)
+    for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
+                            (Tuple{Vector{Int}}, false),
+                            (Tuple{SVector{3,Int}}, true))
+        let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
+            if VERSION >= v"1.4.0-DEV.304"
+                @test !isempty(callsites)
+                cs = callsites[end]
+                @test cs isa Cthulhu.Callsite
+                mi = cs.info.mi
+                @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+                Cthulhu.show_callinfo(iolim, cs.info)
+                @test occursin("…", String(take!(io))) != haslen
+            end
         end
     end
 end
