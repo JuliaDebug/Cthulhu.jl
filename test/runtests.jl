@@ -188,6 +188,8 @@ end
     end
     gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
     hsplat1(A) = gsplat1(eltype(A), A...)
+    io = IOBuffer()
+    iolim = Cthulhu.TextWidthLimiter(io, 80)
     for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
                             (Tuple{Vector{Int}}, false),
                             (Tuple{SVector{3,Int}}, true))
@@ -198,6 +200,8 @@ end
                 @test cs isa Cthulhu.Callsite
                 mi = cs.info.mi
                 @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+                Cthulhu.show_callinfo(iolim, cs.info)
+                @test occursin("…", String(take!(io))) != haslen
             end
         end
     end
