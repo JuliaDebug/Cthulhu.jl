@@ -202,6 +202,17 @@ for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
     end
 end
 
+like_cat(dims, xs::AbstractArray{T}...) where T = like_cat_t(T, xs...; dims=dims)
+like_cat_t(::Type{T}, xs...; dims) where T = T
+
+let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Float32}}})
+    @test length(callsites) == 1
+    cs = callsites[1]
+    @test cs isa Cthulhu.Callsite
+    mi = cs.info.mi
+    @test mi.specTypes.parameters[4] === Type{Float32}
+end
+
 @testset "deoptimized calls" begin
     @noinline function f(@nospecialize(t))
         s = 0

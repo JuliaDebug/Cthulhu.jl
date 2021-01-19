@@ -95,6 +95,19 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
         end
         return Callsite(id, ReturnTypeCallInfo(callinfo), c.head)
     end
+    function maybefixsplat(t, arg)
+        if isa(arg, Core.SSAValue)
+           arg = CI.ssavaluetypes[arg.id]
+           if isa(arg, Core.Compiler.Const)
+                arg = arg.val
+           end
+        end
+        if isa(arg, Tuple)
+            # Redo the type analysis in case there are any DataTypes in the tuple
+            return Tuple{map(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), arg)...}
+        end
+        return t
+    end
 
     for (id, c) in enumerate(CI.code)
         if c isa Expr
@@ -143,7 +156,10 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 ok = true
                 while types[1] === typeof(Core._apply)
                     new_types = Any[types[2]]
-                    for t in types[3:end]
+                    for (i, t) in enumerate(types[3:end])
+                        if i == 1 && t <: Tuple
+                            t = maybefixsplat(t, c.args[3])
+                        end
                         if !(t <: Tuple) || t isa Union
                             ok = false
                             break
@@ -162,6 +178,9 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                         new_types = Any[types[3]]
                         for i = 4:length(types)
                             t = types[i]
+                            if i == 4 && t <: Tuple
+                                t = maybefixsplat(t, c.args[4])
+                            end
                             if t <: AbstractArray
                                 if hasmethod(length, (Type{t},))
                                     for i = 1:length(t)
