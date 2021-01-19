@@ -69,7 +69,7 @@ end
     @test occursin("call twice(::AbstractFloat)", String(take!(io)))
 
     # Note the failure of `callinfo` to properly handle specialization
-    @test_broken Cthulhu.callinfo(Tuple{typeof(twice), AbstractFloat}) isa Cthulhu.MultiCallInfo
+    @test_broken Cthulhu.callinfo(Tuple{typeof(twice), AbstractFloat}, AbstractFloat) isa Cthulhu.MultiCallInfo
 end
 
 # Check that we see callsites that are the rhs of assignments
