@@ -2,6 +2,7 @@ using Cthulhu
 using REPL
 using InteractiveUtils
 using Test
+using Random
 using StaticArrays
 
 function firstassigned(specializations::Core.SimpleVector)
@@ -205,6 +206,20 @@ end
             end
         end
     end
+end
+
+@testset "MaybeUndef" begin
+    function undef(b::Bool)
+        b || @goto final_step
+        str = randstring(8)
+        @label final_step
+        return str*"end"
+    end
+    @test isa(undef(true), String)
+    @test_throws UndefVarError undef(false)
+    cs = find_callsites_by_ftt(undef, Tuple{Bool})[end]
+    @test cs.head === :invoke
+    @test cs.info.mi.def == which(string, (String,String))
 end
 
 like_cat(dims, xs::AbstractArray{T}...) where T = like_cat_t(T, xs...; dims=dims)
