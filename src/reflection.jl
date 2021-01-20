@@ -42,6 +42,8 @@ if VERSION < v"1.2.0-DEV.354"
     function unwrapconst(a)
         if isa(a, Const)
             a = Core.Typeof(a.val)
+        elseif isa(a, Core.Compiler.MaybeUndef)
+            a = a.typ
         end
         return a
     end
