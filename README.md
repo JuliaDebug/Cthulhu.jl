@@ -9,12 +9,21 @@ Cthulhu can help you debug type inference issues by recursively showing the
 messed up, or did something unexpected. Using the Cthulhu interface you can
 debug type inference problems faster.
 
+Looking at type-inferred code can be a bit daunting initially, but you grow more
+comfortable with practice. Consider starting with a [tutorial on "lowered" representation](https://juliadebug.github.io/JuliaInterpreter.jl/stable/ast/),
+which introduces most of the new concepts. Type-inferrred code differs mostly
+by having additional type annotation and (depending on whether you're looking
+at optimized or non-optimized code) may incorporate inlining and other fairly
+significant transformations of the original code as written by the programmer.
+
+Cthulhu's main tool, `descend`, can be invoked like this:
+
 ```julia
-descend(f, tt)
-@descend f()
+descend(f, tt)     # function and argument types
+@descend f(args)   # normal call
 ```
 
-Given a function and a tuple-type, interactively explore the output of
+`descend` allows you to interactively explore the output of
 `code_typed` by descending into `invoke` and `call` statements. (`invoke`
 statements correspond to static dispatch, whereas `call` statements correspond
 to dynamic dispatch.) Press enter to select an `invoke` or `call` to descend
@@ -55,6 +64,8 @@ allows you to explore a call chain or tree starting from the innermost
 callee. Its primary purpose is to support analysis of invalidation and inference
 triggers in conjunction with [SnoopCompile](https://github.com/timholy/SnoopCompile.jl),
 but you can use it as a standalone tool.
+There is a [video using ascend to fix invalidations](https://www.youtube.com/watch?v=7VbXbI6OmYo),
+where the part on `ascend` starts at minute 4:55.
 
 For example, you can use it to examine all the inferred callers of a method instance:
 
@@ -101,3 +112,9 @@ Choose a call for analysis (q to quit):
 
 The calls that appear on the same line separated by `=>` represent inlined methods; when you select such a line,
 you enter at the final (topmost) call on that line.
+
+By default,
+- `descend` views optimized code without "warn" coloration of types
+- `ascend` views non-optimized code with "warn" coloration
+
+You can toggle between these with `o` and `w`.
