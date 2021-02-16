@@ -39,6 +39,7 @@ end
 """
 const CONFIG = CthulhuConfig()
 
+include("interpreter.jl")
 include("callsite.jl")
 include("reflection.jl")
 include("ui.jl")
@@ -142,14 +143,14 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-descend(mi::MethodInstance; kwargs...) = _descend(mi; iswarn=false, interruptexc=false, kwargs...)
+descend(ci::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(ci, mi; iswarn=false, interruptexc=false, kwargs...)
 
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
+function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -160,11 +161,12 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     display_CI = true
     while true
         debuginfo_key = debuginfo ? :source : :none
-        (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
-        preprocess_ci!(CI, mi, optimize, CONFIG)
-        callsites = find_callsites(CI, mi, slottypes; params=params, kwargs...)
+        codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
+        rt = optimize ? interp.opt[mi].rettype : interp.unopt[mi].rt
+        preprocess_ci!(codeinf, mi, optimize, CONFIG)
+        callsites = find_callsites(codeinf, mi, codeinf.slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo_key, CI, rt, mi, iswarn, verbose)
+        display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
         display_CI = true
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
@@ -215,7 +217,7 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
                 continue
             end
 
-            _descend(next_mi; params=params, optimize=optimize,
+            _descend(interp, next_mi; params=params, optimize=optimize,
                      iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 
         elseif toggle === :warn
@@ -267,9 +269,20 @@ function _descend(mi::MethodInstance; iswarn::Bool, params=current_params(), opt
     end
 end
 
+function do_typeinf!(interp, mi)
+    result = InferenceResult(mi)
+    frame = InferenceState(result, true, interp)
+    Core.Compiler.typeinf(interp, frame)
+    return nothing
+end
+
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    mi = choose_method_instance(F, TT; params=params)
-    _descend(mi; params=params, kwargs...)
+    ci = CthulhuInterpreter()
+    sigt = Base.signature_type(F, TT)
+    match = Base._which(sigt)
+    mi = Core.Compiler.specialize_method(match)
+    do_typeinf!(ci, mi)
+    _descend(ci, mi; params=params, kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
