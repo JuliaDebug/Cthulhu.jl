@@ -106,46 +106,27 @@ function callstring(io, sfs::Vector{StackTraces.StackFrame})
 end
 callstring(io, ipframes::Vector{IPFrames}) = callstring(io, ipframes[1].sfs)
 
-if has_treemenu
-    struct Data{T}
-        callstr::String
-        nd::T
-    end
-
-    function treelist(mi)
-        io = IOBuffer()
-        str = callstring(io, mi)
-        treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
-    end
-    function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
-        mi ∈ visited && return parent
-        push!(visited, instance(mi))
-        indent *= " "
-        for edge in backedges(mi)
-            str = indent * callstring(io, edge)
-            child = Node(Data(str, instance(edge)), parent)
-            treelist!(child, io, nextnode(mi, edge), indent, visited)
-        end
-        return parent
-    end
-    treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
-else
-    # TreeMenu can't be implemented, fallback to non-folding menu
-    treelist(mi) = treelist!(String[], typeof(mi)[], IOBuffer(), mi, "", Base.IdSet{typeof(mi)}())
-
-    function treelist!(strs, mis, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
-        mi ∈ visited && return strs, mis
-        push!(visited, mi)
-        str = indent * callstring(io, mi)
-        push!(strs, str)
-        push!(mis, mi)
-        indent *= " "
-        for edge in backedges(mi)
-            treelist!(strs, mis, io, edge, indent, visited)
-        end
-        return strs, mis
-    end
-    treelist!(strs, mis, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
+struct Data{T}
+    callstr::String
+    nd::T
 end
+
+function treelist(mi)
+    io = IOBuffer()
+    str = callstring(io, mi)
+    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
+end
+function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
+    mi ∈ visited && return parent
+    push!(visited, instance(mi))
+    indent *= " "
+    for edge in backedges(mi)
+        str = indent * callstring(io, edge)
+        child = Node(Data(str, instance(edge)), parent)
+        treelist!(child, io, nextnode(mi, edge), indent, visited)
+    end
+    return parent
+end
+treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 
 treelist(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = treelist(buildframes(bt))
