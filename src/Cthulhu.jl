@@ -56,6 +56,15 @@ macro descend_code_typed(ex0...)
 end
 
 """
+    @interp
+
+For debugging. Returns a CthulhuInterpreter from the appropriate entrypoint.
+"""
+macro interp(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :mkinterp, ex0)
+end
+
+"""
     @descend_code_warntype
 
 Evaluates the arguments to the function or macro call, determines their
@@ -157,13 +166,28 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
     display_CI = true
     while true
         debuginfo_key = debuginfo ? :source : :none
-        codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
-        rt = optimize ? interp.opt[mi].rettype : interp.unopt[mi].rt
-        preprocess_ci!(codeinf, mi, optimize, CONFIG)
-        callsites = find_callsites(codeinf, mi, codeinf.slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
-        display_CI = true
+        if optimize && interp.opt[mi].inferred === nothing
+            # This was inferred to a pure constant - we have no code to show,
+            # but make something up that looks plausible.
+            println(stdout)
+            println(stdout, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+            println(stdout, "│  return ", Const(interp.opt[mi].rettype_const))
+            println(stdout)
+            callsites = Callsite[]
+        else
+            codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
+            rt = optimize ? interp.opt[mi].rettype : interp.unopt[mi].rt
+            infos = nothing
+            if !optimize
+                infos = interp.unopt[mi].stmt_infos
+            end
+            preprocess_ci!(codeinf, mi, optimize, CONFIG)
+            callsites = find_callsites(codeinf, infos, mi, codeinf.slottypes; params=params, kwargs...)
+
+            display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
+            display_CI = true
+        end
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = CthulhuMenu(callsites, optimize)
@@ -272,12 +296,17 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+function mkinterp(@nospecialize(F), @nospecialize(TT))
     ci = CthulhuInterpreter()
     sigt = Base.signature_type(F, TT)
     match = Base._which(sigt)
     mi = Core.Compiler.specialize_method(match)
     do_typeinf!(ci, mi)
+    (ci, mi)
+end
+
+function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+    (ci, mi) = mkinterp(F, TT)
     _descend(ci, mi; params=params, kwargs...)
 end
 

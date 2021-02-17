@@ -2,11 +2,14 @@ using Unicode
 
 abstract type CallInfo; end
 
+using Core.Compiler: MethodMatch
+
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
 end
+MICallInfo(match::MethodMatch, rt) = MICallInfo(Core.Compiler.specialize_method(match), rt)
 get_mi(ci::MICallInfo) = ci.mi
 
 # Failed
