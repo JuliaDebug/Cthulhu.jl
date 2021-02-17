@@ -97,7 +97,7 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-if VERSION >= v"1.1.0-DEV.215" && Base.JLOptions().check_bounds == 0
+if Base.JLOptions().check_bounds == 0
 Base.@propagate_inbounds function f(x)
     @boundscheck error()
 end
@@ -195,15 +195,13 @@ end
                             (Tuple{Vector{Int}}, false),
                             (Tuple{SVector{3,Int}}, true))
         let callsites = find_callsites_by_ftt(hsplat1, Atype; optimize=false)
-            if VERSION >= v"1.4.0-DEV.304"
-                @test !isempty(callsites)
-                cs = callsites[end]
-                @test cs isa Cthulhu.Callsite
-                mi = cs.info.mi
-                @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
-                Cthulhu.show_callinfo(iolim, cs.info)
-                @test occursin("…", String(take!(io))) != haslen
-            end
+            @test !isempty(callsites)
+            cs = callsites[end]
+            @test cs isa Cthulhu.Callsite
+            mi = cs.info.mi
+            @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
+            Cthulhu.show_callinfo(iolim, cs.info)
+            @test occursin("…", String(take!(io))) != haslen
         end
     end
 end
@@ -263,7 +261,7 @@ end
     ioctx = IOContext(io, :color=>true)
     Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none, true)
     str = String(take!(io))
-    VERSION >= v"1.2" && @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
+    @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
 
 ##
@@ -275,27 +273,17 @@ fbackedge2(x) = x > 0 ? fbackedge1() : -fbackedge1()
 @test fbackedge2(-0.2) == -1
 mspec = @which(fbackedge1()).specializations
 mi = isa(mspec, Core.SimpleVector) ? mspec[1] : mspec.func
-if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
-    root = Cthulhu.treelist(mi)
-    @test Cthulhu.count_open_leaves(root) == 2
-    @test root.data.callstr == "fbackedge1()"
-    @test root.children[1].data.callstr == " fbackedge2(::Float64)"
-else
-    strs, mis = Cthulhu.treelist(mi)
-    @test strs == ["fbackedge1()", " fbackedge2(::Float64)"]
-end
+root = Cthulhu.treelist(mi)
+@test Cthulhu.count_open_leaves(root) == 2
+@test root.data.callstr == "fbackedge1()"
+@test root.children[1].data.callstr == " fbackedge2(::Float64)"
 
 # issue #114
 unspecva(@nospecialize(i::Int...)) = 1
 @test unspecva(1, 2) == 1
 mi = firstassigned(first(methods(unspecva)).specializations)
-if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
-    root = Cthulhu.treelist(mi)
-    @test occursin("Vararg", root.data.callstr)
-else
-    strs, mis = Cthulhu.treelist(mi)
-    @test occursin("Vararg", strs[1])
-end
+root = Cthulhu.treelist(mi)
+@test occursin("Vararg", root.data.callstr)
 
 # treelist for stacktraces
 fst1(x) = backtrace()
@@ -304,16 +292,10 @@ fst1(x) = backtrace()
 @inline fst4(x) = fst3(x)
 fst5(x) = fst4(x)
 tree = Cthulhu.treelist(fst5(1.0))
-if isdefined(REPL.TerminalMenus, :ConfiguredMenu)
-    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
-    @test length(tree.children) == 1
-    child = tree.children[1]
-    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
-else
-    treestrings = tree[1]
-    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", treestrings[1]) !== nothing
-    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", treestrings[2]) !== nothing
-end
+@test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
+@test length(tree.children) == 1
+child = tree.children[1]
+@test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
 
 ##
 # Cthulhu config test
@@ -341,36 +323,32 @@ let config = Cthulhu.CthulhuConfig(
     end
 end
 
-if VERSION >= v"1.1-"
-    let config = Cthulhu.CthulhuConfig(
-        # Implementing `cat` in Julia:
-        highlighter = `$(Base.julia_cmd()) -e "write(stdout, read(stdin))" --`,
-        enable_highlighter = true,
-    )
-        for lexer in ["llvm", "asm"]
-            @test sprint() do io
-                Cthulhu.highlight(io, "INPUT", lexer, config)
-            end == "INPUT\n"
-            @test sprint() do io
-                Cthulhu.highlight(io, "INPUT\n", lexer, config)
-            end == "INPUT\n"
-        end
+let config = Cthulhu.CthulhuConfig(
+    # Implementing `cat` in Julia:
+    highlighter = `$(Base.julia_cmd()) -e "write(stdout, read(stdin))" --`,
+    enable_highlighter = true,
+)
+    for lexer in ["llvm", "asm"]
+        @test sprint() do io
+            Cthulhu.highlight(io, "INPUT", lexer, config)
+        end == "INPUT\n"
+        @test sprint() do io
+            Cthulhu.highlight(io, "INPUT\n", lexer, config)
+        end == "INPUT\n"
     end
 end
 
 ###
 ### Printer test:
 ###
-if VERSION >= v"1.1.0-DEV.762"
-    function foo()
-        T = rand() > 0.5 ? Int64 : Float64
-        sum(rand(T, 100))
-    end
-    ci, mi, rt, st = process(foo, Tuple{});
-    io = IOBuffer()
-    Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
-    str = String(take!(io))
-    print(str)
-    # test by bounding the number of lines printed
-    @test count(isequal('\n'), str) <= 50
+function foo()
+    T = rand() > 0.5 ? Int64 : Float64
+    sum(rand(T, 100))
 end
+ci, mi, rt, st = process(foo, Tuple{});
+io = IOBuffer()
+Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
+str = String(take!(io))
+print(str)
+# test by bounding the number of lines printed
+@test count(isequal('\n'), str) <= 50

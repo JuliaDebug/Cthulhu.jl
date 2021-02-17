@@ -5,59 +5,25 @@
 using Base.Meta
 using .Compiler: widenconst, argextype, Const
 
-if VERSION >= v"1.1.0-DEV.157"
-    const is_return_type = Core.Compiler.is_return_type
-else
-    is_return_type(f) = f === Core.Compiler.return_type
-end
-
-if VERSION >= v"1.2.0-DEV.249"
-    const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
-else
-    sptypes_from_meth_instance(mi) = Core.Compiler.spvals_from_meth_instance(mi)
-end
-
-if VERSION >= v"1.2.0-DEV.320"
-    const may_invoke_generator = Base.may_invoke_generator
-else
-    may_invoke_generator(meth, @nospecialize(atypes), sparams) = isdispatchtuple(atypes)
-end
-
-if VERSION < v"1.2.0-DEV.573"
-    code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.code_for_method(method, metharg, methsp, world, force)
-else
-    code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
-end
+const is_return_type = Core.Compiler.is_return_type
+const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
+const may_invoke_generator = Base.may_invoke_generator
+code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 
 # https://github.com/JuliaLang/julia/pull/36318
 _id(x) = x.id
-if VERSION < v"1.6.0-DEV.272"
-    const SlotOrArgument = Core.Slot
-else
-    _id(x::Core.Argument) = x.n
-    const SlotOrArgument = Union{Core.Argument,Core.Slot}
-end
+_id(x::Core.Argument) = x.n
+const SlotOrArgument = Union{Core.Argument,Core.Slot}
 
-if VERSION < v"1.2.0-DEV.354"
-    function unwrapconst(a)
-        if isa(a, Const)
-            a = Core.Typeof(a.val)
-        elseif isa(a, Core.Compiler.MaybeUndef)
-            a = a.typ
-        end
-        return a
+function unwrapconst(a)
+    if isa(a, Const)
+        a = Core.Typeof(a.val)
+    elseif isa(a, Core.Compiler.PartialStruct)
+        a = a.typ
+    elseif isa(a, Core.Compiler.MaybeUndef)
+        a = a.typ
     end
-else
-    function unwrapconst(a)
-        if isa(a, Const)
-            a = Core.Typeof(a.val)
-        elseif isa(a, Core.Compiler.PartialStruct)
-            a = a.typ
-        elseif isa(a, Core.Compiler.MaybeUndef)
-            a = a.typ
-        end
-        return a
-    end
+    return a
 end
 
 transform(::Val, callsite) = callsite
@@ -175,36 +141,34 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                 end
                 ok || continue
 
-                @static if VERSION >= v"1.4.0-DEV.304"
-                    # Look through _apply_iterate
-                    if types[1] === typeof(Core._apply_iterate)
-                        ok = true
-                        new_types = Any[types[3]]
-                        for i = 4:length(types)
-                            t = types[i]
-                            if i == 4 && t <: Tuple
-                                t = maybefixsplat(t, c.args[4])
-                            end
-                            if t <: AbstractArray
-                                if hasmethod(length, (Type{t},))
-                                    for i = 1:length(t)
-                                        push!(new_types, eltype(t))
-                                    end
-                                else
-                                    push!(new_types, Vararg{eltype(t)})
-                                    i == length(types) || (ok = false)
-                                end
-                                continue
-                            end
-                            if !(t <: Tuple) || t isa Union
-                                ok = false
-                                break
-                            end
-                            append!(new_types, Base.unwrap_unionall(t).parameters)
+                # Look through _apply_iterate
+                if types[1] === typeof(Core._apply_iterate)
+                    ok = true
+                    new_types = Any[types[3]]
+                    for i = 4:length(types)
+                        t = types[i]
+                        if i == 4 && t <: Tuple
+                            t = maybefixsplat(t, c.args[4])
                         end
-                        ok || continue
-                        types = new_types
+                        if t <: AbstractArray
+                            if hasmethod(length, (Type{t},))
+                                for i = 1:length(t)
+                                    push!(new_types, eltype(t))
+                                end
+                            else
+                                push!(new_types, Vararg{eltype(t)})
+                                i == length(types) || (ok = false)
+                            end
+                            continue
+                        end
+                        if !(t <: Tuple) || t isa Union
+                            ok = false
+                            break
+                        end
+                        append!(new_types, Base.unwrap_unionall(t).parameters)
                     end
+                    ok || continue
+                    types = new_types
                 end
 
                 # Filter out builtin functions and intrinsic function
@@ -266,7 +230,6 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
     return callsites
 end
 
-if VERSION >= v"1.1.0-DEV.215"
 function dce!(ci, mi)
     argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
     ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
@@ -277,43 +240,21 @@ function dce!(ci, mi)
     ir = Core.Compiler.finish(compact)
     Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
 end
-else
-function dce!(ci, mi)
-end
-end
 
-if isdefined(Core.Compiler, :AbstractInterpreter)
-    function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
-        ccall(:jl_typeinf_begin, Cvoid, ())
-        result = Core.Compiler.InferenceResult(mi)
-        frame = Core.Compiler.InferenceState(result, false, interp)
-        frame === nothing && return (nothing, Any, Any[])
-        if Compiler.typeinf(interp, frame) && run_optimizer
-            oparams = Core.Compiler.OptimizationParams(interp)
-            opt = Compiler.OptimizationState(frame, oparams, interp)
-            Base.VERSION >= v"1.6.0-DEV.1410" ? Compiler.optimize(interp, opt, oparams, result.result) :
-                                                Compiler.optimize(opt, oparams, result.result)
-            opt.src.inferred = true
-        end
-        ccall(:jl_typeinf_end, Cvoid, ())
-        frame.inferred || return (nothing, Any, Any[])
-        return (frame.src, result.result, frame.slottypes)
+function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
+    ccall(:jl_typeinf_begin, Cvoid, ())
+    result = Core.Compiler.InferenceResult(mi)
+    frame = Core.Compiler.InferenceState(result, false, interp)
+    frame === nothing && return (nothing, Any, Any[])
+    if Compiler.typeinf(interp, frame) && run_optimizer
+        oparams = Core.Compiler.OptimizationParams(interp)
+        opt = Compiler.OptimizationState(frame, oparams, interp)
+        Compiler.optimize(interp, opt, oparams, result.result)
+        opt.src.inferred = true
     end
-else
-    function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, params::Core.Compiler.Params)
-        ccall(:jl_typeinf_begin, Cvoid, ())
-        result = Core.Compiler.InferenceResult(mi)
-        frame = Core.Compiler.InferenceState(result, false, params)
-        frame === nothing && return (nothing, Any, Any[])
-        if Compiler.typeinf(frame) && run_optimizer
-            opt = Compiler.OptimizationState(frame)
-            Compiler.optimize(opt, result.result)
-            opt.src.inferred = true
-        end
-        ccall(:jl_typeinf_end, Cvoid, ())
-        frame.inferred || return (nothing, Any, Any[])
-        return (frame.src, result.result, frame.slottypes)
-    end
+    ccall(:jl_typeinf_end, Cvoid, ())
+    frame.inferred || return (nothing, Any, Any[])
+    return (frame.src, result.result, frame.slottypes)
 end
 
 function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
@@ -325,18 +266,8 @@ function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
     end
 end
 
-if isdefined(Core.Compiler, :AbstractInterpreter)
-    const CompilerParams = Core.Compiler.NativeInterpreter
-    current_params() = CompilerParams()
-else
-    if :trace_inference_limits in fieldnames(Core.Compiler.Params)
-        const CompilerParams = Core.Compiler.CustomParams
-        current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()); trace_inference_limits=true)
-    else
-        const CompilerParams = Core.Compiler.Params
-        current_params() = CompilerParams(ccall(:jl_get_world_counter, UInt, ()))
-    end
-end
+const CompilerParams = Core.Compiler.NativeInterpreter
+current_params() = CompilerParams()
 
 function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
     sig = Base.signature_type(F, TT)

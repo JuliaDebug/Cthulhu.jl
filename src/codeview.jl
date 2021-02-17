@@ -18,35 +18,19 @@ end
 
 function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig,
                       dump_module = false)
-    @static if VERSION >= v"1.5.0-DEV.393"
-        dump = InteractiveUtils._dump_function_linfo_llvm(
-            mi, params.world,
-            #=wrapper=# false, #=strip_ir_metadata=# true,
-            dump_module,
-            optimize, debuginfo ? :source : :none, Base.CodegenParams())
-    else
-        dump = InteractiveUtils._dump_function_linfo(
-            mi, params.world, #=native=# false,
-            #=wrapper=# false, #=strip_ir_metadata=# true,
-            dump_module, #=syntax=# config.asm_syntax,
-            optimize, debuginfo ? :source : :none)
-    end
+    dump = InteractiveUtils._dump_function_linfo_llvm(
+        mi, params.world,
+        #=wrapper=# false, #=strip_ir_metadata=# true,
+        dump_module,
+        optimize, debuginfo ? :source : :none, Base.CodegenParams())
     highlight(io, dump, "llvm", config)
 end
 
 function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
-    @static if VERSION >= v"1.5.0-DEV.393"
-        dump = InteractiveUtils._dump_function_linfo_native(
-            mi, params.world,
-            #=wrapper=# false, #=syntax=# config.asm_syntax,
-            debuginfo ? :source : :none)
-    else
-        dump = InteractiveUtils._dump_function_linfo(
-            mi, params.world, #=native=# true,
-            #=wrapper=# false, #=strip_ir_metadata=# true,
-            #=dump_module=# false, #=syntax=# config.asm_syntax,
-            optimize, debuginfo ? :source : :none)
-    end
+    dump = InteractiveUtils._dump_function_linfo_native(
+        mi, params.world,
+        #=wrapper=# false, #=syntax=# config.asm_syntax,
+        debuginfo ? :source : :none)
     highlight(io, dump, "asm", config)
 end
 
@@ -74,29 +58,19 @@ end
 
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
 function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
-    if VERSION < v"1.1.0-DEV.762"
-    elseif VERSION < v"1.2.0-DEV.229"
-        lineprinter = Base.IRShow.debuginfo[debuginfo]
-    else
-        debuginfo = Base.IRShow.debuginfo(debuginfo)
-        lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    end
-
+    debuginfo = Base.IRShow.debuginfo(debuginfo)
+    lineprinter = Base.IRShow.__debuginfo[debuginfo]
     lambda_io::IOContext = io
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-        VERSION >= v"1.2" && show_variables(io, src, slotnames)
+        show_variables(io, src, slotnames)
     end
     print(io, "Body")
     InteractiveUtils.warntype_type_printer(io, rettype, true)
     println(io)
-    if VERSION < v"1.1.0-DEV.762"
-        Base.IRShow.show_ir(lambda_io, src, InteractiveUtils.warntype_type_printer)
-    else
-        ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
-        ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
-    end
+    ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
+    ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
     return nothing
 end
 
@@ -107,10 +81,8 @@ function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_cod
 
     if iswarn
         cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
-    elseif VERSION >= v"1.1.0-DEV.762"
-        show(io, CI, debuginfo = debuginfo_key)
     else
-        show(io, MIME"text/plain"(), CI=>rettype)
+        show(io, CI, debuginfo = debuginfo_key)
     end
     println(io)
 end
@@ -209,7 +181,6 @@ InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :
 @nospecialize
 using Base.IRShow: compute_basic_blocks, scan_ssa_use!, should_print_ssa_type, print_stmt, GotoIfNot, GotoNode, PhiNode, block_for_inst
 function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_postprinter)
-    newprinter = VERSION >= v"1.6.0-DEV.852"
     cols = displaysize(io)[2]
     used = BitSet()
     stmts = code.code
@@ -251,11 +222,7 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
         if bb_idx > length(cfg.blocks)
             # If invariants are violated, print a special leader
             linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-            if newprinter
-                inlining_indent = line_info_preprinter(io, linestart, idx)
-            else
-                inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
-            end
+            inlining_indent = line_info_preprinter(io, linestart, idx)
             printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
         else
             bbrange = cfg.blocks[bb_idx].stmts
@@ -263,11 +230,7 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
             # Print line info update
             linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
             linestart *= " "^max_bb_idx_size
-            if newprinter
-                inlining_indent = line_info_preprinter(io, linestart, idx)
-            else
-                inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
-            end
+            inlining_indent = line_info_preprinter(io, linestart, idx)
             if idx == first(bbrange)
                 bb_idx_str = string(bb_idx)
                 bb_pad = max_bb_idx_size - length(bb_idx_str)
@@ -296,11 +259,7 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
             stmt = GotoNode(block_for_inst(cfg, stmt.label))
         elseif stmt isa PhiNode
             e = stmt.edges
-            if VERSION >= v"1.6.0-DEV.732"
-                stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
-            else
-                stmt = PhiNode(Any[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
-            end
+            stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
         end
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if types isa Vector{Any} # ignore types for pre-inference code
@@ -319,11 +278,7 @@ function show_ir(io::IO, code::Core.CodeInfo, line_info_preprinter, line_info_po
         println(io)
     end
     let linestart = " "^(max_bb_idx_size + 2)
-        if newprinter
-            line_info_preprinter(io, linestart, 0)
-        else
-            line_info_preprinter(io, linestart, typemin(Int32))
-        end
+        line_info_preprinter(io, linestart, 0)
     end
     nothing
 end

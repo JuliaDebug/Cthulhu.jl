@@ -1,11 +1,6 @@
 using REPL.TerminalMenus
 import REPL.TerminalMenus: request
-
-const has_treemenu = isdefined(TerminalMenus, :ConfiguredMenu)
-
-if has_treemenu
-    using FoldingTrees
-end
+using FoldingTrees
 
 mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
     options::Vector{String}
@@ -138,7 +133,7 @@ function choose_method_instance(@nospecialize(sig); params=current_params())
     ci isa Union{GeneratedCallInfo, FailedCallInfo} && return nothing
     if ci isa MultiCallInfo
         options = string.(ci.callinfos)
-        menu = has_treemenu ? RadioMenu(options; charset=:unicode) : RadioMenu(options)
+        menu = RadioMenu(options; charset=:unicode)
         chosen = request("Choose call to analyze:", menu)
         if chosen != -1
             return get_mi(ci.callinfos[chosen])
