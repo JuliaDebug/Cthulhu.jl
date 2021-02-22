@@ -170,10 +170,12 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
         if optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
-            println(stdout)
-            println(stdout, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
-            println(stdout, "│  return ", Const(interp.opt[mi].rettype_const))
-            println(stdout)
+            if display_CI
+                println(stdout)
+                println(stdout, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(stdout, "│  return ", Const(interp.opt[mi].rettype_const))
+                println(stdout)
+            end
             callsites = Callsite[]
         else
             codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
