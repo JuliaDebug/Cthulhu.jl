@@ -16,7 +16,7 @@ end
 mutable struct CthulhuInterpreter <: AbstractInterpreter
     native::NativeInterpreter
 
-    unopt::Dict{MethodInstance, InferredSource}
+    unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
 
     msgs::Dict{MethodInstance, Vector{Pair{Int, String}}}
@@ -61,7 +61,7 @@ end
 
 function Core.Compiler.finish(state::InferenceState, ei::CthulhuInterpreter)
     r = invoke(Core.Compiler.finish, Tuple{InferenceState, AbstractInterpreter}, state, ei)
-    ei.unopt[state.linfo] = InferredSource(
+    ei.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(isa(state.src, OptimizationState) ?
             state.src.src : state.src),
         copy(state.stmt_info),

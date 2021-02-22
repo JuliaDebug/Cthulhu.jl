@@ -58,6 +58,12 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
 
+struct ConstPropCallInfo <: CallInfo
+    mi::MICallInfo
+    result::InferenceResult
+end
+get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
+
 # CUDA callsite
 struct CuCallInfo <: CallInfo
      cumi::MICallInfo
@@ -103,7 +109,7 @@ function Base.print(io::TextWidthLimiter, s::String)
 end
 
 function headstring(@nospecialize(T))
-    T = Base.unwrapva(T)
+    T = widenconst(Base.unwrapva(T))
     if T isa Union || T === Union{}
         return string(T)
     elseif T isa UnionAll
@@ -126,7 +132,7 @@ function __show_limited(limiter, name, tt, rt)
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
         if has_space(limiter, sum(textwidth, pstrings) + 3*length(pstrings))
-            print(limiter, join(map(T->string("::", T), pstrings), ","))
+            print(limiter, join(map(T->string(isa(T, Type) ? "::" : "", T), pstrings), ","))
         # Alright, see if we at least have enough space for each head
         elseif has_space(limiter, sum(textwidth, headstrings) + 6*length(pstrings))
             print(limiter, join(map(T->string("::", T, "{…}"), headstrings), ","))
@@ -167,6 +173,13 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     __show_limited(limiter, name, tt, rt)
 end
 
+function show_callinfo(limiter, ci::ConstPropCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = ci.result.linfo.def.name
+    tt = ci.result.argtypes[2:end]
+    __show_limited(limiter, name, tt, ci.mi.rt)
+end
+
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
     cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
@@ -203,6 +216,9 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " = cucall < ")
         show_callinfo(limiter, c.info.cumi)
         print(limiter, " >")
+    elseif isa(c.info, ConstPropCallInfo)
+        print(limiter, " = < constprop > ")
+        show_callinfo(limiter, c.info)
     end
 end
 

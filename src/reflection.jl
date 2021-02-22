@@ -4,7 +4,7 @@
 
 using Base.Meta
 using .Compiler: widenconst, argextype, Const, MethodMatchInfo,
-    UnionSplitApplyCallInfo, UnionSplitInfo
+    UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo
 
 const is_return_type = Core.Compiler.is_return_type
 const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
@@ -73,6 +73,9 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                         rt = argextype(CI, SSAValue(id), sptypes, slottypes)
                         map(match->MICallInfo(match, rt), innerinfo.results.matches)
                     end
+                elseif isa(info, ConstCallInfo)
+                    result = info.result
+                    callinfos = [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
                 elseif info == false
                     continue
                 else

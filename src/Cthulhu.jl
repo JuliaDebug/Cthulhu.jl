@@ -190,7 +190,7 @@ end
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
+function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -202,7 +202,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
     while true
         debuginfo_key = debuginfo ? :source : :none
 
-        if false # optimize && interp.opt[mi].inferred === nothing
+        if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
             if display_CI
@@ -213,7 +213,20 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
             end
             callsites = Callsite[]
         else
-            (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+            if override !== nothing
+                codeinf = copy(optimize ? override.src : interp.unopt[override].src)
+                rt = optimize ? override.result : interp.unopt[mi].rt
+                if optimize
+                    let os = codeinf
+                        codeinf = codeinf.ir
+                        infos = codeinf.stmts.info
+                    end
+                else
+                    infos = interp.unopt[override].stmt_infos
+                end
+            else
+                (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+            end
             preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(codeinf, infos, mi, slottypes; params=params, kwargs...)
 
@@ -269,7 +282,9 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
                 continue
             end
 
-            _descend(interp, next_mi; params=params, optimize=optimize,
+            _descend(interp, next_mi;
+                     override = isa(callsite.info, ConstPropCallInfo) ? callsite.info.result : nothing,
+                     params=params, optimize=optimize,
                      iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 
         elseif toggle === :warn
