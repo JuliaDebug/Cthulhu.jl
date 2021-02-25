@@ -208,7 +208,7 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                     end
                     callsite = Callsite(id, ci, c.head)
                 end
-            else c.head === :foreigncall
+            elseif c.head === :foreigncall
                 # special handling of jl_new_task
                 length(c.args) > 0 || continue
                 if c.args[1] isa QuoteNode
