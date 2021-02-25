@@ -220,6 +220,13 @@ function find_callsites(CI::Core.CodeInfo, mi::Core.MethodInstance, slottypes; p
                         callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing, params=params)), c.head)
                     end
                 end
+            elseif c.head === :new_opaque_closure
+                length(c.args) < 5 && continue  # malformed?
+                m = c.args[5]
+                m isa Method || continue
+                atypes = Base.tuple_type_cons(Any, c.args[1])
+                mi = Core.Compiler.specialize_method(m, atypes, Core.svec())
+                callsite = Callsite(id, MICallInfo(mi, c.args[4]), c.head)
             end
 
             if callsite !== nothing
