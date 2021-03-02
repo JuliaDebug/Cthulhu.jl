@@ -150,6 +150,41 @@ const descend = descend_code_typed
 
 descend(ci::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(ci, mi; iswarn=false, interruptexc=false, kwargs...)
 
+function codeinst_rt(code::CodeInstance)
+    rettype = code.rettype
+    if isdefined(code, :rettype_const)
+        rettype_const = code.rettype_const
+        if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+            return PartialStruct(rettype, rettype_const)
+        elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+            return rettype_const
+        elseif isa(rettype_const, InterConditional)
+            return rettype_const
+        else
+            return Const(rettype_const)
+        end
+    else
+        return rettype
+    end
+end
+
+function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
+    if !optimize
+        codeinf = copy(interp.unopt[mi].src)
+        rt = interp.unopt[mi].rt
+        infos = interp.unopt[mi].stmt_infos
+        slottypes = codeinf.slottypes
+    else
+        codeinst = interp.opt[mi]
+        ir = Core.Compiler.copy(codeinst.inferred.ir)
+        codeinf = ir
+        rt = codeinst_rt(codeinst)
+        infos = ir.stmts.info
+        slottypes = ir.argtypes
+    end
+    (codeinf, rt, infos, slottypes)
+end
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
@@ -167,7 +202,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
     while true
         debuginfo_key = debuginfo ? :source : :none
 
-        if optimize && interp.opt[mi].inferred === nothing
+        if false # optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
             if display_CI
@@ -178,14 +213,9 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
             end
             callsites = Callsite[]
         else
-            codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
-            rt = optimize ? interp.opt[mi].rettype : interp.unopt[mi].rt
-            infos = nothing
-            if !optimize
-                infos = interp.unopt[mi].stmt_infos
-            end
+            (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
             preprocess_ci!(codeinf, mi, optimize, CONFIG)
-            callsites = find_callsites(codeinf, infos, mi, codeinf.slottypes; params=params, kwargs...)
+            callsites = find_callsites(codeinf, infos, mi, slottypes; params=params, kwargs...)
 
             display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
             display_CI = true

@@ -36,16 +36,16 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)), callsite.head)
 end
 
-function find_callsites(CI::Core.CodeInfo, stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
+function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
-    for (id, c) in enumerate(CI.code)
+    for (id, c) in enumerate(isa(CI, IRCode) ? CI.stmts.inst : CI.code)
         callsite = nothing
         if stmt_info !== nothing
             info = stmt_info[id]
             if info !== nothing
-                rt = CI.ssavaluetypes[id]
+                rt = argextype(CI, SSAValue(id), sptypes, slottypes)
                 was_return_type = false
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
@@ -70,9 +70,11 @@ function find_callsites(CI::Core.CodeInfo, stmt_info::Union{Vector, Nothing}, mi
                         @assert isa(info.call, MethodMatchInfo)
                         innerinfo = info.call
                         innerinfo.results === missing && return []
-                        rt = CI.ssavaluetypes[id]
+                        rt = argextype(CI, SSAValue(id), sptypes, slottypes)
                         map(match->MICallInfo(match, rt), innerinfo.results.matches)
                     end
+                elseif info == false
+                    continue
                 else
                     @show info
                     error()
@@ -138,12 +140,17 @@ function dce!(ci, mi)
     argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
     ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
                              argtypes)
+    dce!(ir, mi)
+    Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
+end
+
+function dce!(ir::IRCode, mi)
     compact = Core.Compiler.IncrementalCompact(ir, true)
     # Just run through the iterator without any processing
     Core.Compiler.foreach(x -> nothing, compact)
     ir = Core.Compiler.finish(compact)
-    Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
 end
+
 
 function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
     ccall(:jl_typeinf_begin, Cvoid, ())

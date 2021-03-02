@@ -23,20 +23,15 @@ function firstassigned(specializations)
 end
 
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
-    mi = Cthulhu.first_method_instance(f, TT)
-    (ci, rt, slottypes) = Cthulhu.do_typeinf_slottypes(mi, optimize, Cthulhu.current_params())
+    (interp, mi) = Cthulhu.mkinterp(f, TT)
+    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
     Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
-    ci, mi, rt, slottypes
+    ci, infos, mi, rt, slottypes
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT); optimize=true)
-    ci, mi, _, slottypes = process(f, TT; optimize=optimize)
-    callsites = Cthulhu.find_callsites(ci, mi, slottypes)
-end
-
-# Testing that we don't have spurious calls from `Type`
-let callsites = find_callsites_by_ftt(Base.throw_boundserror, Tuple{UnitRange{Int64},Int64})
-    @test length(callsites) == 1
+    ci, infos, mi, _, slottypes = process(f, TT; optimize=optimize)
+    callsites = Cthulhu.find_callsites(ci, infos, mi, slottypes)
 end
 
 function test()
@@ -104,11 +99,11 @@ end
 g(x) = @inbounds f(x)
 h(x) = f(x)
 
-let (CI, _, _, _) = process(g, Tuple{Vector{Float64}})
+let (CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
     @test length(CI.code) == 3
 end
 
-let (CI, _, _, _) = process(h, Tuple{Vector{Float64}})
+let (CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.code) == 2
 end
 end

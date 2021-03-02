@@ -81,6 +81,8 @@ function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_cod
 
     if iswarn
         cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
+    elseif isa(CI, IRCode)
+        show(io, CI)
     else
         show(io, CI, debuginfo = debuginfo_key)
     end

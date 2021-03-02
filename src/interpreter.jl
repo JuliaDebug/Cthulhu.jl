@@ -1,10 +1,16 @@
 using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
-    OptimizationState, CodeInfo, CodeInstance, InferenceResult
+    OptimizationState, CodeInfo, CodeInstance, InferenceResult, WorldRange,
+    IRCode, SSAValue, inlining_policy
 
 struct InferredSource
     src::CodeInfo
     stmt_infos::Vector{Any}
     rt::Any
+end
+
+struct OptimizedSource
+    ir::IRCode
+    isinlineable::Bool
 end
 
 mutable struct CthulhuInterpreter <: AbstractInterpreter
@@ -18,8 +24,8 @@ end
 
 CthulhuInterpreter() = CthulhuInterpreter(
     NativeInterpreter(),
-    Dict{MethodInstance, CodeInfo}(),
-    Dict{MethodInstance, CodeInfo}(),
+    Dict{MethodInstance, InferredSource}(),
+    Dict{MethodInstance, CodeInstance}(),
     Dict{MethodInstance, Vector{Tuple{Int, String}}}()
 )
 
@@ -61,4 +67,31 @@ function Core.Compiler.finish(state::InferenceState, ei::CthulhuInterpreter)
         copy(state.stmt_info),
         state.result.result)
     return r
+end
+
+function Core.Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
+        valid_worlds::Core.Compiler.WorldRange, @nospecialize(inferred_result))
+    if isa(inferred_result, OptimizationState)
+        opt = inferred_result
+        if isdefined(opt, :ir)
+            return OptimizedSource(opt.ir, inlining_policy(interp.native)(opt.src) !== nothing)
+        end
+    end
+    return inferred_result
+end
+
+function Core.Compiler.inlining_policy(interp::CthulhuInterpreter)
+    function (src)
+        @assert isa(src, OptimizedSource)
+        return src.isinlineable ? src.ir : nothing
+    end
+end
+
+function Core.Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
+    if isa(caller.src, OptimizationState)
+        opt = caller.src
+        if isdefined(opt, :ir)
+            caller.src = OptimizedSource(opt.ir, inlining_policy(interp.native)(opt.src) !== nothing)
+        end
+    end
 end
