@@ -52,6 +52,13 @@ struct TaskCallInfo <: CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 
+# OpaqueClosure CallInfo
+struct OCCallInfo <: CallInfo
+    ci::MICallInfo
+end
+OCCallInfo(mi::MethodInstance, rt) = OCCallInfo(MICallInfo(mi, rt))
+get_mi(tci::OCCallInfo) = get_mi(tci.ci)
+
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
     called_mi::CallInfo
@@ -59,7 +66,7 @@ end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
 
 struct ConstPropCallInfo <: CallInfo
-    mi::MICallInfo
+    mi::CallInfo
     result::InferenceResult
 end
 get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
@@ -132,7 +139,7 @@ function __show_limited(limiter, name, tt, rt)
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
         if has_space(limiter, sum(textwidth, pstrings) + 3*length(pstrings))
-            print(limiter, join(map(T->string(isa(T, Type) ? "::" : "", T), pstrings), ","))
+            print(limiter, join(map(T->string("::", T), pstrings), ","))
         # Alright, see if we at least have enough space for each head
         elseif has_space(limiter, sum(textwidth, headstrings) + 6*length(pstrings))
             print(limiter, join(map(T->string("::", T, "{…}"), headstrings), ","))
@@ -219,6 +226,9 @@ function Base.show(io::IO, c::Callsite)
     elseif isa(c.info, ConstPropCallInfo)
         print(limiter, " = < constprop > ")
         show_callinfo(limiter, c.info)
+    elseif isa(c.info, OCCallInfo)
+        print(limiter, " = < opaque closure call > ")
+        show_callinfo(limiter, c.info.ci)
     end
 end
 

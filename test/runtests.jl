@@ -108,8 +108,11 @@ let (CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
 end
 end
 
-f(a, b) = a + b
-let callsites = find_callsites_by_ftt(f, Tuple{Any, Any})
+# Something with many methods, but enough to be under the match limit
+g_matches(a::Int, b::Int) = a+b
+g_matches(a::Float64, b::Float64) = a+b
+f_matches(a, b) = g_matches(a, b)
+let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false)
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
@@ -123,7 +126,8 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.ReturnTypeCallInfo
     callinfo = callinfo.called_mi
-    @test callinfo isa Cthulhu.FailedCallInfo
+    @test callinfo isa Cthulhu.MultiCallInfo
+    @test length(callinfo.callinfos) == 0
 end
 
 # tasks
@@ -226,30 +230,6 @@ let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Floa
     @test mi.specTypes.parameters[4] === Type{Float32}
 end
 
-@testset "deoptimized calls" begin
-    @noinline function f(@nospecialize(t))
-        s = 0
-        for k in t
-            s += k
-        end
-        return s
-    end
-    g() = f((1, 2, 3))
-
-    callsites = find_callsites_by_ftt(g, Tuple{})
-    infotypes = [typeof(x.info) for x in callsites]
-    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
-
-    @noinline f2(@nospecialize(a), @nospecialize(b), @nospecialize(c)) =
-        (read("/dev/null"); nothing)
-    h2() = __undef__::Int
-    g2(a) = f2(a, h2(), 3)
-
-    callsites = find_callsites_by_ftt(g2, Tuple{Int})
-    infotypes = [typeof(x.info) for x in callsites]
-    @test infotypes == [Cthulhu.DeoptimizedCallInfo]
-end
-
 @testset "warntype variables" begin
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
     io = IOBuffer()
@@ -340,10 +320,10 @@ function foo()
     T = rand() > 0.5 ? Int64 : Float64
     sum(rand(T, 100))
 end
-ci, mi, rt, st = process(foo, Tuple{});
+ci, infos, mi, rt, slottypes = process(foo, Tuple{});
 io = IOBuffer()
 Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
 str = String(take!(io))
 print(str)
 # test by bounding the number of lines printed
-@test count(isequal('\n'), str) <= 50
+@test_broken count(isequal('\n'), str) <= 50

@@ -42,10 +42,11 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
 
     for (id, c) in enumerate(isa(CI, IRCode) ? CI.stmts.inst : CI.code)
         callsite = nothing
+        isa(c, Expr) || continue
         if stmt_info !== nothing
             info = stmt_info[id]
             if info !== nothing
-                rt = argextype(CI, SSAValue(id), sptypes, slottypes)
+                rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 was_return_type = false
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
@@ -67,18 +68,26 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                     # XXX: This could probably use its own info. For now,
                     # we ignore any implicit iterate calls.
                     callinfos = mapreduce(vcat, info.infos) do info
+                        info.call === false && return []
                         @assert isa(info.call, MethodMatchInfo)
                         innerinfo = info.call
                         innerinfo.results === missing && return []
-                        rt = argextype(CI, SSAValue(id), sptypes, slottypes)
+                        rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                         map(match->MICallInfo(match, rt), innerinfo.results.matches)
                     end
                 elseif isa(info, ConstCallInfo)
                     result = info.result
                     callinfos = [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
+                elseif isdefined(Compiler, :OpaqueClosureCallInfo) && isa(info, Compiler.OpaqueClosureCallInfo)
+                    callinfos = [OCCallInfo(info.mi, rt)]
+                elseif isdefined(Compiler, :OpaqueClosureCreateInfo) && isa(info, Compiler.OpaqueClosureCreateInfo)
+                    # TODO: Add ability to descend into OCs at creation site
+                    continue
                 elseif info == false
                     continue
                 else
+                    @show CI
+                    @show c
                     @show info
                     error()
                 end
@@ -103,7 +112,7 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                 (c isa Expr) || continue
             end
             if c.head === :invoke
-                rt = CI.ssavaluetypes[id]
+                rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 at = argextype(c.args[2], CI, sptypes, slottypes)
                 if isa(at, Const) && is_return_type(at.val)
                     callsite = process_return_type(id, c, rt)
@@ -171,12 +180,21 @@ function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::B
     return (frame.src, result.result, frame.slottypes)
 end
 
-function preprocess_ci!(ci, mi, optimize, config::CthulhuConfig)
+function preprocess_ci!(ci::CodeInfo, mi, optimize, config::CthulhuConfig)
     if optimize && config.dead_code_elimination
         # if the optimizer hasn't run, the IR hasn't been converted
         # to SSA form yet and dce is not legal
         dce!(ci, mi)
         dce!(ci, mi)
+    end
+end
+
+function preprocess_ci!(ir::IRCode, mi, optimize, config::CthulhuConfig)
+    if optimize && config.dead_code_elimination
+        # if the optimizer hasn't run, the IR hasn't been converted
+        # to SSA form yet and dce is not legal
+        ir = dce!(ir, mi)
+        ir = dce!(ir, mi)
     end
 end
 

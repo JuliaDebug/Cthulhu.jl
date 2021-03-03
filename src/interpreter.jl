@@ -74,7 +74,7 @@ function Core.Compiler.transform_result_for_cache(interp::CthulhuInterpreter, li
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
         if isdefined(opt, :ir)
-            return OptimizedSource(opt.ir, inlining_policy(interp.native)(opt.src) !== nothing)
+            return OptimizedSource(opt.ir, opt.src.inlineable)
         end
     end
     return inferred_result
@@ -91,7 +91,7 @@ function Core.Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResu
     if isa(caller.src, OptimizationState)
         opt = caller.src
         if isdefined(opt, :ir)
-            caller.src = OptimizedSource(opt.ir, inlining_policy(interp.native)(opt.src) !== nothing)
+            caller.src = OptimizedSource(opt.ir, opt.src.inlineable)
         end
     end
 end

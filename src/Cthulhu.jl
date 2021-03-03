@@ -155,10 +155,10 @@ function codeinst_rt(code::CodeInstance)
     if isdefined(code, :rettype_const)
         rettype_const = code.rettype_const
         if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-            return PartialStruct(rettype, rettype_const)
-        elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+            return Core.PartialStruct(rettype, rettype_const)
+        elseif rettype <: Core.OpaqueClosure && isa(rettype_const, Core.PartialOpaque)
             return rettype_const
-        elseif isa(rettype_const, InterConditional)
+        elseif isa(rettype_const, Core.InterConditional)
             return rettype_const
         else
             return Const(rettype_const)
@@ -214,15 +214,18 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsites = Callsite[]
         else
             if override !== nothing
-                codeinf = copy(optimize ? override.src : interp.unopt[override].src)
+                codeinf = optimize ? override.src : interp.unopt[override].src
                 rt = optimize ? override.result : interp.unopt[mi].rt
                 if optimize
                     let os = codeinf
-                        codeinf = codeinf.ir
+                        codeinf = Core.Compiler.copy(codeinf.ir)
                         infos = codeinf.stmts.info
+                        slottypes = codeinf.argtypes
                     end
                 else
+                    codeinf = copy(codeinf)
                     infos = interp.unopt[override].stmt_infos
+                    slottypes = codeinf.slottypes
                 end
             else
                 (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)

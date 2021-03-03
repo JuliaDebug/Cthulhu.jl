@@ -61,7 +61,7 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     lambda_io::IOContext = io
-    if src.slotnames !== nothing
+    if hasfield(typeof(src), :slotnames) && src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
         show_variables(io, src, slotnames)
@@ -69,8 +69,13 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     print(io, "Body")
     InteractiveUtils.warntype_type_printer(io, rettype, true)
     println(io)
-    ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
-    ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
+    if isa(src, IRCode)
+        show(io, src)
+        # XXX this doesn't properly show warntype
+    else
+        ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
+        ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
+    end
     return nothing
 end
 
