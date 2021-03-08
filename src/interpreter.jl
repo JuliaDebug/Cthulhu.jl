@@ -46,6 +46,7 @@ Core.Compiler.setindex!(a::Dict, b, c) = setindex!(a, b, c)
 Core.Compiler.may_optimize(ei::CthulhuInterpreter) = true
 Core.Compiler.may_compress(ei::CthulhuInterpreter) = false
 Core.Compiler.may_discard_trees(ei::CthulhuInterpreter) = false
+Core.Compiler.verbose_stmt_info(ni::CthulhuInterpreter) = true
 
 function Core.Compiler.add_remark!(ei::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(ei.msgs, sv.linfo, Tuple{Int, String}[]),

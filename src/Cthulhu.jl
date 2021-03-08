@@ -272,12 +272,17 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+function do_typeinf(@nospecialize(F), @nospecialize(TT))
     ci = CthulhuInterpreter()
     sigt = Base.signature_type(F, TT)
     match = Base._which(sigt)
     mi = Core.Compiler.specialize_method(match)
     do_typeinf!(ci, mi)
+    return ci, mi
+end
+
+function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+    ci, mi = do_typeinf(F, TT)
     _descend(ci, mi; params=params, kwargs...)
 end
 

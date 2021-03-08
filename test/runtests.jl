@@ -297,6 +297,11 @@ tree = Cthulhu.treelist(fst5(1.0))
 child = tree.children[1]
 @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
 
+# issue #132
+f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
+ci, mi = Cthulhu.do_typeinf(f132, (Vector{Int}, Int))
+@test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+
 ##
 # Cthulhu config test
 ##
