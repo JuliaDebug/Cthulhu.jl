@@ -1,5 +1,6 @@
 using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
-    OptimizationState, CodeInfo, CodeInstance, InferenceResult
+    OptimizationState, CodeInfo, CodeInstance, InferenceResult, WorldRange,
+    IRCode, SSAValue, inlining_policy
 
 struct InferredSource
     src::CodeInfo
@@ -7,10 +8,15 @@ struct InferredSource
     rt::Any
 end
 
+struct OptimizedSource
+    ir::IRCode
+    isinlineable::Bool
+end
+
 mutable struct CthulhuInterpreter <: AbstractInterpreter
     native::NativeInterpreter
 
-    unopt::Dict{MethodInstance, InferredSource}
+    unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
 
     msgs::Dict{MethodInstance, Vector{Pair{Int, String}}}
@@ -18,8 +24,8 @@ end
 
 CthulhuInterpreter() = CthulhuInterpreter(
     NativeInterpreter(),
-    Dict{MethodInstance, CodeInfo}(),
-    Dict{MethodInstance, CodeInfo}(),
+    Dict{MethodInstance, InferredSource}(),
+    Dict{MethodInstance, CodeInstance}(),
     Dict{MethodInstance, Vector{Tuple{Int, String}}}()
 )
 
@@ -46,6 +52,7 @@ Core.Compiler.setindex!(a::Dict, b, c) = setindex!(a, b, c)
 Core.Compiler.may_optimize(ei::CthulhuInterpreter) = true
 Core.Compiler.may_compress(ei::CthulhuInterpreter) = false
 Core.Compiler.may_discard_trees(ei::CthulhuInterpreter) = false
+Core.Compiler.verbose_stmt_info(ei::CthulhuInterpreter) = true
 
 function Core.Compiler.add_remark!(ei::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(ei.msgs, sv.linfo, Tuple{Int, String}[]),
@@ -54,10 +61,37 @@ end
 
 function Core.Compiler.finish(state::InferenceState, ei::CthulhuInterpreter)
     r = invoke(Core.Compiler.finish, Tuple{InferenceState, AbstractInterpreter}, state, ei)
-    ei.unopt[state.linfo] = InferredSource(
+    ei.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(isa(state.src, OptimizationState) ?
             state.src.src : state.src),
         copy(state.stmt_info),
         state.result.result)
     return r
+end
+
+function Core.Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
+        valid_worlds::Core.Compiler.WorldRange, @nospecialize(inferred_result))
+    if isa(inferred_result, OptimizationState)
+        opt = inferred_result
+        if isdefined(opt, :ir)
+            return OptimizedSource(opt.ir, opt.src.inlineable)
+        end
+    end
+    return inferred_result
+end
+
+function Core.Compiler.inlining_policy(interp::CthulhuInterpreter)
+    function (src)
+        @assert isa(src, OptimizedSource)
+        return src.isinlineable ? src.ir : nothing
+    end
+end
+
+function Core.Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
+    if isa(caller.src, OptimizationState)
+        opt = caller.src
+        if isdefined(opt, :ir)
+            caller.src = OptimizedSource(opt.ir, opt.src.inlineable)
+        end
+    end
 end

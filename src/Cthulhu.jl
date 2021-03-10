@@ -56,6 +56,15 @@ macro descend_code_typed(ex0...)
 end
 
 """
+    @interp
+
+For debugging. Returns a CthulhuInterpreter from the appropriate entrypoint.
+"""
+macro interp(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :mkinterp, ex0)
+end
+
+"""
     @descend_code_warntype
 
 Evaluates the arguments to the function or macro call, determines their
@@ -141,12 +150,47 @@ const descend = descend_code_typed
 
 descend(ci::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(ci, mi; iswarn=false, interruptexc=false, kwargs...)
 
+function codeinst_rt(code::CodeInstance)
+    rettype = code.rettype
+    if isdefined(code, :rettype_const)
+        rettype_const = code.rettype_const
+        if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+            return Core.PartialStruct(rettype, rettype_const)
+        elseif rettype <: Core.OpaqueClosure && isa(rettype_const, Core.PartialOpaque)
+            return rettype_const
+        elseif isa(rettype_const, Core.InterConditional)
+            return rettype_const
+        else
+            return Const(rettype_const)
+        end
+    else
+        return rettype
+    end
+end
+
+function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
+    if !optimize
+        codeinf = copy(interp.unopt[mi].src)
+        rt = interp.unopt[mi].rt
+        infos = interp.unopt[mi].stmt_infos
+        slottypes = codeinf.slottypes
+    else
+        codeinst = interp.opt[mi]
+        ir = Core.Compiler.copy(codeinst.inferred.ir)
+        codeinf = ir
+        rt = codeinst_rt(codeinst)
+        infos = ir.stmts.info
+        slottypes = ir.argtypes
+    end
+    (codeinf, rt, infos, slottypes)
+end
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
+function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
     debuginfo = true
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -157,13 +201,44 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
     display_CI = true
     while true
         debuginfo_key = debuginfo ? :source : :none
-        codeinf = copy(optimize ? interp.opt[mi].inferred : interp.unopt[mi].src)
-        rt = optimize ? interp.opt[mi].rettype : interp.unopt[mi].rt
-        preprocess_ci!(codeinf, mi, optimize, CONFIG)
-        callsites = find_callsites(codeinf, mi, codeinf.slottypes; params=params, kwargs...)
 
-        display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
-        display_CI = true
+        if override === nothing && optimize && interp.opt[mi].inferred === nothing
+            # This was inferred to a pure constant - we have no code to show,
+            # but make something up that looks plausible.
+            if display_CI
+                println(stdout)
+                println(stdout, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(stdout, "│  return ", Const(interp.opt[mi].rettype_const))
+                println(stdout)
+            end
+            callsites = Callsite[]
+        else
+            if override !== nothing
+                if !haskey(interp.unopt, override)
+                    Core.eval(Core.Main, :(the_issue = $override))
+                end
+                codeinf = optimize ? override.src : interp.unopt[override].src
+                rt = optimize ? override.result : interp.unopt[override].rt
+                if optimize
+                    let os = codeinf
+                        codeinf = Core.Compiler.copy(codeinf.ir)
+                        infos = codeinf.stmts.info
+                        slottypes = codeinf.argtypes
+                    end
+                else
+                    codeinf = copy(codeinf)
+                    infos = interp.unopt[override].stmt_infos
+                    slottypes = codeinf.slottypes
+                end
+            else
+                (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+            end
+            preprocess_ci!(codeinf, mi, optimize, CONFIG)
+            callsites = find_callsites(codeinf, infos, mi, slottypes; params=params, kwargs...)
+
+            display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
+            display_CI = true
+        end
 
         TerminalMenus.config(cursor = '•', scroll = :wrap)
         menu = CthulhuMenu(callsites, optimize)
@@ -213,7 +288,9 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; iswarn::Bool, 
                 continue
             end
 
-            _descend(interp, next_mi; params=params, optimize=optimize,
+            _descend(interp, next_mi;
+                     override = isa(callsite.info, ConstPropCallInfo) ? callsite.info.result : nothing,
+                     params=params, optimize=optimize,
                      iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 
         elseif toggle === :warn
@@ -272,12 +349,17 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+function mkinterp(@nospecialize(F), @nospecialize(TT))
     ci = CthulhuInterpreter()
     sigt = Base.signature_type(F, TT)
     match = Base._which(sigt)
     mi = Core.Compiler.specialize_method(match)
     do_typeinf!(ci, mi)
+    (ci, mi)
+end
+
+function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
+    (ci, mi) = mkinterp(F, TT)
     _descend(ci, mi; params=params, kwargs...)
 end
 

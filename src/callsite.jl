@@ -2,11 +2,14 @@ using Unicode
 
 abstract type CallInfo; end
 
+using Core.Compiler: MethodMatch
+
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
 end
+MICallInfo(match::MethodMatch, rt) = MICallInfo(Core.Compiler.specialize_method(match), rt)
 get_mi(ci::MICallInfo) = ci.mi
 
 # Failed
@@ -49,11 +52,24 @@ struct TaskCallInfo <: CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 
+# OpaqueClosure CallInfo
+struct OCCallInfo <: CallInfo
+    ci::MICallInfo
+end
+OCCallInfo(mi::MethodInstance, rt) = OCCallInfo(MICallInfo(mi, rt))
+get_mi(tci::OCCallInfo) = get_mi(tci.ci)
+
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
     called_mi::CallInfo
 end
 get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
+
+struct ConstPropCallInfo <: CallInfo
+    mi::CallInfo
+    result::InferenceResult
+end
+get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -100,7 +116,7 @@ function Base.print(io::TextWidthLimiter, s::String)
 end
 
 function headstring(@nospecialize(T))
-    T = Base.unwrapva(T)
+    T = widenconst(Base.unwrapva(T))
     if T isa Union || T === Union{}
         return string(T)
     elseif T isa UnionAll
@@ -164,6 +180,13 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     __show_limited(limiter, name, tt, rt)
 end
 
+function show_callinfo(limiter, ci::ConstPropCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = ci.result.linfo.def.name
+    tt = ci.result.argtypes[2:end]
+    __show_limited(limiter, name, tt, ci.mi.rt)
+end
+
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
     cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
@@ -200,6 +223,12 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " = cucall < ")
         show_callinfo(limiter, c.info.cumi)
         print(limiter, " >")
+    elseif isa(c.info, ConstPropCallInfo)
+        print(limiter, " = < constprop > ")
+        show_callinfo(limiter, c.info)
+    elseif isa(c.info, OCCallInfo)
+        print(limiter, " = < opaque closure call > ")
+        show_callinfo(limiter, c.info.ci)
     end
 end
 
