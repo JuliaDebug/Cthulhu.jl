@@ -239,38 +239,46 @@ end
     @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
 
-##
-# backedges & treelist
-##
+# issue #132
+f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
+interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
+@test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+
+## Functions for "backedges & treelist"
+# The printing changes when the functions are defined inside the testset
 fbackedge1() = 1
 fbackedge2(x) = x > 0 ? fbackedge1() : -fbackedge1()
-@test fbackedge2(0.2) == 1
-@test fbackedge2(-0.2) == -1
-mspec = @which(fbackedge1()).specializations
-mi = isa(mspec, Core.SimpleVector) ? mspec[1] : mspec.func
-root = Cthulhu.treelist(mi)
-@test Cthulhu.count_open_leaves(root) == 2
-@test root.data.callstr == "fbackedge1()"
-@test root.children[1].data.callstr == " fbackedge2(::Float64)"
-
-# issue #114
-unspecva(@nospecialize(i::Int...)) = 1
-@test unspecva(1, 2) == 1
-mi = firstassigned(first(methods(unspecva)).specializations)
-root = Cthulhu.treelist(mi)
-@test occursin("Vararg", root.data.callstr)
-
-# treelist for stacktraces
 fst1(x) = backtrace()
 @inline fst2(x) = fst1(x)
 @noinline fst3(x) = fst2(x)
 @inline fst4(x) = fst3(x)
 fst5(x) = fst4(x)
-tree = Cthulhu.treelist(fst5(1.0))
-@test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
-@test length(tree.children) == 1
-child = tree.children[1]
-@test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
+
+@testset "backedges and treelist" begin
+    @test fbackedge2(0.2) == 1
+    @test fbackedge2(-0.2) == -1
+    mspec = @which(fbackedge1()).specializations
+    mi = isa(mspec, Core.SimpleVector) ? mspec[1] : mspec.func
+    root = Cthulhu.treelist(mi)
+    @test Cthulhu.count_open_leaves(root) == 2
+    @test root.data.callstr == "fbackedge1()"
+    @test root.children[1].data.callstr == " fbackedge2(::Float64)"
+
+    # issue #114
+    unspecva(@nospecialize(i::Int...)) = 1
+    @test unspecva(1, 2) == 1
+    mi = firstassigned(first(methods(unspecva)).specializations)
+    root = Cthulhu.treelist(mi)
+    @test occursin("Vararg", root.data.callstr)
+
+    # treelist for stacktraces
+    tree = Cthulhu.treelist(fst5(1.0))
+    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
+    @test length(tree.children) == 1
+    child = tree.children[1]
+    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
+end
+
 
 ##
 # Cthulhu config test
@@ -316,11 +324,7 @@ end
 ###
 ### Printer test:
 ###
-function foo()
-    T = rand() > 0.5 ? Int64 : Float64
-    sum(rand(T, 100))
-end
-ci, infos, mi, rt, slottypes = process(foo, Tuple{});
+ci, infos, mi, rt, slottypes = process(test, Tuple{});
 io = IOBuffer()
 Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
 str = String(take!(io))
