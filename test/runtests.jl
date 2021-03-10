@@ -100,11 +100,11 @@ g(x) = @inbounds f(x)
 h(x) = f(x)
 
 let (CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
-    @test length(CI.code) == 3
+    @test length(CI.stmts) == 3
 end
 
 let (CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
-    @test length(CI.code) == 2
+    @test length(CI.stmts) == 2
 end
 end
 

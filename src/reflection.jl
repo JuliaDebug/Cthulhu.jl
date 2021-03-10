@@ -4,7 +4,8 @@
 
 using Base.Meta
 using .Compiler: widenconst, argextype, Const, MethodMatchInfo,
-    UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo
+    UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
+    MethodResultPure, ApplyCallInfo
 
 const is_return_type = Core.Compiler.is_return_type
 const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
@@ -48,48 +49,50 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
             if info !== nothing
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 was_return_type = false
+                if isa(info, MethodResultPure)
+                    # TODO: We could annotate this in the UI
+                    continue
+                end
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
                     was_return_type = true
                 end
-                if isa(info, MethodMatchInfo)
-                    if info.results === missing
-                        continue
-                    end
+                function process_info(info)
+                    if isa(info, MethodMatchInfo)
+                        if info.results === missing
+                            return []
+                        end
 
-                    matches = info.results.matches
-                    callinfos = map(match->MICallInfo(match, rt), matches)
-                elseif isa(info, UnionSplitInfo)
-                    mapreduce(vcat, info.matches) do info
-                        info.results === missing && return []
-                        callinfos = map(match->MICallInfo(match, rt), info.results.matches)
+                        matches = info.results.matches
+                        return map(match->MICallInfo(match, rt), matches)
+                    elseif isa(info, UnionSplitInfo)
+                        return mapreduce(process_info, vcat, info.matches)
+                    elseif isa(info, UnionSplitApplyCallInfo)
+                        return mapreduce(process_info, vcat, info.infos)
+                    elseif isa(info, ApplyCallInfo)
+                        # XXX: This could probably use its own info. For now,
+                        # we ignore any implicit iterate calls.
+                        return process_info(info.call)
+                    elseif isa(info, ConstCallInfo)
+                        result = info.result
+                        return [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
+                    elseif isdefined(Compiler, :OpaqueClosureCallInfo) && isa(info, Compiler.OpaqueClosureCallInfo)
+                        return [OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
+                    elseif isdefined(Compiler, :OpaqueClosureCreateInfo) && isa(info, Compiler.OpaqueClosureCreateInfo)
+                        # TODO: Add ability to descend into OCs at creation site
+                        return []
+                    elseif info == false
+                        return []
+                    else
+                        @show CI
+                        @show c
+                        @show info
+                        error()
                     end
-                elseif isa(info, UnionSplitApplyCallInfo)
-                    # XXX: This could probably use its own info. For now,
-                    # we ignore any implicit iterate calls.
-                    callinfos = mapreduce(vcat, info.infos) do info
-                        info.call === false && return []
-                        @assert isa(info.call, MethodMatchInfo)
-                        innerinfo = info.call
-                        innerinfo.results === missing && return []
-                        rt = argextype(SSAValue(id), CI, sptypes, slottypes)
-                        map(match->MICallInfo(match, rt), innerinfo.results.matches)
-                    end
-                elseif isa(info, ConstCallInfo)
-                    result = info.result
-                    callinfos = [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
-                elseif isdefined(Compiler, :OpaqueClosureCallInfo) && isa(info, Compiler.OpaqueClosureCallInfo)
-                    callinfos = [OCCallInfo(info.mi, rt)]
-                elseif isdefined(Compiler, :OpaqueClosureCreateInfo) && isa(info, Compiler.OpaqueClosureCreateInfo)
-                    # TODO: Add ability to descend into OCs at creation site
+                end
+                callinfos = process_info(info)
+                if !was_return_type && isempty(callinfos)
                     continue
-                elseif info == false
-                    continue
-                else
-                    @show CI
-                    @show c
-                    @show info
-                    error()
                 end
                 callsite = let
                     if length(callinfos) == 1

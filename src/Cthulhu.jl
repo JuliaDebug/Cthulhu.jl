@@ -214,8 +214,11 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsites = Callsite[]
         else
             if override !== nothing
+                if !haskey(interp.unopt, override)
+                    Core.eval(Core.Main, :(the_issue = $override))
+                end
                 codeinf = optimize ? override.src : interp.unopt[override].src
-                rt = optimize ? override.result : interp.unopt[mi].rt
+                rt = optimize ? override.result : interp.unopt[override].rt
                 if optimize
                     let os = codeinf
                         codeinf = Core.Compiler.copy(codeinf.ir)
