@@ -279,6 +279,46 @@ fst5(x) = fst4(x)
     @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
 end
 
+@testset "ascend" begin
+    # This tests only the non-interactive "look up the caller" portion
+    callee(x) = 2x
+    function caller(x)
+        val = 0.0
+        val += callee(3); line1 = @__LINE__
+        val += callee(3.0); line2 = @__LINE__
+        val += callee(x); line3 = @__LINE__
+        val = sum([val])     # FIXME: without this line, `lookup` fails because codeinst.inferred === nothing
+        return val, line1, line2, line3
+    end
+    _, line1, line2, line3 = caller(7)
+    micaller = Cthulhu.get_specialization(caller, Tuple{Int})
+    micallee_Int = Cthulhu.get_specialization(callee, Tuple{Int})
+    micallee_Float4 = Cthulhu.get_specialization(callee, Tuple{Float64})
+    info, lines = only(Cthulhu.find_caller_of(micallee_Int, micaller))
+    @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line1, line3]
+    info, lines = only(Cthulhu.find_caller_of(micallee_Float4, micaller))
+    @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
+
+    # Detection in optimized (post-inlining) code
+    @noinline nicallee(x) = 2x
+    midcaller(x) = nicallee(x), @__LINE__
+    function outercaller(x)
+        val, line2 = midcaller(x); line1 = @__LINE__
+        val = sum([val])     # FIXME: without this line, `lookup` fails because codeinst.inferred === nothing
+        return val, line1, line2
+    end
+    _, line1, line2 = outercaller(7)
+    micaller = Cthulhu.get_specialization(outercaller, Tuple{Int})
+    micallee = Cthulhu.get_specialization(nicallee, Tuple{Int})
+    callerinfo = Cthulhu.find_caller_of(micallee, micaller)
+    @test length(callerinfo) == 2
+    info, lines = callerinfo[1]
+    @test info == (:outercaller, Symbol(@__FILE__), 0)
+    @test lines == [line1]
+    info, lines = callerinfo[2]
+    @test info == (:midcaller, Symbol(@__FILE__), 1)
+    @test lines == [line2]
+end
 
 ##
 # Cthulhu config test

@@ -329,6 +329,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             end
         elseif toggle === :edit
             edit(whereis(mi.def)...)
+            display_CI = false
         else
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(codeviews, toggle, nothing)
@@ -349,11 +350,16 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function mkinterp(@nospecialize(F), @nospecialize(TT))
-    interp = CthulhuInterpreter()
+function get_specialization(@nospecialize(F), @nospecialize(TT))
     sigt = Base.signature_type(F, TT)
     match = Base._which(sigt)
     mi = Core.Compiler.specialize_method(match)
+    return mi
+end
+
+function mkinterp(@nospecialize(F), @nospecialize(TT))
+    interp = CthulhuInterpreter()
+    mi = get_specialization(F, TT)
     do_typeinf!(interp, mi)
     (interp, mi)
 end
@@ -385,28 +391,9 @@ function ascend(mi; kwargs...)
             if !isroot(node)
                 # Help user find the sites calling the parent
                 miparent = instance(node.parent.data.nd)
-                params = current_params()
-                locs = []
-                for optimize in (true, false)
-                    (CI, rt, slottypes) = do_typeinf_slottypes(mi, optimize, params)
-                    preprocess_ci!(CI, mi, optimize, CONFIG)
-                    callsites = find_callsites(CI, mi, slottypes; params=params)
-                    callsites = filter(cs->is_callsite(cs, miparent), callsites)
-                    append!(locs, CI.linetable[CI.codelocs[(cs->cs.id).(callsites)]])
-                end
-                if !isempty(locs)
-                    ulocs = Dict{Tuple{Symbol,Symbol},Vector{Int}}()
-                    for loc in locs
-                        lines = get!(Vector{Int}, ulocs, (loc.method, loc.file))
-                        line = loc.line
-                        if line ∉ lines
-                            push!(lines, line)
-                        end
-                    end
-                    vlocs = collect(ulocs)
-                    strlocs = [string('"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
-                    perm = sortperm(strlocs)
-                    strlocs, vlocs = strlocs[perm], vlocs[perm]
+                ulocs = find_caller_of(miparent, mi)
+                if !isempty(ulocs)
+                    strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
                     linemenu = TerminalMenus.RadioMenu(strlocs)
                     browsecodetyped = false
@@ -414,7 +401,7 @@ function ascend(mi; kwargs...)
                     while choice2 != -1
                         choice2 = TerminalMenus.request("\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
-                            loc = vlocs[choice2]
+                            loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))
                         elseif choice2 == length(strlocs)
                             browsecodetyped = true
@@ -425,7 +412,9 @@ function ascend(mi; kwargs...)
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            browsecodetyped && _descend(mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            interp = CthulhuInterpreter()
+            do_typeinf!(interp, mi)
+            browsecodetyped && _descend(interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end

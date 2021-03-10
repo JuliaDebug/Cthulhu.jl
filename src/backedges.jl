@@ -1,6 +1,6 @@
 # A lightly-modified version of the same function in Base
 # Highlights argument types with color specified by highlighter(typ)
-function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
+function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @nospecialize(sig::Type), demangle=false, kwargs=nothing)
     if sig === Tuple
         print(io, demangle ? Base.demangle_function_name(name) : name, "(...)")
         return

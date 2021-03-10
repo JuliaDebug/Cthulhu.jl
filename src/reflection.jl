@@ -251,3 +251,49 @@ function callinfo(sig, rt, max=-1; params=current_params())
     length(callinfos) == 1 && return first(callinfos)
     return MultiCallInfo(sig, rt, callinfos)
 end
+
+function find_caller_of(callee::MethodInstance, caller::MethodInstance)
+    interp = CthulhuInterpreter()
+    do_typeinf!(interp, caller)
+    params = current_params()
+    locs = Tuple{Core.LineInfoNode,Int}[]
+    for optimize in (true, false)
+        (CI, rt, infos, slottypes) = lookup(interp, caller, optimize)
+        preprocess_ci!(CI, caller, optimize, CONFIG)
+        callsites = find_callsites(CI, infos, caller, slottypes; params=params)
+        callsites = filter(cs->is_callsite(cs, callee), callsites)
+        foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
+    end
+    # Consolidate by method, but preserve the order
+    prlookup = Dict{Tuple{Symbol,Symbol},Int}()
+    ulocs = Pair{Tuple{Symbol,Symbol,Int},Vector{Int}}[]
+    if !isempty(locs)
+        for (loc, depth) in locs
+            idx = get(prlookup, (loc.method, loc.file), nothing)
+            if idx === nothing
+                push!(ulocs, (loc.method, loc.file, depth) => Int[])
+                prlookup[(loc.method, loc.file)] = idx = length(ulocs)
+            end
+            lines = ulocs[idx][2]
+            line = loc.line
+            if line ∉ lines
+                push!(lines, line)
+            end
+        end
+    end
+    return ulocs
+end
+
+function add_sourceline!(locs, CI, stmtidx::Int)
+    if isa(CI, IRCode)
+        stack = Base.IRShow.compute_loc_stack(CI.linetable, CI.stmts.line[stmtidx])
+        for (i, idx) in enumerate(stack)
+            line = CI.linetable[idx]
+            line.line == 0 && continue
+            push!(locs, (CI.linetable[idx], i-1))
+        end
+    else
+        push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
+    end
+    return locs
+end

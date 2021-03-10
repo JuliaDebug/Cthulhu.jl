@@ -234,6 +234,7 @@ end
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::DeoptimizedCallInfo, mi::MethodInstance) = is_callsite(info.accurate, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
