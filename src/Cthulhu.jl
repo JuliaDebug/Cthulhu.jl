@@ -148,7 +148,7 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-descend(ci::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(ci, mi; iswarn=false, interruptexc=false, kwargs...)
+descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
 
 function codeinst_rt(code::CodeInstance)
     rettype = code.rettype
@@ -350,17 +350,17 @@ function do_typeinf!(interp, mi)
 end
 
 function mkinterp(@nospecialize(F), @nospecialize(TT))
-    ci = CthulhuInterpreter()
+    interp = CthulhuInterpreter()
     sigt = Base.signature_type(F, TT)
     match = Base._which(sigt)
     mi = Core.Compiler.specialize_method(match)
-    do_typeinf!(ci, mi)
-    (ci, mi)
+    do_typeinf!(interp, mi)
+    (interp, mi)
 end
 
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    (ci, mi) = mkinterp(F, TT)
-    _descend(ci, mi; params=params, kwargs...)
+    (interp, mi) = mkinterp(F, TT)
+    _descend(interp, mi; params=params, kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =

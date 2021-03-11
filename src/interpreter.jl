@@ -33,35 +33,35 @@ import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
     get_inference_cache, code_cache,
     WorldView, lock_mi_inference, unlock_mi_inference, InferenceState
 
-InferenceParams(ei::CthulhuInterpreter) = InferenceParams(ei.native)
-OptimizationParams(ei::CthulhuInterpreter) = OptimizationParams(ei.native)
-get_world_counter(ei::CthulhuInterpreter) = get_world_counter(ei.native)
-get_inference_cache(ei::CthulhuInterpreter) = get_inference_cache(ei.native)
+InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
+OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
+get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
+get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
 # No need to do any locking since we're not putting our results into the runtime cache
-lock_mi_inference(ei::CthulhuInterpreter, mi::MethodInstance) = nothing
-unlock_mi_inference(ei::CthulhuInterpreter, mi::MethodInstance) = nothing
+lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
+unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 
-code_cache(ei::CthulhuInterpreter) = ei.opt
+code_cache(interp::CthulhuInterpreter) = interp.opt
 Core.Compiler.get(a::Dict, b, c) = Base.get(a,b,c)
 Core.Compiler.get(a::WorldView{<:Dict}, b, c) = Base.get(a.cache,b,c)
 Core.Compiler.haskey(a::Dict, b) = Base.haskey(a, b)
 Core.Compiler.haskey(a::WorldView{<:Dict}, b) =
     Core.Compiler.haskey(a.cache, b)
 Core.Compiler.setindex!(a::Dict, b, c) = setindex!(a, b, c)
-Core.Compiler.may_optimize(ei::CthulhuInterpreter) = true
-Core.Compiler.may_compress(ei::CthulhuInterpreter) = false
-Core.Compiler.may_discard_trees(ei::CthulhuInterpreter) = false
-Core.Compiler.verbose_stmt_info(ei::CthulhuInterpreter) = true
+Core.Compiler.may_optimize(interp::CthulhuInterpreter) = true
+Core.Compiler.may_compress(interp::CthulhuInterpreter) = false
+Core.Compiler.may_discard_trees(interp::CthulhuInterpreter) = false
+Core.Compiler.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
-function Core.Compiler.add_remark!(ei::CthulhuInterpreter, sv::InferenceState, msg)
-    push!(get!(ei.msgs, sv.linfo, Tuple{Int, String}[]),
+function Core.Compiler.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
+    push!(get!(interp.msgs, sv.linfo, Tuple{Int, String}[]),
         sv.currpc => msg)
 end
 
-function Core.Compiler.finish(state::InferenceState, ei::CthulhuInterpreter)
-    r = invoke(Core.Compiler.finish, Tuple{InferenceState, AbstractInterpreter}, state, ei)
-    ei.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
+function Core.Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
+    r = invoke(Core.Compiler.finish, Tuple{InferenceState, AbstractInterpreter}, state, interp)
+    interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(isa(state.src, OptimizationState) ?
             state.src.src : state.src),
         copy(state.stmt_info),
