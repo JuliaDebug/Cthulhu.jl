@@ -74,8 +74,14 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                         # we ignore any implicit iterate calls.
                         return process_info(info.call)
                     elseif isa(info, ConstCallInfo)
-                        result = info.result
-                        return [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
+                        if length(info.results) == 1
+                            result = info.results[1]
+                            return [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
+                        else
+                            vcat(process_info(info.call),
+                                map(result->ConstPropCallInfo(MICallInfo(result.linfo, rt), result),
+                                    filter(!isnothing, info.results)))
+                        end
                     elseif isdefined(Compiler, :OpaqueClosureCallInfo) && isa(info, Compiler.OpaqueClosureCallInfo)
                         return [OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
                     elseif isdefined(Compiler, :OpaqueClosureCreateInfo) && isa(info, Compiler.OpaqueClosureCreateInfo)
