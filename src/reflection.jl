@@ -76,7 +76,6 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                     elseif isa(info, ConstCallInfo)
                         if length(info.results) == 1
                             result = info.results[1]
-                            @assert length(info.results) == 1
                             return [ConstPropCallInfo(MICallInfo(result.linfo, rt), result)]
                         else
                             vcat(process_info(info.call),
