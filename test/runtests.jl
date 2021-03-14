@@ -118,6 +118,55 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
 end
 
+@testset "union-split constant-prop'ed callsites" begin
+    anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
+
+    # constant prop' on all the splits
+    let callsites = (@eval anonymous_module() begin
+            struct F32
+                val::Float32
+                _v::Int
+            end
+            struct F64
+                val::Float64
+                _v::Int
+            end
+
+            $find_callsites_by_ftt((Union{F32,F64},); optimize = false) do f
+                f.val
+            end
+        end)
+        @test length(callsites) == 1
+        callinfo = callsites[1].info
+        @test isa(callinfo, Cthulhu.MultiCallInfo)
+        callinfos = callinfo.callinfos
+        @test length(callinfos) == 2
+        @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
+    end
+
+    # successful and unsuccessful constant prop'
+    let callsites = (@eval anonymous_module() begin
+            struct F32
+                val::Float32
+                _v::Int
+            end
+            struct FZero end
+            Base.getproperty(::FZero, ::Symbol) = 0.0 # constant prop' won't happen here
+
+            $find_callsites_by_ftt((Union{F32,FZero},); optimize = false) do f
+                f.val
+            end
+        end)
+        @test length(callsites) == 1
+        callinfo = callsites[1].info
+        @test isa(callinfo, Cthulhu.MultiCallInfo)
+        callinfos = callinfo.callinfos
+        @test length(callinfos) == 2
+        @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1
+        @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1
+    end
+end
+
 # Failed return_type
 only_ints(::Integer) = 1
 return_type_failure(::T) where T = Base._return_type(only_ints, Tuple{T})
