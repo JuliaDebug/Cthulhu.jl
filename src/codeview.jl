@@ -70,8 +70,8 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     InteractiveUtils.warntype_type_printer(io, rettype, true)
     println(io)
     if isa(src, IRCode)
-        Base.IRShow.show_ir(io, src; verbose_linetable = debuginfo === :source)
-        # XXX this doesn't properly show warntype
+        Base.IRShow.show_ir(io, src, InteractiveUtils.warntype_type_printer;
+                            verbose_linetable = debuginfo === :source)
     else
         ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
         ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
