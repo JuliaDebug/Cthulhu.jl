@@ -267,7 +267,7 @@ fst5(x) = fst4(x)
     # issue #114
     unspecva(@nospecialize(i::Int...)) = 1
     @test unspecva(1, 2) == 1
-    mi = firstassigned(first(methods(unspecva)).specializations)
+    mi = something(first(methods(unspecva)).specializations...)
     root = Cthulhu.treelist(mi)
     @test occursin("Vararg", root.data.callstr)
 
