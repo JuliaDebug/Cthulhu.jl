@@ -70,8 +70,8 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     InteractiveUtils.warntype_type_printer(io, rettype, true)
     println(io)
     if isa(src, IRCode)
-        show(io, src)
-        # XXX this doesn't properly show warntype
+        Base.IRShow.show_ir(io, src, InteractiveUtils.warntype_type_printer;
+                            verbose_linetable = debuginfo === :source)
     else
         ir_printer = stable_code ? Base.IRShow.show_ir : show_ir
         ir_printer(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer)
@@ -80,16 +80,16 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
 end
 
 
-function cthulu_typed(io::IO, debuginfo_key, CI, rettype, mi, iswarn, stable_code)
+function cthulu_typed(io::IO, debuginfo_key, src, rettype, mi, iswarn, stable_code)
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
 
     if iswarn
-        cthulhu_warntype(io, CI, rettype, debuginfo_key, stable_code)
-    elseif isa(CI, IRCode)
-        show(io, CI)
+        cthulhu_warntype(io, src, rettype, debuginfo_key, stable_code)
+    elseif isa(src, IRCode)
+        Base.IRShow.show_ir(io, src; verbose_linetable = debuginfo_key === :source)
     else
-        show(io, CI, debuginfo = debuginfo_key)
+        show(io, src, debuginfo = debuginfo_key)
     end
     println(io)
 end
