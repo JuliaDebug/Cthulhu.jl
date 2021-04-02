@@ -6,6 +6,7 @@ using UUIDs
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
+using Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
 
 const mapany = Base.mapany
 
@@ -174,15 +175,18 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
         rt = interp.unopt[mi].rt
         infos = interp.unopt[mi].stmt_infos
         slottypes = codeinf.slottypes
+        if isnothing(slottypes)
+            slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
+        end
     else
         codeinst = interp.opt[mi]
-        ir = Core.Compiler.copy(codeinst.inferred.ir)
+        ir = Core.Compiler.copy(codeinst.inferred.ir::IRCode)
         codeinf = ir
         rt = codeinst_rt(codeinst)
         infos = ir.stmts.info
         slottypes = ir.argtypes
     end
-    (codeinf, rt, infos, slottypes)
+    (codeinf, rt, infos, slottypes::Vector{Any})
 end
 
 ##
@@ -199,6 +203,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
     end
 
     display_CI = true
+    is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
     while true
         debuginfo_key = debuginfo ? :source : :none
 
@@ -214,25 +219,25 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsites = Callsite[]
         else
             if override !== nothing
-                if !haskey(interp.unopt, override)
-                    Core.eval(Core.Main, :(the_issue = $override))
-                end
                 codeinf = optimize ? override.src : interp.unopt[override].src
                 rt = optimize ? override.result : interp.unopt[override].rt
                 if optimize
-                    codeinf = Core.Compiler.copy(codeinf.ir)
+                    codeinf = Core.Compiler.copy(codeinf.ir::IRCode)
                     infos = codeinf.stmts.info
                     slottypes = codeinf.argtypes
                 else
                     codeinf = copy(codeinf)
                     infos = interp.unopt[override].stmt_infos
                     slottypes = codeinf.slottypes
+                    if isnothing(slottypes)
+                        slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
+                    end
                 end
             else
                 (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
             end
             preprocess_ci!(codeinf, mi, optimize, CONFIG)
-            callsites = find_callsites(codeinf, infos, mi, slottypes; params=params, kwargs...)
+            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
 
             display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
             display_CI = true
@@ -277,7 +282,18 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 callsite = sub_callsites[cid]
             end
 
-            if info isa GeneratedCallInfo || info isa FailedCallInfo
+            if info isa UncachedCallInfo
+                @warn "Cthulhu can't recurse into the uncached callsite"
+                continue
+                # # or, we can forcibly enter into the frame, which the native interpreter threw away
+                # next_interp = CthulhuInterpreter()
+                # next_mi = get_mi(callsite.info)
+                # do_typeinf!(next_interp, next_mi)
+                # _descend(next_interp, next_mi;
+                #          params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
+            end
+
+            if info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
                 @error "Callsite %$(callsite.id) failed to be extracted" callsite
             end
 
@@ -298,6 +314,11 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             verbose ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
+            if !is_cached(mi)
+                @warn "can't switch to post-optimization state, since this inference frame isn't cached"
+                optimize ⊻= true
+            end
+            continue
         elseif toggle === :debuginfo
             debuginfo ⊻= true
         elseif toggle === :highlighter

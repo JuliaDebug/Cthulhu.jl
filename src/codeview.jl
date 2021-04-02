@@ -81,7 +81,16 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
 end
 
 
-function cthulu_typed(io::IO, debuginfo_key, src, rettype, mi, iswarn, stable_code)
+function cthulu_typed(io::IO, debuginfo_key, src, rt, mi, iswarn, stable_code)
+    rettype = ignorelimited(rt)
+
+    if isa(src, Core.CodeInfo)
+        # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
+        src = copy(src)
+        src.ssavaluetypes = ignorelimited.(src.ssavaluetypes::Vector{Any})
+        src.rettype = ignorelimited(src.rettype)
+    end
+
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
 

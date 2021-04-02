@@ -2,15 +2,31 @@ using Unicode
 
 abstract type CallInfo; end
 
-using Core.Compiler: MethodMatch
-
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
+    function MICallInfo(mi::MethodInstance, @nospecialize(rt))
+        if isa(rt, LimitedAccuracy)
+            return LimitedCallInfo(new(mi, ignorelimited(rt)))
+        else
+            return new(mi, rt)
+        end
+    end
 end
-MICallInfo(match::MethodMatch, rt) = MICallInfo(Core.Compiler.specialize_method(match), rt)
 get_mi(ci::MICallInfo) = ci.mi
+
+# only appears when inspecting pre-optimization states
+struct LimitedCallInfo <: CallInfo
+    ci::CallInfo
+end
+get_mi(ci::LimitedCallInfo) = get_mi(ci.ci)
+
+# uncached callsite, we can't recurse into this call
+struct UncachedCallInfo <: CallInfo
+    ci::CallInfo
+end
+get_mi(ci::UncachedCallInfo) = get_mi(ci.ci)
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -197,6 +213,12 @@ function Base.show(io::IO, c::Callsite)
     if isa(info, MICallInfo)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, info)
+    elseif isa(info, LimitedCallInfo)
+        print(limiter, " = < limited > ")
+        show_callinfo(limiter, info.ci)
+    elseif isa(info, UncachedCallInfo)
+        print(limiter, " = < uncached > ")
+        show_callinfo(limiter, info.ci)
     elseif info isa MultiCallInfo
         print(limiter, " = call ")
         show_callinfo(limiter, info)
@@ -235,6 +257,8 @@ end
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::LimitedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
+is_callsite(info::UncachedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::DeoptimizedCallInfo, mi::MethodInstance) = is_callsite(info.accurate, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)

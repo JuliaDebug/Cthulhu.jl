@@ -26,12 +26,17 @@ function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
     (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
     Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
-    ci, infos, mi, rt, slottypes
+    interp, ci, infos, mi, rt, slottypes
 end
 
-function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT); optimize=true)
-    ci, infos, mi, _, slottypes = process(f, TT; optimize=optimize)
-    callsites = Cthulhu.find_callsites(ci, infos, mi, slottypes)
+function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
+    interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
+    callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
+    return callsites
+end
+
+macro find_callsites_by_ftt(ex0...)
+    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
 end
 
 function test()
@@ -99,11 +104,11 @@ end
 g(x) = @inbounds f(x)
 h(x) = f(x)
 
-let (CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
+let (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
     @test length(CI.stmts) == 3
 end
 
-let (CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
+let (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.stmts) == 2
 end
 end
@@ -279,6 +284,14 @@ let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Floa
     @test mi.specTypes.parameters[4] === Type{Float32}
 end
 
+# make sure we annotate `UncachedCallInfo` so that we won't try to retrieve non-existing cache
+let
+    callsites = @find_callsites_by_ftt mapreduce(identity, vcat, ([5], [1.]))
+    @test length(callsites) == 1
+    ci = first(callsites).info
+    @test isa(ci, Cthulhu.UncachedCallInfo)
+end
+
 @testset "warntype variables" begin
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
     io = IOBuffer()
@@ -413,7 +426,7 @@ end
 ###
 ### Printer test:
 ###
-ci, infos, mi, rt, slottypes = process(test, Tuple{});
+_, ci, infos, mi, rt, slottypes = process(test, Tuple{});
 io = IOBuffer()
 Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
 str = String(take!(io))
