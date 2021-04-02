@@ -220,11 +220,9 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 codeinf = optimize ? override.src : interp.unopt[override].src
                 rt = optimize ? override.result : interp.unopt[override].rt
                 if optimize
-                    let os = codeinf
-                        codeinf = Core.Compiler.copy(codeinf.ir)
-                        infos = codeinf.stmts.info
-                        slottypes = codeinf.argtypes
-                    end
+                    codeinf = Core.Compiler.copy(codeinf.ir)
+                    infos = codeinf.stmts.info
+                    slottypes = codeinf.argtypes
                 else
                     codeinf = copy(codeinf)
                     infos = interp.unopt[override].stmt_infos
@@ -254,17 +252,18 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             end
             callsite = callsites[cid]
 
-            if callsite.info isa Union{MultiCallInfo,DeoptimizedCallInfo}
-                callinfos = if callsite.info isa DeoptimizedCallInfo
-                    [callsite.info.accurate, callsite.info.deoptimized]
+            info = callsite.info
+            if info isa Union{MultiCallInfo,DeoptimizedCallInfo}
+                callinfos = if info isa DeoptimizedCallInfo
+                    [info.accurate, info.deoptimized]
                 else
-                    callsite.info.callinfos
+                    info.callinfos
                 end
                 sub_callsites = let callsite=callsite
                     map(ci->Callsite(callsite.id, ci, callsite.head), callinfos)
                 end
                 if isempty(sub_callsites)
-                    @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" callsite.info
+                    @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
                 menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true)
@@ -278,7 +277,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 callsite = sub_callsites[cid]
             end
 
-            if callsite.info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
+            if info isa GeneratedCallInfo || info isa FailedCallInfo
                 @error "Callsite %$(callsite.id) failed to be extracted" callsite
             end
 
@@ -289,7 +288,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             end
 
             _descend(interp, next_mi;
-                     override = isa(callsite.info, ConstPropCallInfo) ? callsite.info.result : nothing,
+                     override = isa(info, ConstPropCallInfo) ? info.result : nothing,
                      params=params, optimize=optimize,
                      iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
 

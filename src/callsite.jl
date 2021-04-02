@@ -193,42 +193,43 @@ function Base.show(io::IO, c::Callsite)
     optimize = get(io, :optimize, true)::Bool
     limiter = TextWidthLimiter(io, cols)
     print(limiter, string("%", c.id, " "))
-    if isa(c.info, MICallInfo)
+    info = c.info
+    if isa(info, MICallInfo)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
-        show_callinfo(limiter, c.info)
-    elseif c.info isa MultiCallInfo
+        show_callinfo(limiter, info)
+    elseif info isa MultiCallInfo
         print(limiter, " = call ")
-        show_callinfo(limiter, c.info)
-    elseif isa(c.info, DeoptimizedCallInfo)
+        show_callinfo(limiter, info)
+    elseif isa(info, DeoptimizedCallInfo)
         deoptstr = sprint(context = IOContext(io, :color => true)) do tmpio
             print(tmpio, " = ")
             printstyled(tmpio, "deoptimized"; color = :red)
             print(tmpio, " ")
         end
         print(limiter, deoptstr)
-        show_callinfo(limiter, c.info.accurate)
-    elseif c.info isa FailedCallInfo ||
-           c.info isa GeneratedCallInfo
+        show_callinfo(limiter, info.accurate)
+    elseif info isa FailedCallInfo ||
+           info isa GeneratedCallInfo
         print(limiter, " = call ")
-        show_callinfo(limiter, c.info)
-    elseif c.info isa TaskCallInfo
+        show_callinfo(limiter, info)
+    elseif info isa TaskCallInfo
         print(limiter, " = task < ")
-        show_callinfo(limiter, c.info.ci)
+        show_callinfo(limiter, info.ci)
         print(limiter, " >")
-    elseif isa(c.info, ReturnTypeCallInfo)
+    elseif isa(info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
-        show_callinfo(limiter, c.info.called_mi)
+        show_callinfo(limiter, info.called_mi)
         print(limiter, " >")
-    elseif isa(c.info, CuCallInfo)
+    elseif isa(info, CuCallInfo)
         print(limiter, " = cucall < ")
-        show_callinfo(limiter, c.info.cumi)
+        show_callinfo(limiter, info.cumi)
         print(limiter, " >")
-    elseif isa(c.info, ConstPropCallInfo)
+    elseif isa(info, ConstPropCallInfo)
         print(limiter, " = < constprop > ")
-        show_callinfo(limiter, c.info)
-    elseif isa(c.info, OCCallInfo)
+        show_callinfo(limiter, info)
+    elseif isa(info, OCCallInfo)
         print(limiter, " = < opaque closure call > ")
-        show_callinfo(limiter, c.info.ci)
+        show_callinfo(limiter, info.ci)
     end
 end
 
