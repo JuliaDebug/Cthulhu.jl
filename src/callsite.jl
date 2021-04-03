@@ -16,17 +16,22 @@ struct MICallInfo <: CallInfo
 end
 get_mi(ci::MICallInfo) = ci.mi
 
+abstract type WrappedCallInfo <: CallInfo end
+
+get_wrapped(ci::WrappedCallInfo) = ci.wrapped
+ignorewrappers(ci::CallInfo) = ci
+ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
+get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
+
 # only appears when inspecting pre-optimization states
-struct LimitedCallInfo <: CallInfo
-    ci::CallInfo
+struct LimitedCallInfo <: WrappedCallInfo
+    wrapped::CallInfo
 end
-get_mi(ci::LimitedCallInfo) = get_mi(ci.ci)
 
 # uncached callsite, we can't recurse into this call
-struct UncachedCallInfo <: CallInfo
-    ci::CallInfo
+struct UncachedCallInfo <: WrappedCallInfo
+    wrapped::CallInfo
 end
-get_mi(ci::UncachedCallInfo) = get_mi(ci.ci)
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -200,7 +205,7 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
     tt = ci.result.argtypes[2:end]
-    __show_limited(limiter, name, tt, ci.mi.rt)
+    __show_limited(limiter, name, tt, (ignorewrappers(ci.mi)::MICallInfo).rt)
 end
 
 function Base.show(io::IO, c::Callsite)
@@ -253,6 +258,20 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " = < opaque closure call > ")
         show_callinfo(limiter, info.ci)
     end
+end
+
+_show_wrapper_info(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
+_show_wrapper_info(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
+function show_wrapper_info(limiter, ci::WrappedCallInfo)
+    print(limiter, " = < ")
+    _show_wrapper_info(limiter, ci)
+    ci = get_wrapped(ci)
+    while isa(ci, WrappedCallInfo)
+        print(limiter, ", ")
+        _show_wrapper_info(limiter, ci)
+        ci = get_wrapped(ci)
+    end
+    print(" > ")
 end
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)

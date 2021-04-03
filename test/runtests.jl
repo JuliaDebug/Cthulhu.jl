@@ -123,9 +123,30 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
 end
 
-@testset "union-split constant-prop'ed callsites" begin
-    anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
+# NOTE some inference won't work with inner functions
+anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
 
+@testset "wrapped callinfo" begin
+    let
+        m = anonymous_module()
+        @eval m begin
+            # mutually recursive functions
+            f(a) = g(a)
+            g(a) = somecode::Bool ? h(a) : a
+            h(a) = f(Type{a})
+        end
+
+        # make sure we form `UncachedCallInfo` so that we won't try to retrieve non-existing cache
+        callsites = @find_callsites_by_ftt m.f(Int)
+        @test length(callsites) == 1
+        ci = first(callsites).info
+        @test isa(ci, Cthulhu.UncachedCallInfo)
+
+        # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
+    end
+end
+
+@testset "union-split constant-prop'ed callsites" begin
     # constant prop' on all the splits
     let callsites = (@eval anonymous_module() begin
             struct F32
@@ -282,14 +303,6 @@ let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Floa
     @test cs isa Cthulhu.Callsite
     mi = cs.info.mi
     @test mi.specTypes.parameters[4] === Type{Float32}
-end
-
-# make sure we annotate `UncachedCallInfo` so that we won't try to retrieve non-existing cache
-let
-    callsites = @find_callsites_by_ftt mapreduce(identity, vcat, ([5], [1.]))
-    @test length(callsites) == 1
-    ci = first(callsites).info
-    @test isa(ci, Cthulhu.UncachedCallInfo)
 end
 
 @testset "warntype variables" begin
