@@ -123,12 +123,9 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
 end
 
-# NOTE some inference won't work with inner functions
-anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
-
 @testset "wrapped callinfo" begin
     let
-        m = anonymous_module()
+        m = Module()
         @eval m begin
             # mutually recursive functions
             f(a) = g(a)
@@ -148,7 +145,7 @@ end
 
 @testset "union-split constant-prop'ed callsites" begin
     # constant prop' on all the splits
-    let callsites = (@eval anonymous_module() begin
+    let callsites = (@eval Module() begin
             struct F32
                 val::Float32
                 _v::Int
@@ -171,7 +168,7 @@ end
     end
 
     # successful and unsuccessful constant prop'
-    let callsites = (@eval anonymous_module() begin
+    let callsites = (@eval Module() begin
             struct F32
                 val::Float32
                 _v::Int
