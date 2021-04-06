@@ -279,18 +279,19 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 if cid == -1
                     interruptexc ? throw(InterruptException()) : break
                 end
+
                 callsite = sub_callsites[cid]
+                info = callsite.info
             end
 
             if info isa UncachedCallInfo
-                @warn "Cthulhu can't recurse into the uncached callsite"
+                # forcibly enter and inspect the frame, which the native interpreter threw away
+                next_interp = CthulhuInterpreter()
+                next_mi = get_mi(info)
+                do_typeinf!(next_interp, next_mi)
+                _descend(next_interp, next_mi;
+                         params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
                 continue
-                # # or, we can forcibly enter into the frame, which the native interpreter threw away
-                # next_interp = CthulhuInterpreter()
-                # next_mi = get_mi(callsite.info)
-                # do_typeinf!(next_interp, next_mi)
-                # _descend(next_interp, next_mi;
-                #          params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
             end
 
             if info isa GeneratedCallInfo || callsite.info isa FailedCallInfo

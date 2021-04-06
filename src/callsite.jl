@@ -218,12 +218,9 @@ function Base.show(io::IO, c::Callsite)
     if isa(info, MICallInfo)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, info)
-    elseif isa(info, LimitedCallInfo)
-        print(limiter, " = < limited > ")
-        show_callinfo(limiter, info.ci)
-    elseif isa(info, UncachedCallInfo)
-        print(limiter, " = < uncached > ")
-        show_callinfo(limiter, info.ci)
+    elseif isa(info, WrappedCallInfo)
+        wrapped_callinfo(limiter, info)
+        show_callinfo(limiter, ignorewrappers(info))
     elseif info isa MultiCallInfo
         print(limiter, " = call ")
         show_callinfo(limiter, info)
@@ -260,19 +257,19 @@ function Base.show(io::IO, c::Callsite)
     end
 end
 
-_show_wrapper_info(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
-_show_wrapper_info(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
-function show_wrapper_info(limiter, ci::WrappedCallInfo)
+function wrapped_callinfo(limiter, ci::WrappedCallInfo)
     print(limiter, " = < ")
-    _show_wrapper_info(limiter, ci)
+    _wrapped_callinfo(limiter, ci)
     ci = get_wrapped(ci)
     while isa(ci, WrappedCallInfo)
         print(limiter, ", ")
-        _show_wrapper_info(limiter, ci)
+        _wrapped_callinfo(limiter, ci)
         ci = get_wrapped(ci)
     end
-    print(" > ")
+    print(limiter, " > ")
 end
+_wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
+_wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
