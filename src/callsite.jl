@@ -2,15 +2,36 @@ using Unicode
 
 abstract type CallInfo; end
 
-using Core.Compiler: MethodMatch
-
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
+    function MICallInfo(mi::MethodInstance, @nospecialize(rt))
+        if isa(rt, LimitedAccuracy)
+            return LimitedCallInfo(new(mi, ignorelimited(rt)))
+        else
+            return new(mi, rt)
+        end
+    end
 end
-MICallInfo(match::MethodMatch, rt) = MICallInfo(Core.Compiler.specialize_method(match), rt)
 get_mi(ci::MICallInfo) = ci.mi
+
+abstract type WrappedCallInfo <: CallInfo end
+
+get_wrapped(ci::WrappedCallInfo) = ci.wrapped
+ignorewrappers(ci::CallInfo) = ci
+ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
+get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
+
+# only appears when inspecting pre-optimization states
+struct LimitedCallInfo <: WrappedCallInfo
+    wrapped::CallInfo
+end
+
+# uncached callsite, we can't recurse into this call
+struct UncachedCallInfo <: WrappedCallInfo
+    wrapped::CallInfo
+end
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -184,7 +205,7 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
     tt = ci.result.argtypes[2:end]
-    __show_limited(limiter, name, tt, ci.mi.rt)
+    __show_limited(limiter, name, tt, (ignorewrappers(ci.mi)::MICallInfo).rt)
 end
 
 function Base.show(io::IO, c::Callsite)
@@ -197,6 +218,9 @@ function Base.show(io::IO, c::Callsite)
     if isa(info, MICallInfo)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, info)
+    elseif isa(info, WrappedCallInfo)
+        wrapped_callinfo(limiter, info)
+        show_callinfo(limiter, ignorewrappers(info))
     elseif info isa MultiCallInfo
         print(limiter, " = call ")
         show_callinfo(limiter, info)
@@ -233,8 +257,24 @@ function Base.show(io::IO, c::Callsite)
     end
 end
 
+function wrapped_callinfo(limiter, ci::WrappedCallInfo)
+    print(limiter, " = < ")
+    _wrapped_callinfo(limiter, ci)
+    ci = get_wrapped(ci)
+    while isa(ci, WrappedCallInfo)
+        print(limiter, ", ")
+        _wrapped_callinfo(limiter, ci)
+        ci = get_wrapped(ci)
+    end
+    print(limiter, " > ")
+end
+_wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
+_wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
+
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::LimitedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
+is_callsite(info::UncachedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::DeoptimizedCallInfo, mi::MethodInstance) = is_callsite(info.accurate, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)

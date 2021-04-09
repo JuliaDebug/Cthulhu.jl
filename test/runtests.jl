@@ -26,12 +26,17 @@ function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
     (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
     Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
-    ci, infos, mi, rt, slottypes
+    interp, ci, infos, mi, rt, slottypes
 end
 
-function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT); optimize=true)
-    ci, infos, mi, _, slottypes = process(f, TT; optimize=optimize)
-    callsites = Cthulhu.find_callsites(ci, infos, mi, slottypes)
+function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
+    interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
+    callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
+    return callsites
+end
+
+macro find_callsites_by_ftt(ex0...)
+    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
 end
 
 function test()
@@ -99,11 +104,11 @@ end
 g(x) = @inbounds f(x)
 h(x) = f(x)
 
-let (CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
+let (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
     @test length(CI.stmts) == 3
 end
 
-let (CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
+let (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
     @test length(CI.stmts) == 2
 end
 end
@@ -118,11 +123,29 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
 end
 
-@testset "union-split constant-prop'ed callsites" begin
-    anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
+@testset "wrapped callinfo" begin
+    let
+        m = Module()
+        @eval m begin
+            # mutually recursive functions
+            f(a) = g(a)
+            g(a) = somecode::Bool ? h(a) : a
+            h(a) = f(Type{a})
+        end
 
+        # make sure we form `UncachedCallInfo` so that we won't try to retrieve non-existing cache
+        callsites = @find_callsites_by_ftt m.f(Int)
+        @test length(callsites) == 1
+        ci = first(callsites).info
+        @test isa(ci, Cthulhu.UncachedCallInfo)
+
+        # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
+    end
+end
+
+@testset "union-split constant-prop'ed callsites" begin
     # constant prop' on all the splits
-    let callsites = (@eval anonymous_module() begin
+    let callsites = (@eval Module() begin
             struct F32
                 val::Float32
                 _v::Int
@@ -145,7 +168,7 @@ end
     end
 
     # successful and unsuccessful constant prop'
-    let callsites = (@eval anonymous_module() begin
+    let callsites = (@eval Module() begin
             struct F32
                 val::Float32
                 _v::Int
@@ -413,7 +436,7 @@ end
 ###
 ### Printer test:
 ###
-ci, infos, mi, rt, slottypes = process(test, Tuple{});
+_, ci, infos, mi, rt, slottypes = process(test, Tuple{});
 io = IOBuffer()
 Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
 str = String(take!(io))

@@ -37,7 +37,10 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)), callsite.head)
 end
 
-function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance, slottypes; params=current_params(), multichoose::Bool=false, kwargs...)
+function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
+                        stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
+                        slottypes::Vector{Any}, optimize::Bool=true;
+                        params=current_params(), kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -57,6 +60,7 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                     info = info.info
                     was_return_type = true
                 end
+                is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
                 function process_info(info)
                     if isa(info, MethodMatchInfo)
                         if info.results === missing
@@ -64,7 +68,11 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                         end
 
                         matches = info.results.matches
-                        return map(match->MICallInfo(match, rt), matches)
+                        return map(matches) do match
+                            mi = Core.Compiler.specialize_method(match)
+                            mici = MICallInfo(mi, rt)
+                            return is_cached(mi) ? mici : UncachedCallInfo(mici)
+                        end
                     elseif isa(info, UnionSplitInfo)
                         return mapreduce(process_info, vcat, info.matches)
                     elseif isa(info, UnionSplitApplyCallInfo)
@@ -80,12 +88,14 @@ function find_callsites(CI::Union{Core.CodeInfo, IRCode}, stmt_info::Union{Vecto
                             if isnothing(result)
                                 infos[i]
                             else
-                                ConstPropCallInfo(MICallInfo(result.linfo, rt), result)
+                                linfo = result.linfo
+                                mici = MICallInfo(linfo, rt)
+                                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
                             end
                         end
-                    elseif isdefined(Compiler, :OpaqueClosureCallInfo) && isa(info, Compiler.OpaqueClosureCallInfo)
+                    elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
                         return [OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
-                    elseif isdefined(Compiler, :OpaqueClosureCreateInfo) && isa(info, Compiler.OpaqueClosureCreateInfo)
+                    elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
                         # TODO: Add ability to descend into OCs at creation site
                         return []
                     elseif info == false
@@ -172,7 +182,6 @@ function dce!(ir::IRCode, mi)
     Core.Compiler.foreach(x -> nothing, compact)
     ir = Core.Compiler.finish(compact)
 end
-
 
 function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
     ccall(:jl_typeinf_begin, Cvoid, ())
@@ -267,7 +276,7 @@ function find_caller_of(callee::MethodInstance, caller::MethodInstance)
     for optimize in (true, false)
         (CI, rt, infos, slottypes) = lookup(interp, caller, optimize)
         preprocess_ci!(CI, caller, optimize, CONFIG)
-        callsites = find_callsites(CI, infos, caller, slottypes; params=params)
+        callsites = find_callsites(interp, CI, infos, caller, slottypes, optimize; params=params)
         callsites = filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
     end
