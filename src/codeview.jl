@@ -22,7 +22,7 @@ function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuCo
         mi, params.world,
         #=wrapper=# false, #=strip_ir_metadata=# true,
         dump_module,
-        optimize, debuginfo ? :source : :none, Base.CodegenParams())
+        optimize, debuginfo > 0 ? :source : :none, Base.CodegenParams())
     highlight(io, dump, "llvm", config)
 end
 
@@ -30,7 +30,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     dump = InteractiveUtils._dump_function_linfo_native(
         mi, params.world,
         #=wrapper=# false, #=syntax=# config.asm_syntax,
-        debuginfo ? :source : :none)
+        debuginfo > 0 ? :source : :none)
     highlight(io, dump, "asm", config)
 end
 
@@ -56,10 +56,24 @@ function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     highlight(io, src, "julia", config)
 end
 
+using Base.IRShow: IRShow, _stmt, _type, should_print_ssa_type, IRShowConfig, show_ir
+
+const __debuginfo = merge(IRShow.__debuginfo, Dict(
+    :compact => src -> src isa CodeInfo ? __debuginfo[:source](src)
+                                        : IRShow.inline_linfo_printer(src)
+))
+
+function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
+    stmt = _stmt(code, idx)
+    type = _type(code, idx)
+    should_print_ssa_type(stmt) || return false
+    return (idx in used) && type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+end
+
 cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
 function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
-    debuginfo = Base.IRShow.debuginfo(debuginfo)
-    lineprinter = Base.IRShow.__debuginfo[debuginfo]
+    debuginfo = IRShow.debuginfo(debuginfo)
+    lineprinter = __debuginfo[debuginfo]
     lambda_io::IOContext = io
     if hasfield(typeof(src), :slotnames) && src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
@@ -69,19 +83,21 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code)
     print(io, "Body")
     InteractiveUtils.warntype_type_printer(io, rettype, true)
     println(io)
-    if isa(src, IRCode)
-        Base.IRShow.show_ir(io, src, InteractiveUtils.warntype_type_printer;
-                            verbose_linetable = debuginfo === :source)
-    else
-        print_stmt = stable_code ? (_, _, _) -> true : is_type_unstable
-        show_ir(lambda_io, src, lineprinter(src), InteractiveUtils.warntype_type_printer;
-                print_stmt)
-    end
+
+    should_print_stmt = (src isa IRCode || stable_code) ? Returns(true) : is_type_unstable
+    bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
+    irshow_config = IRShowConfig(
+        lineprinter(src), InteractiveUtils.warntype_type_printer;
+        should_print_stmt, bb_color,
+    )
+    show_ir(io, src, irshow_config)
     return nothing
 end
 
 
-function cthulu_typed(io::IO, debuginfo_key, src, rt, mi, iswarn, stable_code)
+function cthulu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code)
+    debuginfo = IRShow.debuginfo(debuginfo)
+    lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
 
     if isa(src, Core.CodeInfo)
@@ -94,13 +110,11 @@ function cthulu_typed(io::IO, debuginfo_key, src, rt, mi, iswarn, stable_code)
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
 
-    if iswarn
-        cthulhu_warntype(io, src, rettype, debuginfo_key, stable_code)
-    elseif isa(src, IRCode)
-        Base.IRShow.show_ir(io, src; verbose_linetable = debuginfo_key === :source)
-    else
-        show(io, src, debuginfo = debuginfo_key)
-    end
+    iswarn && cthulhu_warntype(io, src, rettype, debuginfo, stable_code)
+
+    bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
+    irshow_config = IRShowConfig(lineprinter(src); bb_color)
+    show_ir(io, src, irshow_config)
     println(io)
 end
 
@@ -195,39 +209,3 @@ InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :
                              config = CONFIG) =
     cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)
 
-@nospecialize
-
-using Base.IRShow: _stmt, _type, should_print_ssa_type, statementidx_lineinfo_printer,
-    default_expr_type_printer, compute_basic_blocks, scan_ssa_use!, show_ir_stmt
-
-function is_type_unstable(code::CodeInfo, idx::Int, used::BitSet)
-    stmt = _stmt(code, idx)
-    type = _type(code, idx)
-    should_print_ssa_type(stmt) || return false
-    return (idx in used) && type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
-end
-
-function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_lineinfo_printer(code), line_info_postprinter=default_expr_type_printer; print_stmt = (_, _, _) -> true)
-    stmts = code.code
-    used = BitSet()
-    cfg = compute_basic_blocks(stmts)
-    for stmt in stmts
-        scan_ssa_use!(push!, used, stmt)
-    end
-    bb_idx = 1
-
-    for idx in 1:length(stmts)
-        if print_stmt(code, idx, used)
-            bb_idx = show_ir_stmt(io, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
-        # this is the only functionality added vs base
-        elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
-            bb_idx += 1
-        end
-    end
-
-    max_bb_idx_size = length(string(length(cfg.blocks)))
-    line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
-    nothing
-end
-
-@specialize
