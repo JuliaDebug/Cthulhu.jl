@@ -22,7 +22,8 @@ function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuCo
         mi, params.world,
         #=wrapper=# false, #=strip_ir_metadata=# true,
         dump_module,
-        optimize, debuginfo > 0 ? :source : :none, Base.CodegenParams())
+        optimize, debuginfo != DInfo.none ? :source : :none,
+        Base.CodegenParams())
     highlight(io, dump, "llvm", config)
 end
 
@@ -30,7 +31,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     dump = InteractiveUtils._dump_function_linfo_native(
         mi, params.world,
         #=wrapper=# false, #=syntax=# config.asm_syntax,
-        debuginfo > 0 ? :source : :none)
+        debuginfo != DInfo.none ? :source : :none)
     highlight(io, dump, "asm", config)
 end
 
