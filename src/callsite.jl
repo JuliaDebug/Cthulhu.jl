@@ -73,6 +73,13 @@ struct TaskCallInfo <: CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 
+struct InvokeCallInfo <: CallInfo
+    ci::MICallInfo
+    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt)) =
+        new(MICallInfo(mi, rt))
+end
+get_mi(ci::InvokeCallInfo) = get_mi(ci.ci)
+
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
     ci::MICallInfo
@@ -240,6 +247,10 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " = task < ")
         show_callinfo(limiter, info.ci)
         print(limiter, " >")
+    elseif info isa InvokeCallInfo
+        print(limiter, " = invoke < ")
+        show_callinfo(limiter, info.ci)
+        print(limiter, " >")
     elseif isa(info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
         show_callinfo(limiter, info.called_mi)
@@ -272,12 +283,13 @@ _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
-is_callsite(info::MICallInfo, mi::MethodInstance) = info.mi == mi
+is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
 is_callsite(info::LimitedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::UncachedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::DeoptimizedCallInfo, mi::MethodInstance) = is_callsite(info.accurate, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
+is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
 is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
 function is_callsite(info::MultiCallInfo, mi::MethodInstance)
