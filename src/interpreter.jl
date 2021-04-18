@@ -32,35 +32,38 @@ CthulhuInterpreter() = CthulhuInterpreter(
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
     get_inference_cache, code_cache,
     WorldView, lock_mi_inference, unlock_mi_inference, InferenceState
+using Base: @invoke
 
-InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
-OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
-get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
-get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
+Compiler.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
+Compiler.OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
+Compiler.get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
+Compiler.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
 # No need to do any locking since we're not putting our results into the runtime cache
-lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
-unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
+Compiler.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
+Compiler.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 
-code_cache(interp::CthulhuInterpreter) = interp.opt
-Core.Compiler.get(a::Dict, b, c) = Base.get(a,b,c)
-Core.Compiler.get(a::WorldView{<:Dict}, b, c) = Base.get(a.cache,b,c)
-Core.Compiler.haskey(a::Dict, b) = Base.haskey(a, b)
-Core.Compiler.haskey(a::WorldView{<:Dict}, b) =
-    Core.Compiler.haskey(a.cache, b)
-Core.Compiler.setindex!(a::Dict, b, c) = setindex!(a, b, c)
-Core.Compiler.may_optimize(interp::CthulhuInterpreter) = true
-Core.Compiler.may_compress(interp::CthulhuInterpreter) = false
-Core.Compiler.may_discard_trees(interp::CthulhuInterpreter) = false
-Core.Compiler.verbose_stmt_info(interp::CthulhuInterpreter) = true
+struct CthulhuCache
+    cache::Dict{MethodInstance, CodeInstance}
+end
 
-function Core.Compiler.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
+Compiler.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_world_counter(interp)))
+Compiler.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
+Compiler.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
+Compiler.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
+
+Compiler.may_optimize(interp::CthulhuInterpreter) = true
+Compiler.may_compress(interp::CthulhuInterpreter) = false
+Compiler.may_discard_trees(interp::CthulhuInterpreter) = false
+Compiler.verbose_stmt_info(interp::CthulhuInterpreter) = true
+
+function Compiler.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(interp.msgs, sv.linfo, Tuple{Int, String}[]),
         sv.currpc => msg)
 end
 
-function Core.Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
-    r = invoke(Core.Compiler.finish, Tuple{InferenceState, AbstractInterpreter}, state, interp)
+function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
+    r = @invoke Compiler.finish(state::InferenceState, interp::AbstractInterpreter)
     interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(isa(state.src, OptimizationState) ?
             state.src.src : state.src),
@@ -69,7 +72,7 @@ function Core.Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     return r
 end
 
-function Core.Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
+function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
         valid_worlds::Core.Compiler.WorldRange, @nospecialize(inferred_result))
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
@@ -80,14 +83,14 @@ function Core.Compiler.transform_result_for_cache(interp::CthulhuInterpreter, li
     return inferred_result
 end
 
-function Core.Compiler.inlining_policy(interp::CthulhuInterpreter)
+function Compiler.inlining_policy(interp::CthulhuInterpreter)
     function (src)
         @assert isa(src, OptimizedSource)
         return src.isinlineable ? src.ir : nothing
     end
 end
 
-function Core.Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
+function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     if isa(caller.src, OptimizationState)
         opt = caller.src
         if isdefined(opt, :ir)
