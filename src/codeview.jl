@@ -110,11 +110,13 @@ function cthulu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code)
     println(io)
     println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
 
-    iswarn && cthulhu_warntype(io, src, rettype, debuginfo, stable_code)
-
-    bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
-    irshow_config = IRShowConfig(lineprinter(src); bb_color)
-    show_ir(io, src, irshow_config)
+    if iswarn
+        cthulhu_warntype(io, src, rettype, debuginfo, stable_code)
+    else
+        bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
+        irshow_config = IRShowConfig(lineprinter(src); bb_color)
+        show_ir(io, src, irshow_config)
+    end
     println(io)
 end
 
@@ -208,4 +210,3 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
 InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
                              config = CONFIG) =
     cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)
-
