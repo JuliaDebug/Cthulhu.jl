@@ -189,23 +189,28 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
     (codeinf, rt, infos, slottypes::Vector{Any})
 end
 
+module DInfo
+    @enum DebugInfo none compact source
+end
+using .DInfo: DebugInfo
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
-    debuginfo = true
+    debuginfo = DInfo.compact # default is compact debuginfo
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
         # TODO: respect default
-        debuginfo = selected === :source
+        debuginfo = getfield(DInfo, selected)::DebugInfo
     end
 
     display_CI = true
     is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
     while true
-        debuginfo_key = debuginfo ? :source : :none
+        debuginfo_key = Symbol(debuginfo)
 
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
@@ -321,7 +326,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             end
             continue
         elseif toggle === :debuginfo
-            debuginfo ⊻= true
+            debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
