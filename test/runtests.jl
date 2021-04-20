@@ -210,6 +210,38 @@ let callsites = find_callsites_by_ftt(ftask, Tuple{})
     @test filter(c -> c.info.ci isa Cthulhu.FailedCallInfo, task_callsites) == []
 end
 
+@testset "invoke" begin
+    m = Module()
+    @eval m begin
+        f(a::Integer) = :Integer
+        f(a::Int) = :Int
+    end
+
+    let
+        callsites = @eval m begin
+            $find_callsites_by_ftt(; optimize=false) do
+                Base.@invoke f(0::Integer)
+            end
+        end
+        @test any(callsites) do callsite
+            info = callsite.info
+            isa(info, Cthulhu.InvokeCallInfo) && info.ci.rt === Core.Compiler.Const(:Integer)
+        end
+    end
+
+    let
+        callsites = @eval m begin
+            $find_callsites_by_ftt(; optimize=false) do
+                Base.@invoke f(0::Int)
+            end
+        end
+        @test any(callsites) do callsite
+            info = callsite.info
+            isa(info, Cthulhu.InvokeCallInfo) && info.ci.rt === Core.Compiler.Const(:Int)
+        end
+    end
+end
+
 ##
 # Union{f, g}
 ##
