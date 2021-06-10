@@ -465,6 +465,21 @@ let config = Cthulhu.CthulhuConfig(
     end
 end
 
+# https://github.com/JuliaDebug/Cthulhu.jl/issues/152
+let callsites = @find_callsites_by_ftt optimize=false replace("s", "a"=>"b")
+    @test !isempty(callsites)
+end
+function issue152_another(t)
+    s = 0
+    for a in t
+        s += a
+    end
+    return s
+end
+let callsites = find_callsites_by_ftt(issue152_another, (Tuple{Float64,Vararg{Float64}},); optimize=false)
+    @test !isempty(callsites)
+end
+
 ###
 ### Printer test:
 ###
