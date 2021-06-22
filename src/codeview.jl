@@ -84,7 +84,7 @@ end
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
-function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
+function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance}=nothing;
     hide_type_stable::Bool=false, inline_cost::Bool=false)
     if inline_cost
@@ -224,7 +224,7 @@ Base.show(io::IO, b::Bookmark) =
 # Turn off `optimize` and `debuginfo` for default `show` so that the
 # output is smaller.
 function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
-                   optimize = false, debuginfo = :none, iswarn=false, hide_type_stable=true)
+                   optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
     world = b.interp.native.world
     CI, rt = InteractiveUtils.code_typed(b; optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
@@ -236,7 +236,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
     cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, hide_type_stable)
 end
 
-function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
+function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     interp = b.interp
     mi = b.mi
     (ci, rt) = lookup(interp, mi, optimize)
@@ -255,7 +255,7 @@ InteractiveUtils.code_warntype(b::Bookmark; kw...) =
 function InteractiveUtils.code_warntype(
     io::IO,
     b::Bookmark;
-    debuginfo = :source,
+    debuginfo::AnyDebugInfo = :source,
     hide_type_stable::Bool = true,
     kw...,
 )
