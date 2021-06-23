@@ -76,7 +76,7 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code, inline_c
     if inline_cost
         error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rettype, nothing, false, stable_code, inline_cost)
+    cthulu_typed(io, debuginfo, src, rettype, nothing, false, stable_code, inline_cost)
     return nothing
 end
 
