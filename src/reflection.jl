@@ -179,7 +179,11 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
 end
 
 function dce!(ci, mi)
-    argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
+    if VERSION >= v"1.7.0-DEV.705"
+        argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing, false)[1]
+    else
+        argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
+    end
     ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
                              argtypes)
     dce!(ir, mi)
