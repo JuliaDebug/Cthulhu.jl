@@ -393,13 +393,8 @@ function mkinterp(@nospecialize(args...))
     (interp, mi)
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    (interp, mi) = mkinterp(F, TT)
-    _descend(interp, mi; params=params, kwargs...)
-end
-
-function _descend(@nospecialize(TT::Type{<:Tuple}); params=current_params(), kwargs...)
-    (interp, mi) = mkinterp(TT)
+function _descend(@nospecialize(args...); params=current_params(), kwargs...)
+    (interp, mi) = mkinterp(args...)
     _descend(interp, mi; params=params, kwargs...)
 end
 
