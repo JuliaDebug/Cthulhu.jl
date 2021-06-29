@@ -376,22 +376,30 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function get_specialization(@nospecialize(F), @nospecialize(TT))
-    sigt = Base.signature_type(F, TT)
-    match = Base._which(sigt)
+function get_specialization(@nospecialize(TT))
+    match = Base._which(TT)
     mi = Core.Compiler.specialize_method(match)
     return mi
 end
 
-function mkinterp(@nospecialize(F), @nospecialize(TT))
+function get_specialization(@nospecialize(F), @nospecialize(TT))
+    return get_specialization(Base.signature_type(F, TT))
+end
+
+function mkinterp(@nospecialize(args...))
     interp = CthulhuInterpreter()
-    mi = get_specialization(F, TT)
+    mi = get_specialization(args...)
     do_typeinf!(interp, mi)
     (interp, mi)
 end
 
 function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
     (interp, mi) = mkinterp(F, TT)
+    _descend(interp, mi; params=params, kwargs...)
+end
+
+function _descend(@nospecialize(TT::Type{<:Tuple}); params=current_params(), kwargs...)
+    (interp, mi) = mkinterp(TT)
     _descend(interp, mi; params=params, kwargs...)
 end
 
