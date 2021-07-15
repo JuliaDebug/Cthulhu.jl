@@ -186,7 +186,7 @@ function dce!(ci, mi)
     end
     ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
                              argtypes)
-    dce!(ir, mi)
+    ir = dce!(ir, mi)
     Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
 end
 
