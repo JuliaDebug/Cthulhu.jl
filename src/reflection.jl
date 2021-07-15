@@ -204,8 +204,9 @@ function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::B
     frame === nothing && return (nothing, Any, Any[])
     if Compiler.typeinf(interp, frame) && run_optimizer
         oparams = Core.Compiler.OptimizationParams(interp)
-        opt = Compiler.OptimizationState(frame, oparams, interp)
+        result.src = opt = Compiler.OptimizationState(frame, oparams, interp)
         Compiler.optimize(interp, opt, oparams, result.result)
+        frame.src = Core.Compiler.finish!(interp, result)
         opt.src.inferred = true
     end
     ccall(:jl_typeinf_end, Cvoid, ())
