@@ -341,7 +341,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             Core.println()
             display_CI = false
         elseif toggle === :bookmark
-            push!(BOOKMARKS, Bookmark(mi, params))
+            push!(BOOKMARKS, Bookmark(mi, interp))
             @info "The method is pushed at the end of `Cthulhu.BOOKMARKS`."
             display_CI = false
         elseif toggle === :revise
