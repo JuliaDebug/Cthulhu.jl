@@ -80,12 +80,10 @@ end
 
 Shortcut for [`@descend_code_typed`](@ref).
 """
-macro descend(ex0...)
-    esc(:(@descend_code_typed($(ex0...))))
-end
+const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, tt; kwargs...)
+    descend_code_typed(f, tt=Tuple{}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
@@ -100,14 +98,14 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_typed(foo, Tuple{})
+descend_code_typed(foo)
 ```
 """
-descend_code_typed(f, @nospecialize(tt); kwargs...) =
+descend_code_typed(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, tt)
+    descend_code_warntype(f, tt=Tuple{})
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
 
 Given a function and a tuple-type, interactively explore the output of
@@ -122,10 +120,10 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_warntype(foo, Tuple{})
+descend_code_warntype(foo)
 ```
 """
-descend_code_warntype(f, @nospecialize(tt); kwargs...) =
+descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
 function _descend_with_error_handling(args...; kwargs...)
