@@ -323,11 +323,13 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
-            continue
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
         elseif toggle === :inline_cost
             inline_cost ⊻= true
+            if inline_cost && !optimize
+                @warn "enable optimization to see the inlining costs"
+            end
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
