@@ -310,7 +310,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             _descend(interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing,
                      params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
+                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose,
+                     inline_cost=inline_cost, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
