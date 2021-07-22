@@ -71,7 +71,7 @@ function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
     return (idx in used) && type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 end
 
-cthulhu_warntype(args...) = cthulhu_warntype(stdout, args...)
+cthulhu_warntype(args...) = cthulhu_warntype(stdout::IO, args...)
 function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code, inline_cost=false)
     if inline_cost
         error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
@@ -207,19 +207,19 @@ function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
 end
 
 InteractiveUtils.code_warntype(b::Bookmark; kw...) =
-    InteractiveUtils.code_warntype(stdout, b; kw...)
+    InteractiveUtils.code_warntype(stdout::IO, b; kw...)
 function InteractiveUtils.code_warntype(io::IO, b::Bookmark; debuginfo = :source, kw...)
     CI, rt = InteractiveUtils.code_typed(b; kw...)
     cthulhu_warntype(io, CI, rt, debuginfo)
 end
 
-InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout, b)
+InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
 InteractiveUtils.code_llvm(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
                            dump_module = false, config = CONFIG) =
     cthulhu_llvm(io, b.mi, optimize, debuginfo == :source, b.params, config, dump_module)
 
 InteractiveUtils.code_native(b::Bookmark; kw...) =
-    InteractiveUtils.code_native(stdout, b; kw...)
+    InteractiveUtils.code_native(stdout::IO, b; kw...)
 InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
                              config = CONFIG) =
     cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)
