@@ -76,11 +76,11 @@ function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code, inline_c
     if inline_cost
         error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulu_typed(io, debuginfo, src, rettype, nothing, true, stable_code, inline_cost)
+    cthulhu_typed(io, debuginfo, src, rettype, nothing, true, stable_code, inline_cost)
     return nothing
 end
 
-function cthulu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inline_cost=false)
+function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inline_cost=false)
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -197,7 +197,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", b.params.world, ")")
-    cthulu_typed(io, debuginfo, CI, rt, b.mi, iswarn)
+    cthulhu_typed(io, debuginfo, CI, rt, b.mi, iswarn)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
