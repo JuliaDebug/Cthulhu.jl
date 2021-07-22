@@ -80,12 +80,10 @@ end
 
 Shortcut for [`@descend_code_typed`](@ref).
 """
-macro descend(ex0...)
-    esc(:(@descend_code_typed($(ex0...))))
-end
+const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, tt; kwargs...)
+    descend_code_typed(f, tt=Tuple{}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
@@ -100,14 +98,14 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_typed(foo, Tuple{})
+descend_code_typed(foo)
 ```
 """
-descend_code_typed(f, @nospecialize(tt); kwargs...) =
+descend_code_typed(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, tt)
+    descend_code_warntype(f, tt=Tuple{})
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
 
 Given a function and a tuple-type, interactively explore the output of
@@ -122,10 +120,10 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_warntype(foo, Tuple{})
+descend_code_warntype(foo)
 ```
 """
-descend_code_warntype(f, @nospecialize(tt); kwargs...) =
+descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
 function _descend_with_error_handling(args...; kwargs...)
@@ -378,22 +376,25 @@ function do_typeinf!(interp, mi)
     return nothing
 end
 
-function get_specialization(@nospecialize(F), @nospecialize(TT))
-    sigt = Base.signature_type(F, TT)
-    match = Base._which(sigt)
+function get_specialization(@nospecialize(TT))
+    match = Base._which(TT)
     mi = Core.Compiler.specialize_method(match)
     return mi
 end
 
-function mkinterp(@nospecialize(F), @nospecialize(TT))
+function get_specialization(@nospecialize(F), @nospecialize(TT))
+    return get_specialization(Base.signature_type(F, TT))
+end
+
+function mkinterp(@nospecialize(args...))
     interp = CthulhuInterpreter()
-    mi = get_specialization(F, TT)
+    mi = get_specialization(args...)
     do_typeinf!(interp, mi)
     (interp, mi)
 end
 
-function _descend(@nospecialize(F), @nospecialize(TT); params=current_params(), kwargs...)
-    (interp, mi) = mkinterp(F, TT)
+function _descend(@nospecialize(args...); params=current_params(), kwargs...)
+    (interp, mi) = mkinterp(args...)
     _descend(interp, mi; params=params, kwargs...)
 end
 
