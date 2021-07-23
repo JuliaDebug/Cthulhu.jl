@@ -222,12 +222,15 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsites = Callsite[]
         else
             if override !== nothing
-                codeinf = optimize ? override.src : interp.unopt[override].src
-                rt = optimize ? override.result : interp.unopt[override].rt
+                codeinf, rt = optimize ? (override.src, override.result) : (interp.unopt[override].src, interp.unopt[override].rt)
                 if optimize
-                    codeinf = Core.Compiler.copy(codeinf.ir::IRCode)
-                    infos = codeinf.stmts.info
-                    slottypes = codeinf.argtypes
+                    if isa(codeinf, Compiler.OptimizationState)
+                        codeinf = Compiler.copy(codeinf.ir::IRCode)
+                        infos = codeinf.stmts.info
+                        slottypes = codeinf.argtypes
+                    else # source might be unavailable at this point, when a result is fully constant-folded etc.
+                        (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+                    end
                 else
                     codeinf = copy(codeinf)
                     infos = interp.unopt[override].stmt_infos
