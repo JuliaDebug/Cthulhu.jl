@@ -158,7 +158,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                         func = c.args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing, params=params)), c.head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; params)), c.head)
                     end
                 end
             end
@@ -257,8 +257,8 @@ function choose_method_instance(@nospecialize(F), @nospecialize(TT); params=curr
     choose_method_instance(sig; params=params)
 end
 
-function callinfo(sig, rt, max=-1; params=current_params())
-    methds = Base._methods_by_ftype(sig, -1, params.world)
+function callinfo(sig, rt, max_methods; params=current_params())
+    methds = Base._methods_by_ftype(sig, max_methods, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
     for x in methds
