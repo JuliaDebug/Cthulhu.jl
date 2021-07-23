@@ -31,7 +31,8 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
     dump = InteractiveUtils._dump_function_linfo_native(
         mi, params.world,
         #=wrapper=# false, #=syntax=# config.asm_syntax,
-        debuginfo != DInfo.none ? :source : :none)
+        debuginfo != DInfo.none ? :source : :none,
+        #=binary=# false)
     highlight(io, dump, "asm", config)
 end
 
