@@ -264,15 +264,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsite = callsites[cid]
 
             info = callsite.info
-            if info isa Union{MultiCallInfo,DeoptimizedCallInfo}
-                callinfos = if info isa DeoptimizedCallInfo
-                    [info.accurate, info.deoptimized]
-                else
-                    info.callinfos
-                end
-                sub_callsites = let callsite=callsite
-                    map(ci->Callsite(callsite.id, ci, callsite.head), callinfos)
-                end
+            if info isa MultiCallInfo
+                sub_callsites = map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
