@@ -290,8 +290,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 info = callsite.info
             end
 
-            if info isa UncachedCallInfo
-                # forcibly enter and inspect the frame, which the native interpreter threw away
+            # forcibly enter and inspect the frame, although the native interpreter gave up
+            if info isa UncachedCallInfo || info isa TaskCallInfo
                 next_interp = CthulhuInterpreter()
                 next_mi = get_mi(info)
                 do_typeinf!(next_interp, next_mi)
