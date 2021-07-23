@@ -257,7 +257,7 @@ function choose_method_instance(@nospecialize(F), @nospecialize(TT); params=curr
     choose_method_instance(sig; params=params)
 end
 
-function callinfo(sig, rt, max_methods; params=current_params())
+function callinfo(sig, rt, max_methods=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, max_methods, params.world)
     (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
