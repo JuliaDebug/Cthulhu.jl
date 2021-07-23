@@ -90,7 +90,7 @@ function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inli
     if isa(src, Core.CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
         src = copy(src)
-        src.ssavaluetypes = ignorelimited.(src.ssavaluetypes::Vector{Any})
+        src.ssavaluetypes = Base.mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
         src.rettype = ignorelimited(src.rettype)
 
         if src.slotnames !== nothing
