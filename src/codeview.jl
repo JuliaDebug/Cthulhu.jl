@@ -130,7 +130,7 @@ function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inli
 
     irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
 
-    show_ir(io, src, irshow_config)
+    show_ir(lambda_io, src, irshow_config)
     return nothing
 end
 
