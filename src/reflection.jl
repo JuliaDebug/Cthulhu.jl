@@ -197,22 +197,6 @@ function dce!(ir::IRCode, mi)
     ir = Core.Compiler.finish(compact)
 end
 
-function do_typeinf_slottypes(mi::Core.Compiler.MethodInstance, run_optimizer::Bool, interp::Core.Compiler.AbstractInterpreter)
-    ccall(:jl_typeinf_begin, Cvoid, ())
-    result = Core.Compiler.InferenceResult(mi)
-    frame = Core.Compiler.InferenceState(result, false, interp)
-    frame === nothing && return (nothing, Any, Any[])
-    if Compiler.typeinf(interp, frame) && run_optimizer
-        oparams = Core.Compiler.OptimizationParams(interp)
-        opt = Compiler.OptimizationState(frame, oparams, interp)
-        Compiler.optimize(interp, opt, oparams, result.result)
-        opt.src.inferred = true
-    end
-    ccall(:jl_typeinf_end, Cvoid, ())
-    frame.inferred || return (nothing, Any, Any[])
-    return (frame.src, result.result, frame.slottypes)
-end
-
 function preprocess_ci!(ci::CodeInfo, mi, optimize, config::CthulhuConfig)
     if optimize && config.dead_code_elimination
         # if the optimizer hasn't run, the IR hasn't been converted
