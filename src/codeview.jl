@@ -170,7 +170,7 @@ It can be used with the following functions:
 """
 struct Bookmark
     mi::MethodInstance
-    params::CompilerParams
+    interp::CthulhuInterpreter
 end
 
 """
@@ -190,37 +190,69 @@ Base.show(io::IO, b::Bookmark) =
 # Turn off `optimize` and `debuginfo` for default `show` so that the
 # output is smaller.
 function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
-                   optimize = false, debuginfo = :none, iswarn=false)
+                   optimize = false, debuginfo = :none, iswarn=false, verbose=true)
+    world = b.interp.native.world
     CI, rt = InteractiveUtils.code_typed(b, optimize = optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt)), :invoke)
-        print(io, " (world: ", b.params.world, ")")
+        print(io, Callsite(-1, MICallInfo(b.mi, rt), :invoke))
+        print(io, " (world: ", world, ")")
         return
     end
-    println(io, "Cthulhu.Bookmark (world: ", b.params.world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, b.mi, iswarn)
+    println(io, "Cthulhu.Bookmark (world: ", world, ")")
+    cthulhu_typed(io, debuginfo, CI, rt, b.mi, iswarn, verbose)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
-    (CI, rt, slottypes) = do_typeinf_slottypes(b.mi, optimize, b.params)
-    preprocess_ci!(CI, b.mi, optimize, CONFIG)
-    return CI => rt
+    interp = b.interp
+    mi = b.mi
+    (ci, rt) = lookup(interp, mi, optimize)
+    ci = preprocess_ci!(ci, mi, optimize, CONFIG)
+    if ci isa IRCode
+        ir = ci
+        ci = copy(interp.unopt[mi].src)
+        nargs = Int(mi.def.nargs) - 1
+        Core.Compiler.replace_code_newstyle!(ci, ir, nargs)
+    end
+    return ci => rt
 end
 
 InteractiveUtils.code_warntype(b::Bookmark; kw...) =
     InteractiveUtils.code_warntype(stdout::IO, b; kw...)
-function InteractiveUtils.code_warntype(io::IO, b::Bookmark; debuginfo = :source, kw...)
+function InteractiveUtils.code_warntype(
+    io::IO,
+    b::Bookmark;
+    debuginfo = :source,
+    verbose = true,
+    kw...,
+)
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    cthulhu_warntype(io, CI, rt, debuginfo)
+    cthulhu_warntype(io, CI, rt, debuginfo, verbose)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
-InteractiveUtils.code_llvm(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
-                           dump_module = false, config = CONFIG) =
-    cthulhu_llvm(io, b.mi, optimize, debuginfo == :source, b.params, config, dump_module)
+InteractiveUtils.code_llvm(
+    io::IO,
+    b::Bookmark;
+    optimize = true,
+    debuginfo = :source,
+    dump_module = false,
+    config = CONFIG,
+) = cthulhu_llvm(
+    io,
+    b.mi,
+    optimize,
+    debuginfo == :source,
+    b.interp.native,
+    config,
+    dump_module,
+)
 
 InteractiveUtils.code_native(b::Bookmark; kw...) =
     InteractiveUtils.code_native(stdout::IO, b; kw...)
-InteractiveUtils.code_native(io::IO, b::Bookmark; optimize = true, debuginfo = :source,
-                             config = CONFIG) =
-    cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.params, config)
+InteractiveUtils.code_native(
+    io::IO,
+    b::Bookmark;
+    optimize = true,
+    debuginfo = :source,
+    config = CONFIG,
+) = cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.interp.native, config)

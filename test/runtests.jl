@@ -490,3 +490,38 @@ str = String(take!(io))
 print(str)
 # test by bounding the number of lines printed
 @test_broken count(isequal('\n'), str) <= 50
+
+@testset "Bookmarks" begin
+    (interp, mi) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
+    b = Cthulhu.Bookmark(mi, interp)
+
+    @testset "code_typed(bookmark)" begin
+        ci, rt = code_typed(b)
+        @test ci isa Core.Compiler.CodeInfo
+        @test rt isa Type
+    end
+
+    @testset "code_typed(bookmark; optimize = false)" begin
+        ci, rt = code_typed(b; optimize = false)
+        @test ci isa Core.Compiler.CodeInfo
+        @test rt isa Type
+    end
+
+    @testset "show(io, bookmark)" begin
+        str = sprint(io -> show(io, "text/plain", b))
+        @test occursin("Cthulhu.Bookmark (world: ", str)
+    end
+
+    @testset "show(io, [bookmark])" begin
+        # Test that it does not print the full IR:
+        str = sprint(io -> show(io, "text/plain", [b]))
+        @test occursin("world:", str)
+        @test !occursin("Cthulhu.Bookmark (world: ", str)
+    end
+
+    @testset "Smoke tests" begin
+        @test code_warntype(devnull, b) isa Any
+        @test code_llvm(devnull, b) isa Any
+        @test code_native(devnull, b) isa Any
+    end
+end

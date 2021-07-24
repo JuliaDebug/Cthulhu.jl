@@ -339,7 +339,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             Core.println()
             display_CI = false
         elseif toggle === :bookmark
-            push!(BOOKMARKS, Bookmark(mi, params))
+            push!(BOOKMARKS, Bookmark(mi, interp))
             @info "The method is pushed at the end of `Cthulhu.BOOKMARKS`."
             display_CI = false
         elseif toggle === :revise
@@ -397,10 +397,10 @@ function _descend(@nospecialize(args...); params=current_params(), kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.mi; iswarn = false, params = b.params, kw...)
+    _descend_with_error_handling(b.interp, b.mi; iswarn = false, kw...)
 
 descend_code_warntype(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.mi; iswarn = true, params = b.params, kw...)
+    _descend_with_error_handling(b.interp, b.mi; iswarn = true, kw...)
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
