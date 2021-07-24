@@ -485,7 +485,7 @@ end
 ###
 _, ci, infos, mi, rt, slottypes = process(test, Tuple{});
 io = IOBuffer()
-Cthulhu.cthulu_typed(io, :none, ci, rt, mi, true, false)
+Cthulhu.cthulhu_typed(io, :none, ci, rt, mi, true, false)
 str = String(take!(io))
 print(str)
 # test by bounding the number of lines printed

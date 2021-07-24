@@ -4,6 +4,8 @@
 [![Build Status](https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg)](https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster)
 [![Codecov](https://codecov.io/github/JuliaDebug/Cthulhu.jl/coverage.svg)](https://codecov.io/gh/JuliaDebug/Cthulhu.jl)
 
+:warning: The latest stable version is only compatible with Julia v1.7 and higher.
+
 Cthulhu can help you debug type inference issues by recursively showing the
 `code_typed` output until you find the exact point where inference gave up,
 messed up, or did something unexpected. Using the Cthulhu interface you can
@@ -33,7 +35,7 @@ into, select ↩  to ascend, and press q or control-c to quit.
 [Watch on YouTube](https://www.youtube.com/watch?v=qf9oA09wxXY)  
 [![Click to watch video](https://img.youtube.com/vi/qf9oA09wxXY/0.jpg)](https://www.youtube.com/watch?v=qf9oA09wxXY)
 
-The version of Cthulu in the demo is a little outdated, without the newest features, but largely it has not changed too much.
+The version of Cthulhu in the demo is a little outdated, without the newest features, but largely it has not changed too much.
 
 ## Usage: descend
 

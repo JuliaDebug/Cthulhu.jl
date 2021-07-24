@@ -80,12 +80,10 @@ end
 
 Shortcut for [`@descend_code_typed`](@ref).
 """
-macro descend(ex0...)
-    esc(:(@descend_code_typed($(ex0...))))
-end
+const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, tt; kwargs...)
+    descend_code_typed(f, tt=Tuple{}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
@@ -100,14 +98,14 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_typed(foo, Tuple{})
+descend_code_typed(foo)
 ```
 """
-descend_code_typed(f, @nospecialize(tt); kwargs...) =
+descend_code_typed(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, tt)
+    descend_code_warntype(f, tt=Tuple{})
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
 
 Given a function and a tuple-type, interactively explore the output of
@@ -122,10 +120,10 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend_code_warntype(foo, Tuple{})
+descend_code_warntype(foo)
 ```
 """
-descend_code_warntype(f, @nospecialize(tt); kwargs...) =
+descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
 function _descend_with_error_handling(args...; kwargs...)
@@ -199,7 +197,7 @@ using .DInfo: DebugInfo
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, kwargs...)
+function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, inline_cost::Bool=false, kwargs...)
     debuginfo = DInfo.compact # default is compact debuginfo
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -216,20 +214,23 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
             if display_CI
-                println(stdout)
-                println(stdout, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
-                println(stdout, "│  return ", Const(interp.opt[mi].rettype_const))
-                println(stdout)
+                println(stdout::IO)
+                println(stdout::IO, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(stdout::IO, "│  return ", Const(interp.opt[mi].rettype_const))
+                println(stdout::IO)
             end
             callsites = Callsite[]
         else
             if override !== nothing
-                codeinf = optimize ? override.src : interp.unopt[override].src
-                rt = optimize ? override.result : interp.unopt[override].rt
+                codeinf, rt = optimize ? (override.src, override.result) : (interp.unopt[override].src, interp.unopt[override].rt)
                 if optimize
-                    codeinf = Core.Compiler.copy(codeinf.ir::IRCode)
-                    infos = codeinf.stmts.info
-                    slottypes = codeinf.argtypes
+                    if isa(codeinf, Compiler.OptimizationState)
+                        codeinf = Compiler.copy(codeinf.ir::IRCode)
+                        infos = codeinf.stmts.info
+                        slottypes = codeinf.argtypes
+                    else # source might be unavailable at this point, when a result is fully constant-folded etc.
+                        (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+                    end
                 else
                     codeinf = copy(codeinf)
                     infos = interp.unopt[override].stmt_infos
@@ -244,7 +245,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
 
-            display_CI && cthulu_typed(stdout, debuginfo_key, codeinf, rt, mi, iswarn, verbose)
+            display_CI && cthulhu_typed(stdout::IO, debuginfo_key, codeinf, rt, mi, iswarn, verbose, inline_cost)
             display_CI = true
         end
 
@@ -263,15 +264,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             callsite = callsites[cid]
 
             info = callsite.info
-            if info isa Union{MultiCallInfo,DeoptimizedCallInfo}
-                callinfos = if info isa DeoptimizedCallInfo
-                    [info.accurate, info.deoptimized]
-                else
-                    info.callinfos
-                end
-                sub_callsites = let callsite=callsite
-                    map(ci->Callsite(callsite.id, ci, callsite.head), callinfos)
-                end
+            if info isa MultiCallInfo
+                sub_callsites = map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
@@ -289,8 +283,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 info = callsite.info
             end
 
-            if info isa UncachedCallInfo
-                # forcibly enter and inspect the frame, which the native interpreter threw away
+            # forcibly enter and inspect the frame, although the native interpreter gave up
+            if info isa UncachedCallInfo || info isa TaskCallInfo
                 next_interp = CthulhuInterpreter()
                 next_mi = get_mi(info)
                 do_typeinf!(next_interp, next_mi)
@@ -311,8 +305,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
 
             _descend(interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing,
-                     params=params, optimize=optimize,
-                     iswarn=iswarn, debuginfo=debuginfo_key, interruptexc=interruptexc, verbose=verbose, kwargs...)
+                     params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose,
+                     inline_cost, kwargs...)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -324,9 +318,13 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
-            continue
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
+        elseif toggle === :inline_cost
+            inline_cost ⊻= true
+            if inline_cost && !optimize
+                @warn "enable optimization to see the inlining costs"
+            end
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
@@ -360,7 +358,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(codeviews, toggle, nothing)
             if view_cmd !== nothing
-                view_cmd(stdout, mi, optimize, debuginfo, params, CONFIG)
+                view_cmd(stdout::IO, mi, optimize, debuginfo, params, CONFIG)
                 display_CI = false
             else
                 error("Unknown option $toggle")
@@ -395,7 +393,7 @@ end
 
 function _descend(@nospecialize(args...); params=current_params(), kwargs...)
     (interp, mi) = mkinterp(args...)
-    _descend(interp, mi; params=params, kwargs...)
+    _descend(interp, mi; params, kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
