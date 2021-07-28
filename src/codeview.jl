@@ -48,13 +48,17 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuCon
             # Could even highlight the above as some kind-of LISP
         end
     else
-        @info "Could not retrieve AST. AST display requires Revise.jl to be loaded." meth
+        @warn "Could not retrieve AST of $meth. AST display requires Revise.jl to be loaded."
     end
 end
 
 function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
     meth = mi.def
-    src, line = definition(String, meth)
+    def = definition(String, meth)
+    if isnothing(def)
+        return @warn "couldn't retrieve source of $meth"
+    end
+    src, line = def
     highlight(io, src, "julia", config)
 end
 
@@ -149,7 +153,7 @@ end
 
 # These are standard code views that don't need any special handling,
 # This namedtuple maps toggle::Symbol to function
-const codeviews = (;
+const CODEVIEWS = (;
     llvm=cthulhu_llvm,
     native=cthulhu_native,
     ast=cthulhu_ast,

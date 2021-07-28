@@ -356,13 +356,10 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             display_CI = false
         else
             #Handle Standard alternative view, e.g. :native, :llvm
-            view_cmd = get(codeviews, toggle, nothing)
-            if view_cmd !== nothing
-                view_cmd(stdout::IO, mi, optimize, debuginfo, params, CONFIG)
-                display_CI = false
-            else
-                error("Unknown option $toggle")
-            end
+            view_cmd = get(CODEVIEWS, toggle, nothing)
+            @assert !isnothing(view_cmd) "invalid option $toggle"
+            view_cmd(stdout::IO, mi, optimize, debuginfo, params, CONFIG)
+            display_CI = false
         end
     end
 end
