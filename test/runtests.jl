@@ -97,20 +97,20 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-if Base.JLOptions().check_bounds == 0
-Base.@propagate_inbounds function f(x)
-    @boundscheck error()
-end
-g(x) = @inbounds f(x)
-h(x) = f(x)
+if Base.JLOptions().check_bounds ∈ (0, 2)
+    @testset "DCE & boundscheck" begin
+        Base.@propagate_inbounds function f(x)
+            @boundscheck error()
+        end
+        g(x) = @inbounds f(x)
+        h(x) = f(x)
 
-let (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
-    @test length(CI.stmts) == 3
-end
+        (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
+        @test_broken length(CI.stmts) == 3
 
-let (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
-    @test length(CI.stmts) == 2
-end
+        (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
+        @test_broken length(CI.stmts) == 2
+    end
 end
 
 # Something with many methods, but enough to be under the match limit
@@ -138,6 +138,7 @@ end
         @test length(callsites) == 1
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
+        @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
 
         # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
     end
