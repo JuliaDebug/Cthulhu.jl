@@ -107,12 +107,12 @@ if Base.JLOptions().check_bounds ∈ (0, 2)
 
         (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
         @test all(CI.stmts.inst) do stmt
-            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)) || Base.Meta.isexpr(stmt, :code_coverage_effect, 0)
         end
 
         (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
         i = 1
-        while CI.stmts.inst[i] === nothing
+        while CI.stmts.inst[i] === nothing || Base.Meta.isexpr(CI.stmts.inst[i], :code_coverage_effect, 0)
             i += 1
         end
         @test length(CI.stmts) - i + 1 == 2
