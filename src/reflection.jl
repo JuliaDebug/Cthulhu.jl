@@ -76,7 +76,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                     elseif isa(info, UnionSplitInfo)
                         return mapreduce(process_info, vcat, info.matches)
                     elseif isa(info, UnionSplitApplyCallInfo)
-                        return mapreduce(process_info, vcat, info.infos)
+                        return mapreduce(process_info, vcat, info.infos; init=Core.Compiler.ApplyCallInfo[])
                     elseif isa(info, ApplyCallInfo)
                         # XXX: This could probably use its own info. For now,
                         # we ignore any implicit iterate calls.

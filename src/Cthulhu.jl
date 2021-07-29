@@ -178,11 +178,18 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
         end
     else
         codeinst = interp.opt[mi]
-        ir = Core.Compiler.copy(codeinst.inferred.ir::IRCode)
-        codeinf = ir
         rt = codeinst_rt(codeinst)
-        infos = ir.stmts.info
-        slottypes = ir.argtypes
+        codeinf0 = codeinst.inferred
+        if codeinf0 !== nothing
+            ir = Core.Compiler.copy(codeinf0.ir::IRCode)
+            codeinf = ir
+            infos = ir.stmts.info
+            slottypes = ir.argtypes
+        else
+            codeinf = nothing
+            infos = []
+            slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
+        end
     end
     (codeinf, rt, infos, slottypes::Vector{Any})
 end
