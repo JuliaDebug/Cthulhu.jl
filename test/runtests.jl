@@ -25,7 +25,7 @@ end
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
     (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
-    Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
+    ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     interp, ci, infos, mi, rt, slottypes
 end
 
@@ -106,10 +106,18 @@ if Base.JLOptions().check_bounds ∈ (0, 2)
         h(x) = f(x)
 
         (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
-        @test_broken length(CI.stmts) == 3
+        @test all(CI.stmts.inst) do stmt
+            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+        end
 
         (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
-        @test_broken length(CI.stmts) == 2
+        i = 1
+        while CI.stmts.inst[i] === nothing
+            i += 1
+        end
+        @test length(CI.stmts) - i + 1 == 2
+        stmt = CI.stmts.inst[end]
+        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
     end
 end
 
