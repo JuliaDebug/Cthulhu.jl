@@ -270,8 +270,7 @@ _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
-is_callsite(info::LimitedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::UncachedCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
+is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped(info), mi)
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)

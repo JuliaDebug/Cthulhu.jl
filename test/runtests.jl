@@ -138,6 +138,7 @@ end
         @test length(callsites) == 1
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
+        @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
 
         # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
     end
