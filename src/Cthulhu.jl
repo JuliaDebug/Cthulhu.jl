@@ -242,7 +242,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             else
                 (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
             end
-            preprocess_ci!(codeinf, mi, optimize, CONFIG)
+            ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
 
             display_CI && cthulhu_typed(stdout::IO, debuginfo_key, codeinf, rt, mi, iswarn, verbose, inline_cost)

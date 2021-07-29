@@ -275,7 +275,7 @@ function find_caller_of(callee::MethodInstance, caller::MethodInstance)
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
         (CI, rt, infos, slottypes) = lookup(interp, caller, optimize)
-        preprocess_ci!(CI, caller, optimize, CONFIG)
+        CI = preprocess_ci!(CI, caller, optimize, CONFIG)
         callsites = find_callsites(interp, CI, infos, caller, slottypes, optimize; params=params)
         callsites = filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
