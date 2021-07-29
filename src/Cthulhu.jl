@@ -186,6 +186,8 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
             infos = ir.stmts.info
             slottypes = ir.argtypes
         else
+            # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
+            # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
             codeinf = nothing
             infos = []
             slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
