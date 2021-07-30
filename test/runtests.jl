@@ -25,12 +25,15 @@ end
 function process(@nospecialize(f), @nospecialize(TT); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
     (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
-    ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
+    if ci !== nothing
+        ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
+    end
     interp, ci, infos, mi, rt, slottypes
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
     interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
+    ci === nothing && return Cthulhu.Callsite[]
     callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
     return callsites
 end
@@ -44,12 +47,27 @@ function test()
     sum(rand(T, 100))
 end
 
-let callsites = find_callsites_by_ftt(test, Tuple{})
-    @test length(callsites) >= 4
+function empty_func(::Bool)
 end
 
-let callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
+isordered(::Type{T}) where {T<:AbstractDict} = false
+
+@testset "Callsites" begin
+    callsites = find_callsites_by_ftt(test, Tuple{})
+    @test length(callsites) >= 4
+
+    callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
     @test length(callsites) == 4
+
+    callsites = find_callsites_by_ftt(empty_func, Tuple{Bool}; optimize=true)
+    @test isempty(callsites)
+
+    # Some weird methods get inferred
+    callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
+    @test callsites[1].info isa Cthulhu.ConstPropCallInfo
+
+    # Broken stuff in Julia
+    @test_broken find_callsites_by_ftt(Core.Compiler._limit_type_size, Tuple{Any, Type{Any}, Core.SimpleVector, Int, Int})  # ssair/ir.jl bug
 end
 
 @testset "Expr heads" begin
