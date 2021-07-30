@@ -62,6 +62,10 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
     callsites = find_callsites_by_ftt(empty_func, Tuple{Bool}; optimize=true)
     @test isempty(callsites)
 
+    callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
+    @test occursin("< pure, uncached >", string(callsites[1]))
+    @test occursin(r"< constprop > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
+
     # Some weird methods get inferred
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
     @test callsites[1].info isa Cthulhu.ConstPropCallInfo

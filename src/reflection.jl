@@ -52,10 +52,6 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             if info !== nothing
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 was_return_type = false
-                if isa(info, MethodResultPure)
-                    # TODO: We could annotate this in the UI
-                    continue
-                end
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
                     was_return_type = true
@@ -73,6 +69,8 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                             mici = MICallInfo(mi, rt)
                             return is_cached(mi) ? mici : UncachedCallInfo(mici)
                         end
+                    elseif isa(info, MethodResultPure)
+                        return Any[PureCallInfo(only(process_info(info.info)))]
                     elseif isa(info, UnionSplitInfo)
                         return mapreduce(process_info, vcat, info.matches)
                     elseif isa(info, UnionSplitApplyCallInfo)

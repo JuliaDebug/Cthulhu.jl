@@ -33,6 +33,11 @@ struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
 
+# Pure
+struct PureCallInfo <: WrappedCallInfo
+    wrapped::CallInfo
+end
+
 # Failed
 struct FailedCallInfo <: CallInfo
     sig
@@ -267,6 +272,7 @@ function wrapped_callinfo(limiter, ci::WrappedCallInfo)
 end
 _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
+_wrapped_callinfo(limiter, ::PureCallInfo) = print(limiter, "pure")
 
 is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
