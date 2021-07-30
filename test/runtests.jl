@@ -147,6 +147,9 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo)
+    @test occursin(r"#g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
 end
 
 @testset "wrapped callinfo" begin
@@ -192,6 +195,9 @@ end
         callinfos = callinfo.callinfos
         @test length(callinfos) == 2
         @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
+        io = IOBuffer()
+        Cthulhu.show_callinfo(io, callinfos[1])
+        @test startswith(String(take!(io)), "getproperty")
     end
 
     # successful and unsuccessful constant prop'
@@ -226,6 +232,9 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     @test callinfo isa Cthulhu.ReturnTypeCallInfo
     callinfo = callinfo.called_mi
     @test callinfo isa Cthulhu.MultiCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo)
+    @test String(take!(io)) == "#return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
     @test length(callinfo.callinfos) == 0
 end
 
@@ -309,7 +318,26 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
     end
 end
 
-@testset "Varargs" begin
+@testset "Varargs and printing" begin
+    @test Cthulhu.headstring(Float32) == "Float32"
+    @test Cthulhu.headstring(Vararg{Float32}) == "Float32"
+    @test Cthulhu.headstring(Union{Char,Float32}) == "Union{Char, Float32}"
+    @test Cthulhu.headstring(Union{}) == "Union{}"
+    @test Cthulhu.headstring(Vector{Int}) == "Array"
+    @test Cthulhu.headstring(Vector{T} where T) == "Array"
+    io = IOBuffer()
+    iolim = Cthulhu.TextWidthLimiter(io, 3)
+    print(iolim, 'α')
+    @test String(take!(iolim)) == "α"
+    iolim = Cthulhu.TextWidthLimiter(io, 1)
+    print(iolim, 'a')
+    @test String(take!(iolim)) == ""
+    iolim = Cthulhu.TextWidthLimiter(io, 80)
+    print(iolim, "abcd"^21)
+    @test occursin("…", String(take!(iolim)))
+    print(iolim, "abcd"^19)
+    @test !occursin("…", String(take!(iolim)))
+
     function fsplat(::Type{Int}, a...)
         z = zero(Int)
         for v in a
@@ -319,8 +347,6 @@ end
     end
     gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
     hsplat1(A) = gsplat1(eltype(A), A...)
-    io = IOBuffer()
-    iolim = Cthulhu.TextWidthLimiter(io, 80)
     for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
                             (Tuple{Vector{Int}}, false),
                             (Tuple{SVector{3,Int}}, true))
@@ -331,9 +357,48 @@ end
             mi = cs.info.mi
             @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
             Cthulhu.show_callinfo(iolim, cs.info)
-            @test occursin("…", String(take!(io))) != haslen
+            @test occursin("...", String(take!(iolim))) != haslen
         end
     end
+    callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{10,Int}}; optimize=false)
+    cs = callsites[end]
+    Cthulhu.show_callinfo(iolim, cs.info)
+    @test occursin("gsplat1(…,…,…,…,…,…,…,…,…,…,…)::Int", String(take!(iolim)))
+    callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{50,Int}}; optimize=false)
+    cs = callsites[end]
+    Cthulhu.show_callinfo(iolim, cs.info)
+    @test occursin("gsplat1(…)::Int", String(take!(iolim)))
+
+    # foo(x::Vector{Vector{Vector{Vector{Char}}}}) = -1
+    foo(x::Vector) = -1
+    bar() = foo([[[['c']]]])
+    callsites = find_callsites_by_ftt(bar, Tuple{}; optimize=false)
+    cs = callsites[end]
+    Cthulhu.show_callinfo(iolim, cs.info)
+    str = String(take!(iolim))
+    @test !occursin("Array{…}", str)
+    @test occursin("::Core.Const(-1)", str)
+    iolim = Cthulhu.TextWidthLimiter(io, 55)
+    Cthulhu.show_callinfo(iolim, cs.info)
+    str = String(take!(iolim))
+    @test !occursin("Array{…}", str)
+    @test !occursin("::Core.Const(-1)", str)
+    iolim = Cthulhu.TextWidthLimiter(io, 40)
+    Cthulhu.show_callinfo(iolim, cs.info)
+    str = String(take!(iolim))
+    @test occursin("Array{…}", str)
+    @test occursin("::Core.Const(-1)", str)
+    iolim = Cthulhu.TextWidthLimiter(io, 25)
+    Cthulhu.show_callinfo(iolim, cs.info)
+    str = String(take!(iolim))
+    @test occursin("Array{…}", str)
+    @test !occursin("::Core.Const(-1)", str)
+    iolim = Cthulhu.TextWidthLimiter(io, 8)
+    Cthulhu.show_callinfo(iolim, cs.info)
+    @test String(take!(iolim)) == "foo(…)"
+    iolim = Cthulhu.TextWidthLimiter(io, 4)
+    Cthulhu.show_callinfo(iolim, cs.info)
+    @test String(take!(iolim)) == "…"
 end
 
 @testset "MaybeUndef" begin
