@@ -51,11 +51,16 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             info = stmt_info[id]
             if info !== nothing
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
-                was_return_type = false
-                if isa(info, MethodResultPure)
-                    # TODO: We could annotate this in the UI
-                    continue
+                # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
+                # so extract rhs for such an case
+                args = c.args
+                if !optimize
+                    if isexpr(c, :(=))
+                        args = c.args[2].args
+                    end
                 end
+                types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
+                was_return_type = false
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
                     was_return_type = true
@@ -73,6 +78,8 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                             mici = MICallInfo(mi, rt)
                             return is_cached(mi) ? mici : UncachedCallInfo(mici)
                         end
+                    elseif isa(info, MethodResultPure)
+                        return Any[PureCallInfo(types, rt)]
                     elseif isa(info, UnionSplitInfo)
                         return mapreduce(process_info, vcat, info.matches)
                     elseif isa(info, UnionSplitApplyCallInfo)
@@ -117,16 +124,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                     if length(callinfos) == 1
                         callinfo = callinfos[1]
                     else
-                        # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
-                        # so extract rhs for such an case
-                        args = c.args
-                        if !optimize
-                            if isexpr(c, :(=))
-                                args = c.args[2].args
-                            end
-                        end
-                        types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
-                        callinfo = MultiCallInfo(Core.Compiler.argtypes_to_type(types), rt, callinfos)
+                        callinfo = MultiCallInfo(Compiler.argtypes_to_type(types), rt, callinfos)
                     end
                     if was_return_type
                         callinfo = ReturnTypeCallInfo(callinfo)
