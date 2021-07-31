@@ -63,8 +63,14 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
     @test isempty(callsites)
 
     callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
-    @test occursin("< pure, uncached >", string(callsites[1]))
+    @test occursin("< pure >", string(callsites[1]))
     @test occursin(r"< constprop > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
+
+    # handle pure
+    callsites = @eval find_callsites_by_ftt(; optimize=false) do
+        length($(QuoteNode(Core.svec(0,1,2))))
+    end
+    @test occursin("< pure >", string(callsites[1]))
 
     # Some weird methods get inferred
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
