@@ -129,18 +129,3 @@ function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cur
 
     print(buf, line)
 end
-
-function choose_method_instance(@nospecialize(sig); params=current_params())
-    ci = callinfo(sig, Any, 1, params=params)
-    ci isa MICallInfo && return get_mi(ci)
-    ci isa Union{GeneratedCallInfo, FailedCallInfo} && return nothing
-    if ci isa MultiCallInfo
-        options = string.(ci.callinfos)
-        menu = RadioMenu(options; charset=:unicode)
-        chosen = request("Choose call to analyze:", menu)
-        if chosen != -1
-            return get_mi(ci.callinfos[chosen])
-        end
-    end
-    error("unexpected callinfo ", ci)
-end
