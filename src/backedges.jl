@@ -86,10 +86,10 @@ specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
 nextnode(mi, edge) = edge
 
-instance(sfs::Vector{StackTraces.StackFrame}) = sfs[end].linfo
+instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? Core.Compiler.Timings.ROOTmi : sfs[end].linfo
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 
-instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? nothing : instance(ipframes[1].sfs)
+instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? Core.Compiler.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
 function callstring(io, mi)

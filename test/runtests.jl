@@ -432,6 +432,7 @@ fst5(x) = fst4(x)
     tree = Cthulhu.treelist(similar(fst5(1.0), 0))
     @test isempty(tree.data.callstr)
     @test isempty(Cthulhu.callstring(io, similar(stacktrace(fst5(1.0)), 0)))
+    @test Cthulhu.instance(similar(stacktrace(fst5(1.0)), 0)) === Core.Compiler.Timings.ROOTmi
 end
 
 @testset "ascend" begin
