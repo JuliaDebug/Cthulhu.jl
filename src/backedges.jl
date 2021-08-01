@@ -89,7 +89,7 @@ nextnode(mi, edge) = edge
 instance(sfs::Vector{StackTraces.StackFrame}) = sfs[end].linfo
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 
-instance(ipframes::Vector{IPFrames}) = instance(ipframes[1].sfs)
+instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? nothing : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
 function callstring(io, mi)
@@ -97,6 +97,7 @@ function callstring(io, mi)
     return String(take!(io))
 end
 function callstring(io, sfs::Vector{StackTraces.StackFrame})
+    isempty(sfs) && return ""
     for i = 1:length(sfs)-1
         sf = sfs[i]
         print(io, sf.func, " at ", sf.file, ':', sf.line, " => ")
@@ -104,7 +105,7 @@ function callstring(io, sfs::Vector{StackTraces.StackFrame})
     sf = sfs[end]
     return callstring(io, instance(sfs)) * string(" at ", sf.file, ':', sf.line)
 end
-callstring(io, ipframes::Vector{IPFrames}) = callstring(io, ipframes[1].sfs)
+callstring(io, ipframes::Vector{IPFrames}) = isempty(ipframes) ? "" : callstring(io, ipframes[1].sfs)
 
 struct Data{T}
     callstr::String
