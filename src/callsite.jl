@@ -33,6 +33,14 @@ struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
 
+struct PureCallInfo <: CallInfo
+    argtypes::Vector{Any}
+    rt
+    PureCallInfo(argtypes::Vector{Any}, @nospecialize(rt)) =
+        new(argtypes, rt)
+end
+get_mi(::PureCallInfo) = nothing
+
 # Failed
 struct FailedCallInfo <: CallInfo
     sig
@@ -202,6 +210,13 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     __show_limited(limiter, name, tt, rt)
 end
 
+function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
+    ft, tt... = argtypes
+    f = Compiler.argtype_to_function(ft)
+    name = isnothing(f) ? "unknown" : nameof(f)
+    __show_limited(limiter, name, tt, rt)
+end
+
 function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
@@ -222,6 +237,9 @@ function Base.show(io::IO, c::Callsite)
     elseif isa(info, WrappedCallInfo)
         wrapped_callinfo(limiter, info)
         show_callinfo(limiter, ignorewrappers(info))
+    elseif isa(info, PureCallInfo)
+        print(limiter, " = < pure > ")
+        show_callinfo(limiter, info)
     elseif info isa MultiCallInfo
         print(limiter, " = call ")
         show_callinfo(limiter, info)

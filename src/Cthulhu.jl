@@ -295,7 +295,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             # forcibly enter and inspect the frame, although the native interpreter gave up
             if info isa UncachedCallInfo || info isa TaskCallInfo
                 next_interp = CthulhuInterpreter()
-                next_mi = get_mi(info)
+                next_mi = get_mi(info)::MethodInstance
                 do_typeinf!(next_interp, next_mi)
                 _descend(next_interp, next_mi;
                          params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
@@ -373,7 +373,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
     end
 end
 
-function do_typeinf!(interp, mi)
+function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
     frame = InferenceState(result, true, interp)
     Core.Compiler.typeinf(interp, frame)
