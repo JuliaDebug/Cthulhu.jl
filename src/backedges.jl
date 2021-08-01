@@ -84,6 +84,7 @@ backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _empt
 method(mi::MethodInstance) = mi.def
 specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
+nextnode(mi, edge) = edge
 
 instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? Core.Compiler.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
@@ -106,15 +107,15 @@ function callstring(io::IO, sfs::Vector{StackTraces.StackFrame})
 end
 callstring(io::IO, ipframes::Vector{IPFrames}) = isempty(ipframes) ? "" : callstring(io, ipframes[1].sfs)
 
-struct Data
+struct Data{T}
     callstr::String
-    nd::MethodInstance
+    nd::T
 end
 
 function treelist(mi)
     io = IOBuffer()
     str = callstring(io, mi)
-    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{MethodInstance}())
+    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
 end
 function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
     mi ∈ visited && return parent
@@ -123,9 +124,10 @@ function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Ba
     for edge in backedges(mi)
         str = indent * callstring(io, edge)
         child = Node(Data(str, instance(edge)), parent)
-        treelist!(child, io, edge, indent, visited)
+        treelist!(child, io, nextnode(mi, edge), indent, visited)
     end
     return parent
 end
+treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 
 treelist(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = treelist(buildframes(bt))

@@ -206,7 +206,7 @@ Base.@aggressive_constprop function lookup(interp::CthulhuInterpreter, mi::Metho
                 mi = $mi
                 optimize = $optimize
             end)
-            throw("couldn't find the source; inspect `Main.interp` and `Main.mi`")
+            error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
     end
     (codeinf, rt, infos, slottypes::Vector{Any})
