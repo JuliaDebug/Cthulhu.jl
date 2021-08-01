@@ -418,6 +418,8 @@ fst5(x) = fst4(x)
     mi = Cthulhu.get_specialization(Vector{Int}, Tuple{typeof(undef), Int})
     io = IOBuffer()
     @test Cthulhu.callstring(io, mi) == "Vector{$Int}(::UndefInitializer, ::$Int)"
+    mi = Cthulhu.get_specialization(similar, Tuple{Type{Vector{T}}, Dims{1}} where T)
+    @test occursin(r"31m::Type", Cthulhu.callstring(io, mi))
 
     # treelist for stacktraces
     tree = Cthulhu.treelist(fst5(1.0))
