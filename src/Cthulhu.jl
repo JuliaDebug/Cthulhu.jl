@@ -214,8 +214,10 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
         debuginfo = getfield(DInfo, selected)::DebugInfo
     end
 
-    display_CI = true
     is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
+
+    menu_options = (cursor = '•', scroll_wrap = true)
+    display_CI = true
     while true
         debuginfo_key = Symbol(debuginfo)
 
@@ -258,8 +260,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             display_CI = true
         end
 
-        TerminalMenus.config(cursor = '•', scroll = :wrap)
-        menu = CthulhuMenu(callsites, optimize)
+        menu = CthulhuMenu(callsites, optimize; menu_options...)
         cid = request(menu)
         toggle = menu.toggle
 
@@ -279,7 +280,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true)
+                menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true, menu_options...)
                 cid = request(menu)
                 if cid == length(sub_callsites) + 1
                     continue
