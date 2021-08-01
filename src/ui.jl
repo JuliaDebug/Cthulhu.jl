@@ -2,13 +2,14 @@ using REPL.TerminalMenus
 import REPL.TerminalMenus: request
 using FoldingTrees
 
-mutable struct CthulhuMenu <: TerminalMenus.AbstractMenu
+mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     options::Vector{String}
     pagesize::Int
     pageoffset::Int
     selected::Int
     toggle::Union{Nothing, Symbol}
     sub_menu::Bool
+    config::TerminalMenus.Config
 end
 
 function show_as_line(el, optimize::Bool)
@@ -22,7 +23,7 @@ function show_as_line(el, optimize::Bool)
 end
 
 
-function CthulhuMenu(callsites, optimize::Bool; pagesize::Int=10, sub_menu = false)
+function CthulhuMenu(callsites, optimize::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
     options = vcat(map(site->show_as_line(site, optimize), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
@@ -36,7 +37,8 @@ function CthulhuMenu(callsites, optimize::Bool; pagesize::Int=10, sub_menu = fal
     pageoffset = 0
     selected = -1 # none
 
-    CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu)
+    config = TerminalMenus.Config(; kwargs...)
+    CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config)
 end
 
 TerminalMenus.options(m::CthulhuMenu) = m.options
@@ -106,26 +108,7 @@ function TerminalMenus.pick(menu::CthulhuMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool)
-    cursor_len = length(TerminalMenus.CONFIG[:cursor])
-    # print a ">" on the selected entry
-    cursor ? print(buf, TerminalMenus.CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
-    print(buf, " ") # Space between cursor and text
-
+function TerminalMenus.writeline(buf::IOBuffer, menu::CthulhuMenu, idx::Int, iscursor::Bool)
     line = replace(menu.options[idx], "\n" => "\\n")
-
-    print(buf, line)
-end
-
-# This used to be the original method, the above is for compatibility with Base.REPL
-function TerminalMenus.writeLine(buf::IOBuffer, menu::CthulhuMenu, idx::Int, cursor::Bool, term_width::Int)
-    cursor_len = length(TerminalMenus.CONFIG[:cursor])
-    # print a ">" on the selected entry
-    cursor ? print(buf, TerminalMenus.CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
-    print(buf, " ") # Space between cursor and text
-
-    line = replace(menu.options[idx], "\n" => "\\n")
-    line = TerminalMenus.trimWidth(line, term_width, !cursor, cursor_len)
-
     print(buf, line)
 end
