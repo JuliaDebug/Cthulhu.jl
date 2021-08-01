@@ -358,7 +358,8 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             if mod !== nothing
                 revise = getfield(mod, :revise)::Function
                 revise()
-                mi = first_method_instance(mi.specTypes)
+                mi = get_specialization(mi.specTypes)
+                do_typeinf!(interp, mi)
             end
         elseif toggle === :edit
             edit(whereis(mi.def)...)
