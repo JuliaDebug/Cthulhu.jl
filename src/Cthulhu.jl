@@ -266,7 +266,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             else
                 (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
             end
-            codeinf = preprocess_ci!(codeinf, mi, optimize, CONFIG)
+            ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
 
             display_CI && cthulhu_typed(term.out_stream::IO, debuginfo,
