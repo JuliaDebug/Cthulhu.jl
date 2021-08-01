@@ -411,12 +411,27 @@ fst5(x) = fst4(x)
     root = Cthulhu.treelist(mi)
     @test occursin("Vararg", root.data.callstr)
 
+    # Test highlighting and other printing
+    mi = Cthulhu.get_specialization(:, Tuple{T, T} where T<:Integer)
+    root = Cthulhu.treelist(mi)
+    @test occursin("\e[31m::T\e[39m", root.data.callstr)
+    mi = Cthulhu.get_specialization(Vector{Int}, Tuple{typeof(undef), Int})
+    io = IOBuffer()
+    @test Cthulhu.callstring(io, mi) == "Vector{$Int}(::UndefInitializer, ::$Int)"
+    mi = Cthulhu.get_specialization(similar, Tuple{Type{Vector{T}}, Dims{1}} where T)
+    @test occursin(r"31m::Type", Cthulhu.callstring(io, mi))
+
     # treelist for stacktraces
     tree = Cthulhu.treelist(fst5(1.0))
     @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
     @test length(tree.children) == 1
     child = tree.children[1]
     @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
+
+    # issue #184
+    tree = Cthulhu.treelist(similar(fst5(1.0), 0))
+    @test isempty(tree.data.callstr)
+    @test isempty(Cthulhu.callstring(io, similar(stacktrace(fst5(1.0)), 0)))
 end
 
 @testset "ascend" begin
