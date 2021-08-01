@@ -12,22 +12,6 @@ const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
 const may_invoke_generator = Base.may_invoke_generator
 code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 
-# https://github.com/JuliaLang/julia/pull/36318
-_id(x) = x.id
-_id(x::Core.Argument) = x.n
-const SlotOrArgument = Union{Core.Argument,Core.Slot}
-
-function unwrapconst(a)
-    if isa(a, Const)
-        a = Core.Typeof(a.val)
-    elseif isa(a, Core.Compiler.PartialStruct)
-        a = a.typ
-    elseif isa(a, Core.Compiler.MaybeUndef)
-        a = a.typ
-    end
-    return a
-end
-
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
     sptypes = sptypes_from_meth_instance(mi)
@@ -217,24 +201,6 @@ end
 
 const CompilerParams = Core.Compiler.NativeInterpreter
 current_params() = CompilerParams()
-
-function first_method_instance(@nospecialize(F), @nospecialize(TT); params=current_params())
-    sig = Base.signature_type(F, TT)
-    first_method_instance(sig; params=params)
-end
-
-function first_method_instance(@nospecialize(sig); params=current_params())
-    ci = callinfo(sig, Any, 1, params=params)
-    if ci isa Union{GeneratedCallInfo, FailedCallInfo, MultiCallInfo}
-        if ci isa MultiCallInfo
-            @warn "expected single CallInfo got multiple" ci
-        end
-        return nothing
-    else
-        @assert ci isa MICallInfo
-        return get_mi(ci)
-    end
-end
 
 function callinfo(sig, rt, max_methods=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, max_methods, params.world)
