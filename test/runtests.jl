@@ -156,6 +156,9 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo)
+    @test occursin(r"#g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
 end
 
 @testset "wrapped callinfo" begin
@@ -174,7 +177,9 @@ end
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
         @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
-
+        io = IOBuffer()
+        show(io, first(callsites))
+        @test occursin("< uncached >", String(take!(io)))
         # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
     end
 end
@@ -201,6 +206,12 @@ end
         callinfos = callinfo.callinfos
         @test length(callinfos) == 2
         @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
+        io = IOBuffer()
+        Cthulhu.show_callinfo(io, callinfos[1])
+        @test startswith(String(take!(io)), "getproperty")
+        io = IOBuffer()
+        print(io, callsites[1])
+        @test occursin("= call #getproperty", String(take!(io)))
     end
 
     # successful and unsuccessful constant prop'
@@ -224,6 +235,20 @@ end
         @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1
         @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1
     end
+
+    callsites = (@eval Module() begin
+            struct F32
+                val::Float32
+                _v::Int
+            end
+
+            $find_callsites_by_ftt((F32,); optimize = false) do f
+                f.val
+            end
+        end)
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("= < constprop > getproperty(", String(take!(io)))
 end
 
 # Failed return_type
@@ -235,6 +260,12 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     @test callinfo isa Cthulhu.ReturnTypeCallInfo
     callinfo = callinfo.called_mi
     @test callinfo isa Cthulhu.MultiCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo)
+    @test String(take!(io)) == "#return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
+    io = IOBuffer()
+    print(io, callsites[1])
+    @test occursin("return_type < #return_type", String(take!(io)))
     @test length(callinfo.callinfos) == 0
 end
 
@@ -244,6 +275,9 @@ let callsites = find_callsites_by_ftt(ftask, Tuple{})
     task_callsites = filter(c->c.info isa Cthulhu.TaskCallInfo, callsites)
     @test !isempty(task_callsites)
     @test filter(c -> c.info.ci isa Cthulhu.FailedCallInfo, task_callsites) == []
+    io = IOBuffer()
+    show(io, first(task_callsites))
+    @test occursin("= task < #", String(take!(io)))
 end
 
 @testset "invoke" begin
@@ -253,6 +287,7 @@ end
         f(a::Int) = :Int
     end
 
+    io = IOBuffer()
     let
         callsites = @eval m begin
             $find_callsites_by_ftt(; optimize=false) do
@@ -261,9 +296,11 @@ end
         end
         @test any(callsites) do callsite
             info = callsite.info
+            isa(info, Cthulhu.InvokeCallInfo) && print(io, callsite)
             isa(info, Cthulhu.InvokeCallInfo) && info.ci.rt === Core.Compiler.Const(:Integer)
         end
     end
+    @test occursin("= invoke < f(::Int", String(take!(io)))
 
     let
         callsites = @eval m begin
@@ -318,7 +355,31 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
     end
 end
 
-@testset "Varargs" begin
+@testset "Varargs and printing" begin
+    @test Cthulhu.headstring(Float32) == "Float32"
+    @test Cthulhu.headstring(Vararg{Float32}) == "Float32"
+    @test Cthulhu.headstring(Union{Char,Float32}) == "Union{Char, Float32}"
+    @test Cthulhu.headstring(Union{}) == "Union{}"
+    @test Cthulhu.headstring(Vector{Int}) == "Array"
+    @test Cthulhu.headstring(Vector{T} where T) == "Array"
+
+    function checklim(f, n, strchar::Union{AbstractString,AbstractChar})
+        io = IOBuffer()
+        iolim = Cthulhu.TextWidthLimiter(io, n)
+        print(iolim, strchar)
+        return f(String(take!(iolim)))
+    end
+    @test checklim(str -> str == "α", 3, 'α')
+    @test checklim(str -> str == "", 1, 'a')
+    @test checklim(str ->  occursin("…", str), 80, "abcd"^21)
+    @test checklim(str -> !occursin("…", str), 80, "abcd"^19)
+
+    function checklim(f, n, info::Cthulhu.CallInfo)
+        io = IOBuffer()
+        iolim = Cthulhu.TextWidthLimiter(io, n)
+        Cthulhu.show_callinfo(iolim, info)
+        return f(String(take!(iolim)))
+    end
     function fsplat(::Type{Int}, a...)
         z = zero(Int)
         for v in a
@@ -328,8 +389,6 @@ end
     end
     gsplat1(T::Type, a...) = fsplat(T, a...)   # does not force specialization
     hsplat1(A) = gsplat1(eltype(A), A...)
-    io = IOBuffer()
-    iolim = Cthulhu.TextWidthLimiter(io, 80)
     for (Atype, haslen) in ((Tuple{Tuple{Int,Int,Int}}, true),
                             (Tuple{Vector{Int}}, false),
                             (Tuple{SVector{3,Int}}, true))
@@ -339,9 +398,42 @@ end
             @test cs isa Cthulhu.Callsite
             mi = cs.info.mi
             @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
-            Cthulhu.show_callinfo(iolim, cs.info)
-            @test occursin("…", String(take!(io))) != haslen
+            @test checklim(str -> occursin("...", str) != haslen, 80, cs.info)
         end
+    end
+    callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{10,Int}}; optimize=false)
+    cs = callsites[end]
+    @test checklim(str -> occursin("gsplat1(…,…,…,…,…,…,…,…,…,…,…)::Int", str), 80, cs.info)
+    callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{50,Int}}; optimize=false)
+    cs = callsites[end]
+    @test checklim(str -> occursin("gsplat1(…)::Int", str), 80, cs.info)
+
+    # foo(x::Vector{Vector{Vector{Vector{Char}}}}) = -1
+    foo(x::Vector) = -1
+    bar() = foo([[[['c']]]])
+    callsites = find_callsites_by_ftt(bar, Tuple{}; optimize=false)
+    cs = callsites[end]
+    checklim(80, cs.info) do str
+        @test !occursin("Array{…}", str)
+        @test occursin("::Core.Const(-1)", str)
+    end
+    checklim(55, cs.info) do str
+        @test !occursin("Array{…}", str)
+        @test !occursin("::Core.Const(-1)", str)
+    end
+    checklim(40, cs.info) do str
+        @test occursin("Array{…}", str)
+        @test occursin("::Core.Const(-1)", str)
+    end
+    checklim(25, cs.info) do str
+        @test occursin("Array{…}", str)
+        @test !occursin("::Core.Const(-1)", str)
+    end
+    checklim(8, cs.info) do str
+        @test str == "foo(…)"
+    end
+    checklim(4, cs.info) do str
+        @test str == "…"
     end
 end
 

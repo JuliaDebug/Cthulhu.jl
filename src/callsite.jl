@@ -123,6 +123,7 @@ end
 TextWidthLimiter(io::IO, limit) = TextWidthLimiter(io, 0, limit)
 has_space(limiter::TextWidthLimiter, width::Int) = limiter.width + width < limiter.limit - 1
 has_space(limiter::TextWidthLimiter, s) = has_space(limiter, textwidth(string(s)))
+has_space(::IO, s) = true
 function Base.print(io::TextWidthLimiter, s::String)
     io.width == io.limit && return 0
     width = textwidth(s::String)
@@ -134,15 +135,30 @@ function Base.print(io::TextWidthLimiter, s::String)
         for c in graphemes(s)
             cwidth = textwidth(c)
             if has_space(io, cwidth)
-                print(io, c)
+                print(io.io, c)
                 io.width += cwidth
             else
                 break
             end
         end
-        print(io, '…')
+        print(io.io, '…')
         io.width += 1
     end
+end
+
+function Base.print(io::TextWidthLimiter, c::Char)
+    tw = textwidth(c)
+    if has_space(io, tw)
+        print(io.io, c)
+        io.width += tw
+        return
+    end
+    return
+end
+
+function Base.take!(io::TextWidthLimiter)
+    io.width = 0
+    return take!(io.io)
 end
 
 function headstring(@nospecialize(T))
@@ -152,18 +168,20 @@ function headstring(@nospecialize(T))
     elseif T isa UnionAll
         return headstring(Base.unwrap_unionall(T))
     else
-        return string(T.name)
+        return string(T.name.name)
     end
 end
 
 
 function __show_limited(limiter, name, tt, rt)
+    vastring(@nospecialize(T)) = Base.isvarargtype(T) ? headstring(T)*"..." : string(T)
+
     if !has_space(limiter, name)
         print(limiter, '…')
         return
     end
     print(limiter, string(name))
-    pstrings = map(string, tt)
+    pstrings = map(vastring, tt)
     headstrings = map(headstring, tt)
     print(limiter, "(")
     if length(pstrings) != 0
@@ -186,7 +204,10 @@ function __show_limited(limiter, name, tt, rt)
     rts = string(rt)
     if has_space(limiter, textwidth(rts)+2)
         print(limiter, string("::", rts))
+    elseif has_space(limiter, 3)
+        print(limiter, "::…")
     end
+    return
 end
 
 function show_callinfo(limiter, mici::MICallInfo)
