@@ -421,13 +421,13 @@ descend_code_warntype(b::Bookmark; kw...) =
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-function ascend(mi; kwargs...)
+function ascend(term, mi; kwargs...)
     root = treelist(mi)
     menu = TreeMenu(root)
     choice = menu.current
     while choice !== nothing
         menu.chosen = false
-        choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu; cursor=menu.currentidx)
+        choice = TerminalMenus.request(term, "Choose a call for analysis (q to quit):", menu; cursor=menu.currentidx)
         browsecodetyped = true
         if choice !== nothing
             node = menu.current
@@ -443,7 +443,7 @@ function ascend(mi; kwargs...)
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1
-                        choice2 = TerminalMenus.request("\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                        choice2 = TerminalMenus.request(term, "\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
                             loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))
@@ -458,11 +458,11 @@ function ascend(mi; kwargs...)
             # warn highlighting is useful.
             interp = CthulhuInterpreter()
             do_typeinf!(interp, mi)
-            browsecodetyped && _descend(interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end
-
+ascend(mi; kwargs...) = ascend(REPL.LineEdit.terminal(Base.active_repl), mi; kwargs...)
 
 """
     ascend(mi::MethodInstance; kwargs...)
