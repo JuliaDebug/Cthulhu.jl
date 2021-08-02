@@ -177,7 +177,6 @@ end
 
 @testset "union-split constant-prop'ed callsites" begin
     # constant prop' on all the splits
-    io = IOBuffer()
     let callsites = (@eval Module() begin
             struct F32
                 val::Float32
@@ -198,8 +197,10 @@ end
         callinfos = callinfo.callinfos
         @test length(callinfos) == 2
         @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
+        io = IOBuffer()
         Cthulhu.show_callinfo(io, callinfos[1])
         @test startswith(String(take!(io)), "getproperty")
+        io = IOBuffer()
         print(io, callsites[1])
         @test occursin("= call #getproperty", String(take!(io)))
     end
@@ -236,6 +237,7 @@ end
                 f.val
             end
         end)
+    io = IOBuffer()
     print(io, callsites[1])
     @test occursin("= < constprop > getproperty(", String(take!(io)))
 end
@@ -252,6 +254,7 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test String(take!(io)) == "#return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
+    io = IOBuffer()
     print(io, callsites[1])
     @test occursin("return_type < #return_type", String(take!(io)))
     @test length(callinfo.callinfos) == 0
@@ -350,19 +353,24 @@ end
     @test Cthulhu.headstring(Union{}) == "Union{}"
     @test Cthulhu.headstring(Vector{Int}) == "Array"
     @test Cthulhu.headstring(Vector{T} where T) == "Array"
-    io = IOBuffer()
-    iolim = Cthulhu.TextWidthLimiter(io, 3)
-    print(iolim, 'α')
-    @test String(take!(iolim)) == "α"
-    iolim = Cthulhu.TextWidthLimiter(io, 1)
-    print(iolim, 'a')
-    @test String(take!(iolim)) == ""
-    iolim = Cthulhu.TextWidthLimiter(io, 80)
-    print(iolim, "abcd"^21)
-    @test occursin("…", String(take!(iolim)))
-    print(iolim, "abcd"^19)
-    @test !occursin("…", String(take!(iolim)))
 
+    function checklim(f, n, strchar::Union{AbstractString,AbstractChar})
+        io = IOBuffer()
+        iolim = Cthulhu.TextWidthLimiter(io, n)
+        print(iolim, strchar)
+        return f(String(take!(iolim)))
+    end
+    @test checklim(str -> str == "α", 3, 'α')
+    @test checklim(str -> str == "", 1, 'a')
+    @test checklim(str ->  occursin("…", str), 80, "abcd"^21)
+    @test checklim(str -> !occursin("…", str), 80, "abcd"^19)
+
+    function checklim(f, n, info::Cthulhu.CallInfo)
+        io = IOBuffer()
+        iolim = Cthulhu.TextWidthLimiter(io, n)
+        Cthulhu.show_callinfo(iolim, info)
+        return f(String(take!(iolim)))
+    end
     function fsplat(::Type{Int}, a...)
         z = zero(Int)
         for v in a
@@ -381,49 +389,43 @@ end
             @test cs isa Cthulhu.Callsite
             mi = cs.info.mi
             @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
-            Cthulhu.show_callinfo(iolim, cs.info)
-            @test occursin("...", String(take!(iolim))) != haslen
+            @test checklim(str -> occursin("...", str) != haslen, 80, cs.info)
         end
     end
     callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{10,Int}}; optimize=false)
     cs = callsites[end]
-    Cthulhu.show_callinfo(iolim, cs.info)
-    @test occursin("gsplat1(…,…,…,…,…,…,…,…,…,…,…)::Int", String(take!(iolim)))
+    @test checklim(str -> occursin("gsplat1(…,…,…,…,…,…,…,…,…,…,…)::Int", str), 80, cs.info)
     callsites = find_callsites_by_ftt(hsplat1, Tuple{NTuple{50,Int}}; optimize=false)
     cs = callsites[end]
-    Cthulhu.show_callinfo(iolim, cs.info)
-    @test occursin("gsplat1(…)::Int", String(take!(iolim)))
+    @test checklim(str -> occursin("gsplat1(…)::Int", str), 80, cs.info)
 
     # foo(x::Vector{Vector{Vector{Vector{Char}}}}) = -1
     foo(x::Vector) = -1
     bar() = foo([[[['c']]]])
     callsites = find_callsites_by_ftt(bar, Tuple{}; optimize=false)
     cs = callsites[end]
-    Cthulhu.show_callinfo(iolim, cs.info)
-    str = String(take!(iolim))
-    @test !occursin("Array{…}", str)
-    @test occursin("::Core.Const(-1)", str)
-    iolim = Cthulhu.TextWidthLimiter(io, 55)
-    Cthulhu.show_callinfo(iolim, cs.info)
-    str = String(take!(iolim))
-    @test !occursin("Array{…}", str)
-    @test !occursin("::Core.Const(-1)", str)
-    iolim = Cthulhu.TextWidthLimiter(io, 40)
-    Cthulhu.show_callinfo(iolim, cs.info)
-    str = String(take!(iolim))
-    @test occursin("Array{…}", str)
-    @test occursin("::Core.Const(-1)", str)
-    iolim = Cthulhu.TextWidthLimiter(io, 25)
-    Cthulhu.show_callinfo(iolim, cs.info)
-    str = String(take!(iolim))
-    @test occursin("Array{…}", str)
-    @test !occursin("::Core.Const(-1)", str)
-    iolim = Cthulhu.TextWidthLimiter(io, 8)
-    Cthulhu.show_callinfo(iolim, cs.info)
-    @test String(take!(iolim)) == "foo(…)"
-    iolim = Cthulhu.TextWidthLimiter(io, 4)
-    Cthulhu.show_callinfo(iolim, cs.info)
-    @test String(take!(iolim)) == "…"
+    checklim(80, cs.info) do str
+        @test !occursin("Array{…}", str)
+        @test occursin("::Core.Const(-1)", str)
+    end
+    checklim(55, cs.info) do str
+        @test !occursin("Array{…}", str)
+        @test !occursin("::Core.Const(-1)", str)
+    end
+    checklim(40, cs.info) do str
+        @test occursin("Array{…}", str)
+        @test occursin("::Core.Const(-1)", str)
+    end
+    checklim(25, cs.info) do str
+        @test occursin("Array{…}", str)
+        @test !occursin("::Core.Const(-1)", str)
+    end
+    checklim(8, cs.info) do str
+        @test str == "foo(…)"
+    end
+    checklim(4, cs.info) do str
+        @test str == "…"
+    end
 end
 
 @testset "MaybeUndef" begin
