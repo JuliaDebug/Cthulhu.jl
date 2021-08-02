@@ -85,7 +85,7 @@ cread(io) = readuntil(io, '↩'; keep=true) * readuntil(io, '↩'; keep=true)
             @test !occursin("┌ @ promotion.jl", lines)
             write(in, "N")
             lines = cread(out)
-            @test occursin(".text", lines)
+            @test occursin(".text", lines) || occursin("__text", lines)
             @test occursin("retq", lines)
             # Revise
             open(fn, "w") do io
