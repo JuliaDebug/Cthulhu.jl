@@ -3,6 +3,7 @@ module Cthulhu
 using CodeTracking: definition, whereis
 using InteractiveUtils
 using UUIDs
+using REPL: REPL, AbstractTerminal
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
@@ -206,7 +207,7 @@ using .DInfo: DebugInfo
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, inline_cost::Bool=false, kwargs...)
+function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, inline_cost::Bool=false, kwargs...)
     debuginfo = DInfo.compact # default is compact debuginfo
     if :debuginfo in keys(kwargs)
         selected = kwargs[:debuginfo]
@@ -225,10 +226,10 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
             if display_CI
-                println(stdout::IO)
-                println(stdout::IO, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
-                println(stdout::IO, "│  return ", Const(interp.opt[mi].rettype_const))
-                println(stdout::IO)
+                println(term.out_stream::IO)
+                println(term.out_stream::IO, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(term.out_stream::IO, "│  return ", Const(interp.opt[mi].rettype_const))
+                println(term.out_stream::IO)
             end
             callsites = Callsite[]
         else
@@ -256,12 +257,12 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
 
-            display_CI && cthulhu_typed(stdout::IO, debuginfo_key, codeinf, rt, mi, iswarn, verbose, inline_cost)
+            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo_key, codeinf, rt, mi, iswarn, verbose, inline_cost)
             display_CI = true
         end
 
         menu = CthulhuMenu(callsites, optimize; menu_options...)
-        cid = request(menu)
+        cid = request(term, menu)
         toggle = menu.toggle
 
         if toggle === nothing
@@ -281,7 +282,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                     continue
                 end
                 menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true, menu_options...)
-                cid = request(menu)
+                cid = request(term, menu)
                 if cid == length(sub_callsites) + 1
                     continue
                 end
@@ -298,7 +299,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 next_interp = CthulhuInterpreter()
                 next_mi = get_mi(info)::MethodInstance
                 do_typeinf!(next_interp, next_mi)
-                _descend(next_interp, next_mi;
+                _descend(term, next_interp, next_mi;
                          params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
                 continue
             end
@@ -313,7 +314,7 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
                 continue
             end
 
-            _descend(interp, next_mi;
+            _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing,
                      params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose,
                      inline_cost, kwargs...)
@@ -369,11 +370,15 @@ function _descend(interp::CthulhuInterpreter, mi::MethodInstance; override::Unio
             #Handle Standard alternative view, e.g. :native, :llvm
             view_cmd = get(CODEVIEWS, toggle, nothing)
             @assert !isnothing(view_cmd) "invalid option $toggle"
-            view_cmd(stdout::IO, mi, optimize, debuginfo, params, CONFIG)
+            println(term.out_stream)
+            view_cmd(term.out_stream::IO, mi, optimize, debuginfo, params, CONFIG)
             display_CI = false
         end
+        println(term.out_stream)
     end
 end
+_descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
+    _descend(REPL.LineEdit.terminal(Base.active_repl), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
@@ -402,6 +407,10 @@ end
 function _descend(@nospecialize(args...); params=current_params(), kwargs...)
     (interp, mi) = mkinterp(args...)
     _descend(interp, mi; params, kwargs...)
+end
+function _descend(term::AbstractTerminal, @nospecialize(args...); params=current_params(), kwargs...)
+    (interp, mi) = mkinterp(args...)
+    _descend(term, interp, mi; params, kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =

@@ -5,6 +5,8 @@ using Test
 using Random
 using StaticArrays
 
+@test isempty(detect_ambiguities(Cthulhu))
+
 function firstassigned(specializations::Core.SimpleVector)
     # the methodinstance may not be first (annoying)
     for i = 1:length(specializations)
@@ -669,3 +671,5 @@ print(str)
         @test code_native(devnull, b) isa Any
     end
 end
+
+include("terminal.jl")
