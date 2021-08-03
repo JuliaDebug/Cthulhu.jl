@@ -13,7 +13,7 @@ const may_invoke_generator = Base.may_invoke_generator
 code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 
 transform(::Val, callsite) = callsite
-function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing, kwargs...)
+function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing)
     sptypes = sptypes_from_meth_instance(mi)
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
@@ -24,7 +24,7 @@ end
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true;
-                        params=current_params(), kwargs...)
+                        params=current_params())
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -150,7 +150,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             if callsite.info isa MICallInfo
                 mi = get_mi(callsite)
                 if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params=params, kwargs...)
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params)
                 end
             end
 

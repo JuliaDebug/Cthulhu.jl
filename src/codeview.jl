@@ -76,16 +76,22 @@ function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
     return (idx in used) && type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 end
 
-cthulhu_warntype(args...) = cthulhu_warntype(stdout::IO, args...)
-function cthulhu_warntype(io::IO, src, rettype, debuginfo, stable_code, inline_cost=false)
+cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
+function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance}=nothing;
+    verbose::Bool=true, inline_cost::Bool=false)
     if inline_cost
-        error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
+        isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rettype, nothing, true, stable_code, inline_cost)
+    cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, verbose, inline_cost)
     return nothing
 end
 
-function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inline_cost=false)
+cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
+    cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
+function cthulhu_typed(io::IO, debuginfo::Symbol,
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
+    iswarn::Bool=false, verbose::Bool=true, inline_cost::Bool=false)
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -109,10 +115,12 @@ function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inli
         InteractiveUtils.warntype_type_printer(io, rettype, true)
         println(io)
     else
+        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
     end
 
     if src isa IRCode && inline_cost
+        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
         params = Core.Compiler.OptimizationParams(Core.Compiler.NativeInterpreter())
@@ -129,7 +137,7 @@ function cthulhu_typed(io::IO, debuginfo, src, rt, mi, iswarn, stable_code, inli
     end
     postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
 
-    should_print_stmt = (iswarn || src isa IRCode || stable_code) ? Returns(true) : is_type_unstable
+    should_print_stmt = (iswarn || src isa IRCode || verbose) ? Returns(true) : is_type_unstable
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
 
     irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
@@ -203,7 +211,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, b.mi, iswarn, verbose)
+    cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, verbose)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
@@ -230,7 +238,7 @@ function InteractiveUtils.code_warntype(
     kw...,
 )
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    cthulhu_warntype(io, CI, rt, debuginfo, verbose)
+    cthulhu_warntype(io, debuginfo, CI, rt, b.mi; verbose)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
