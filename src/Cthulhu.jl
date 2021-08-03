@@ -175,7 +175,8 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
+# `Base.@aggressive_constprop` here in order to make sure the constant propagation of `allow_no_codeinf`
+Base.@aggressive_constprop function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_codeinf::Bool=false)
     if !optimize
         codeinf = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
@@ -193,12 +194,19 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
             codeinf = ir
             infos = ir.stmts.info
             slottypes = ir.argtypes
-        else
+        elseif allow_no_codeinf
             # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
             # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
             codeinf = nothing
             infos = []
             slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
+        else
+            Core.eval(Main, quote
+                interp = $interp
+                mi = $mi
+                optimize = $optimize
+            end)
+            throw("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
     end
     (codeinf, rt, infos, slottypes::Vector{Any})
