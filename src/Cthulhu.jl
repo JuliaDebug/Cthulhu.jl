@@ -37,6 +37,11 @@ end
 """
 const CONFIG = CthulhuConfig()
 
+module DInfo
+    @enum DebugInfo none compact source
+end
+using .DInfo: DebugInfo
+
 include("interpreter.jl")
 include("callsite.jl")
 include("reflection.jl")
@@ -197,11 +202,6 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
     (codeinf, rt, infos, slottypes::Vector{Any})
 end
 
-module DInfo
-    @enum DebugInfo none compact source
-end
-using .DInfo: DebugInfo
-
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
@@ -257,7 +257,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
 
-            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo_key, codeinf, rt, mi, iswarn, verbose, inline_cost)
+            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo_key,
+                codeinf, rt, mi; 
+                iswarn, verbose, inline_cost)
             display_CI = true
         end
 

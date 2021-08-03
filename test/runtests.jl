@@ -4,6 +4,7 @@ using InteractiveUtils
 using Test
 using Random
 using StaticArrays
+using Revise
 
 @test isempty(detect_ambiguities(Cthulhu))
 
@@ -24,7 +25,7 @@ function firstassigned(specializations)
     return mis[1]
 end
 
-function process(@nospecialize(f), @nospecialize(TT); optimize=true)
+function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
     (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
     if ci !== nothing
@@ -44,21 +45,20 @@ macro find_callsites_by_ftt(ex0...)
     return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
 end
 
-function test()
+function testf_simple()
     T = rand() > 0.5 ? Int64 : Float64
     sum(rand(T, 100))
 end
 
-function empty_func(::Bool)
-end
+function empty_func(::Bool) end
 
 isordered(::Type{T}) where {T<:AbstractDict} = false
 
 @testset "Callsites" begin
-    callsites = find_callsites_by_ftt(test, Tuple{})
+    callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
 
-    callsites = find_callsites_by_ftt(test, Tuple{}; optimize=false)
+    callsites = find_callsites_by_ftt(testf_simple; optimize=false)
     @test length(callsites) == 4
 
     callsites = find_callsites_by_ftt(empty_func, Tuple{Bool}; optimize=true)
@@ -468,7 +468,7 @@ end
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
-    Cthulhu.cthulhu_warntype(ioctx, src, rettype, :none, true)
+    Cthulhu.cthulhu_warntype(ioctx, :none, src, rettype, nothing)
     str = String(take!(io))
     @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
@@ -626,16 +626,45 @@ let callsites = find_callsites_by_ftt(issue152_another, (Tuple{Float64,Vararg{Fl
     @test !isempty(callsites)
 end
 
-###
-### Printer test:
-###
-_, ci, infos, mi, rt, slottypes = process(test, Tuple{});
-io = IOBuffer()
-Cthulhu.cthulhu_typed(io, :none, ci, rt, mi, true, false)
-str = String(take!(io))
-print(str)
-# test by bounding the number of lines printed
-@test_broken count(isequal('\n'), str) <= 50
+# NOTE setup to for `cthulhu_ast`
+include("sandbox.jl")
+using .CthulhuTestSandbox
+Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
+
+@testset "printer test" begin
+    _, src, infos, mi, rt, slottypes = process(testf_revise);
+    tf = (true, false)
+
+    @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
+        if !@isdefined(Revise)
+            codeview == Cthulhu.cthulhu_ast && continue
+        end
+        @testset "optimize: $optimize" for optimize in tf
+            @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+                params = Cthulhu.current_params()
+                config = Cthulhu.CONFIG
+
+                io = IOBuffer()
+                codeview(io, mi, optimize, debuginfo, params, config)
+                @test !isempty(String(take!(io))) # just check it works
+            end
+        end
+    end
+
+    @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+        @testset "iswarn: $iswarn" for iswarn in tf
+            @testset "verbose: $verbose" for verbose in tf
+                @testset "inline_cost: $inline_cost" for inline_cost in tf
+                    io = IOBuffer()
+                    Cthulhu.cthulhu_typed(io, debuginfo,
+                        src, rt, mi;
+                        iswarn, verbose, inline_cost)
+                    @test !isempty(String(take!(io))) # just check it works
+                end
+            end
+        end
+    end
+end
 
 @testset "Bookmarks" begin
     (interp, mi) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
