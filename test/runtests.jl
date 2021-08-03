@@ -677,12 +677,12 @@ Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
 
     @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
         @testset "iswarn: $iswarn" for iswarn in tf
-            @testset "verbose: $verbose" for verbose in tf
+            @testset "hide: $hide" for hide in tf
                 @testset "inline_cost: $inline_cost" for inline_cost in tf
                     io = IOBuffer()
                     Cthulhu.cthulhu_typed(io, debuginfo,
                         src, rt, mi;
-                        iswarn, verbose, inline_cost)
+                        iswarn, hide, inline_cost)
                     @test !isempty(String(take!(io))) # just check it works
                 end
             end
