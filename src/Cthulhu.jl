@@ -219,7 +219,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
-    isnothing(verbose) || @warn "use `hide_type_stable` instead of `verbose`." maxlog=1
+    isnothing(verbose) || Base.depwarn("The `verbose` keyword argument to `Cthulhu.descend` is deprecated. Use `hide_type_stable` instead.")
     if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
