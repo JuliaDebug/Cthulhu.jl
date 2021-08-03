@@ -61,7 +61,7 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         m.toggle = :warn
         return true
     elseif key == UInt32('h')
-        m.toggle = :hide
+        m.toggle = :hide_type_stable
         return true
     elseif key == UInt32('o')
         m.toggle = :optimize

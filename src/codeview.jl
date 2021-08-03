@@ -79,11 +79,11 @@ end
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance}=nothing;
-    hide::Bool=false, inline_cost::Bool=false)
+    hide_type_stable::Bool=false, inline_cost::Bool=false)
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, hide, inline_cost)
+    cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, hide_type_stable, inline_cost)
     return nothing
 end
 
@@ -91,7 +91,7 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
-    iswarn::Bool=false, hide::Bool=false, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Bool=false, inline_cost::Bool=false)
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -139,7 +139,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     end
     postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
 
-    should_print_stmt = hide ? is_type_unstable : Returns(true)
+    should_print_stmt = hide_type_stable ? is_type_unstable : Returns(true)
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
 
     irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
@@ -204,7 +204,7 @@ Base.show(io::IO, b::Bookmark) =
 # Turn off `optimize` and `debuginfo` for default `show` so that the
 # output is smaller.
 function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
-                   optimize = false, debuginfo = :none, iswarn=false, hide=true)
+                   optimize = false, debuginfo = :none, iswarn=false, hide_type_stable=true)
     world = b.interp.native.world
     CI, rt = InteractiveUtils.code_typed(b; optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
@@ -213,7 +213,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, hide)
+    cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, hide_type_stable)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
@@ -236,11 +236,11 @@ function InteractiveUtils.code_warntype(
     io::IO,
     b::Bookmark;
     debuginfo = :source,
-    hide::Bool = true,
+    hide_type_stable::Bool = true,
     kw...,
 )
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    cthulhu_warntype(io, debuginfo, CI, rt, b.mi; hide)
+    cthulhu_warntype(io, debuginfo, CI, rt, b.mi; hide_type_stable)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
