@@ -81,7 +81,7 @@ function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance} = nothing;
     verbose::Bool=true, inline_cost::Bool=false)
     if inline_cost
-        @assert isa(mi, MethodInstance) "`mi::MethodInstance` is required"
+        isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
     cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, verbose, inline_cost)
     return nothing
@@ -115,12 +115,12 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         InteractiveUtils.warntype_type_printer(io, rettype, true)
         println(io)
     else
-        @assert isa(mi, MethodInstance) "`mi::MethodInstance` is required"
+        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
     end
 
     if src isa IRCode && inline_cost
-        @assert isa(mi, MethodInstance) "`mi::MethodInstance` is required"
+        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
         params = Core.Compiler.OptimizationParams(Core.Compiler.NativeInterpreter())
