@@ -372,7 +372,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 do_typeinf!(interp, mi)
             end
         elseif toggle === :edit
-            edit(whereis(mi.def)...)
+            edit(whereis(mi.def::Method)...)
             display_CI = false
         else
             #Handle Standard alternative view, e.g. :native, :llvm
@@ -390,7 +390,10 @@ _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
-    frame = InferenceState(result, true, interp)
+    # we may want to handle the case when `InferenceState(...)` returns `nothing`,
+    # which indicates code generation of a `@generated` has been failed,
+    # and show it in the UI in some way ?
+    frame = InferenceState(result, true, interp)::InferenceState
     Core.Compiler.typeinf(interp, frame)
     return nothing
 end

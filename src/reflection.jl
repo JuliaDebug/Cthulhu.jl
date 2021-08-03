@@ -204,7 +204,8 @@ current_params() = CompilerParams()
 
 function callinfo(sig, rt, max_methods=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, max_methods, params.world)
-    (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
+    methds isa Bool && return FailedCallInfo(sig, rt)
+    length(methds) < 1 && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
     for x in methds
         meth = x[3]

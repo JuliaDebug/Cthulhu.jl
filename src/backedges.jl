@@ -84,19 +84,18 @@ backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _empt
 method(mi::MethodInstance) = mi.def
 specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
-nextnode(mi, edge) = edge
 
-instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? Core.Compiler.Timings.ROOTmi : sfs[end].linfo
+instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? Core.Compiler.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 
 instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? Core.Compiler.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
-function callstring(io, mi)
+function callstring(io::IO, mi::MethodInstance)
     show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(mi).name, specTypes(mi))
     return String(take!(io))
 end
-function callstring(io, sfs::Vector{StackTraces.StackFrame})
+function callstring(io::IO, sfs::Vector{StackTraces.StackFrame})
     isempty(sfs) && return ""
     for i = 1:length(sfs)-1
         sf = sfs[i]
@@ -105,17 +104,17 @@ function callstring(io, sfs::Vector{StackTraces.StackFrame})
     sf = sfs[end]
     return callstring(io, instance(sfs)) * string(" at ", sf.file, ':', sf.line)
 end
-callstring(io, ipframes::Vector{IPFrames}) = isempty(ipframes) ? "" : callstring(io, ipframes[1].sfs)
+callstring(io::IO, ipframes::Vector{IPFrames}) = isempty(ipframes) ? "" : callstring(io, ipframes[1].sfs)
 
-struct Data{T}
+struct Data
     callstr::String
-    nd::T
+    nd::MethodInstance
 end
 
 function treelist(mi)
     io = IOBuffer()
     str = callstring(io, mi)
-    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
+    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{MethodInstance}())
 end
 function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
     mi ∈ visited && return parent
@@ -124,10 +123,9 @@ function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Ba
     for edge in backedges(mi)
         str = indent * callstring(io, edge)
         child = Node(Data(str, instance(edge)), parent)
-        treelist!(child, io, nextnode(mi, edge), indent, visited)
+        treelist!(child, io, edge, indent, visited)
     end
     return parent
 end
-treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 
 treelist(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = treelist(buildframes(bt))
