@@ -26,7 +26,9 @@ const keydict = Dict(:up => "\e[A",
                      :enter => '\r')
 
 @testset "Terminal" begin
-    @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
+    if isdefined(Base, :active_repl)
+        @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
+    end
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
     fn = tempname()
