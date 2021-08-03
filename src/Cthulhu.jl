@@ -207,11 +207,11 @@ end
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance; override::Union{Nothing, InferenceResult} = nothing, iswarn::Bool, params=current_params(), optimize::Bool=true, interruptexc::Bool=true, verbose=true, inline_cost::Bool=false, kwargs...)
-    debuginfo = DInfo.compact # default is compact debuginfo
-    if :debuginfo in keys(kwargs)
-        selected = kwargs[:debuginfo]
-        # TODO: respect default
+function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
+    override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
+    params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
+    iswarn::Bool=false, verbose=true, inline_cost::Bool=false)
+    if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, selected)::DebugInfo
     end
 
@@ -220,8 +220,6 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
     while true
-        debuginfo_key = Symbol(debuginfo)
-
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
@@ -255,10 +253,10 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
             end
             ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
-            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params, kwargs...)
+            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
 
-            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo_key,
-                codeinf, rt, mi; 
+            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo,
+                codeinf, rt, mi;
                 iswarn, verbose, inline_cost)
             display_CI = true
         end
@@ -302,7 +300,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 next_mi = get_mi(info)::MethodInstance
                 do_typeinf!(next_interp, next_mi)
                 _descend(term, next_interp, next_mi;
-                         params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose, kwargs...)
+                         debuginfo,
+                         params, optimize, interruptexc,
+                         iswarn, verbose, inline_cost)
                 continue
             end
 
@@ -317,9 +317,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
 
             _descend(term, interp, next_mi;
-                     override = isa(info, ConstPropCallInfo) ? info.result : nothing,
-                     params, optimize, iswarn, debuginfo=debuginfo_key, interruptexc, verbose,
-                     inline_cost, kwargs...)
+                     override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
+                     params,optimize, interruptexc,
+                     iswarn, verbose, inline_cost)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -406,20 +406,20 @@ function mkinterp(@nospecialize(args...))
     (interp, mi)
 end
 
-function _descend(@nospecialize(args...); params=current_params(), kwargs...)
+function _descend(@nospecialize(args...); kwargs...)
     (interp, mi) = mkinterp(args...)
-    _descend(interp, mi; params, kwargs...)
+    _descend(interp, mi; kwargs...)
 end
-function _descend(term::AbstractTerminal, @nospecialize(args...); params=current_params(), kwargs...)
+function _descend(term::AbstractTerminal, @nospecialize(args...); kwargs...)
     (interp, mi) = mkinterp(args...)
-    _descend(term, interp, mi; params, kwargs...)
+    _descend(term, interp, mi; kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.interp, b.mi; iswarn = false, kw...)
+    _descend_with_error_handling(b.interp, b.mi; iswarn=false, kw...)
 
 descend_code_warntype(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.interp, b.mi; iswarn = true, kw...)
+    _descend_with_error_handling(b.interp, b.mi; iswarn=true, kw...)
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
