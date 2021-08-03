@@ -706,10 +706,16 @@ end
             return String(take!(io))
         end
 
-        # by default, should print every statement
-        @test occursin("globalvar", prints())
-        # should omit type stable statements
-        @test !occursin("globalvar", prints(; hide_type_stable=true))
+        let # by default, should print every statement
+            s = prints()
+            @test occursin("globalvar", s)
+            @test occursin("undefvar", s)
+        end
+        let # should omit type stable statements
+            s = prints(; hide_type_stable=true)
+            @test !occursin("globalvar", s)
+            @test occursin("undefvar", s)
+        end
     end
 
     let # unoptimize code
@@ -727,14 +733,28 @@ end
             return String(take!(io))
         end
 
-        # by default, should print every statement
-        @test occursin("globalvar", prints())
-        # should omit type stable statements
-        @test !occursin("globalvar", prints(; hide_type_stable=true))
+        let # by default, should print every statement
+            s = prints()
+            @test occursin("globalvar", s)
+            @test occursin("undefvar", s)
+        end
+        let # should omit type stable statements
+            s = prints(; hide_type_stable=true)
+            @test !occursin("globalvar", s)
+            @test_broken occursin("undefvar", s)
+        end
 
-        # works for warn mode
-        @test occursin("globalvar", prints(; iswarn=true))
-        @test !occursin("globalvar", prints(; iswarn=true, hide_type_stable=true))
+        # should work for warn mode
+        let
+            s = prints(; iswarn=true)
+            @test occursin("globalvar", s)
+            @test occursin("undefvar", s)
+        end
+        let
+            s = prints(; iswarn=true, hide_type_stable=true)
+            @test !occursin("globalvar", s)
+            @test_broken occursin("undefvar", s)
+        end
     end
 end
 
