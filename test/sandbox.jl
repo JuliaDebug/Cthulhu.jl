@@ -1,6 +1,9 @@
 module CthulhuTestSandbox
 
-testf_revise(a=10) = (rand(Bool) ? sin : cos)(42)
+function testf_revise()
+    T = rand() > 0.5 ? Int64 : Float64
+    sum(rand(T, 100))
+end
 
 export testf_revise
 
