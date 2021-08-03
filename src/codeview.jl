@@ -87,6 +87,14 @@ function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
     return nothing
 end
 
+# # for API consistency with the others
+# function cthulhu_typed(io::IO, mi::MethodInstance, optimize, debuginfo, params, config::CthulhuConfig)
+#     interp = mkinterp(mi)
+#     codeinf, rt, infos, slottypes = lookup(interp, mi, optimize)
+#     ci = Cthulhu.preprocess_ci!(codeinf, mi, optimize, config)
+#     cthulhu_typed(io, debuginfo, codeinf, rt, mi)
+# end
+
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
@@ -107,7 +115,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         if src.slotnames !== nothing
             slotnames = Base.sourceinfo_slotnames(src)
             lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-            iswarn && show_variables(io, src, slotnames)
+            show_variables(io, src, slotnames)
         end
     end
 
@@ -164,6 +172,7 @@ end
 # These are standard code views that don't need any special handling,
 # This namedtuple maps toggle::Symbol to function
 const CODEVIEWS = (;
+    # typed=cthulhu_typed,
     llvm=cthulhu_llvm,
     native=cthulhu_native,
     ast=cthulhu_ast,
