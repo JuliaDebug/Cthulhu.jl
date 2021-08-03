@@ -95,7 +95,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
-    lambda_io::IOContext = io
+    iolim = IOContext(io, :limit=>true)
+    lambda_io = iolim
 
     if isa(src, Core.CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
@@ -112,11 +113,12 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if iswarn
         print(io, "Body")
-        InteractiveUtils.warntype_type_printer(io, rettype, true)
+        InteractiveUtils.warntype_type_printer(iolim, rettype, true)
         println(io)
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        println(io, "│ ─ $(string(Callsite(-1, MICallInfo(mi, rettype), :invoke)))")
+        print(io, "│ ─ ")
+        println(iolim, Callsite(-1, MICallInfo(mi, rettype), :invoke))
     end
 
     if src isa IRCode && inline_cost

@@ -473,10 +473,34 @@ end
     @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
 
-# issue #132
-f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
-interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
-@test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+@testset "Limit printing (issue #94)" begin
+    m = Module()
+    @eval m begin
+        const x = collect(1:1000)
+        f1() = x
+        function f2()
+            y = x
+            return sum(y)
+        end
+    end
+    function doprint(f)
+        interp, mi = Cthulhu.mkinterp(f, ())
+        src, rt = Cthulhu.lookup(interp, mi, true)
+        io = IOBuffer()
+        Cthulhu.cthulhu_typed(io, :none, src, rt, mi; iswarn=false)
+        return String(take!(io))
+    end
+    @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
+    str = doprint(getfield(m, :f2))
+    @test occursin("x::Core.Const([1, 2, 3", str)
+    @test !occursin("500,", str)
+end
+
+@testset "Issue #132" begin
+    f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
+    interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
+    @test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+end
 
 ## Functions for "backedges & treelist"
 # The printing changes when the functions are defined inside the testset
