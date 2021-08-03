@@ -212,7 +212,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, verbose=true, inline_cost::Bool=false)
     if isa(debuginfo, Symbol)
-        debuginfo = getfield(DInfo, selected)::DebugInfo
+        debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
     is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
