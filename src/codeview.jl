@@ -78,7 +78,7 @@ end
 
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance} = nothing;
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance}=nothing;
     verbose::Bool=true, inline_cost::Bool=false)
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
