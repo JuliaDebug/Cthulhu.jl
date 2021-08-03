@@ -74,7 +74,7 @@ const keydict = Dict(:up => "\e[A",
             @test occursin(r"Base\.mul_float\(.*, .*\)\u001B\[36m::Float32\u001B\[39m", lines)
             write(in, 'i')            # inline cost
             lines = cread(out)
-            @test occursin(r"1 ─\u001B\[32m \d\u001B\[39m %1 = Base\.mul_float", lines)
+            @test occursin(r"\u001B\[32m \d\u001B\[39m %\d += Base\.mul_float", lines)
             write(in, 'i')
             lines = cread(out)
             write(in, 'o')
