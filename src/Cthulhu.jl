@@ -127,10 +127,10 @@ descend_code_warntype(foo)
 descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(args...; kwargs...)
+function _descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
     @nospecialize
     try
-        _descend(args...; kwargs...)
+        _descend(terminal, args...; kwargs...)
     catch x
         if x isa InterruptException
             return nothing
@@ -140,6 +140,8 @@ function _descend_with_error_handling(args...; kwargs...)
     end
     return nothing
 end
+
+default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
 
 """
     descend
@@ -378,7 +380,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     end
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(REPL.LineEdit.terminal(Base.active_repl), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
+    _descend(default_terminal(), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
@@ -462,7 +464,7 @@ function ascend(term, mi; kwargs...)
         end
     end
 end
-ascend(mi; kwargs...) = ascend(REPL.LineEdit.terminal(Base.active_repl), mi; kwargs...)
+ascend(mi; kwargs...) = ascend(default_terminal(), mi; kwargs...)
 
 """
     ascend(mi::MethodInstance; kwargs...)

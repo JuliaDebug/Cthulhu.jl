@@ -1,4 +1,5 @@
 using Test
+using REPL
 using Cthulhu
 using Revise
 
@@ -25,6 +26,7 @@ const keydict = Dict(:up => "\e[A",
                      :enter => '\r')
 
 @testset "Terminal" begin
+    @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
     fn = tempname()
@@ -44,7 +46,7 @@ const keydict = Dict(:up => "\e[A",
     try
         fake_terminal() do term, in, out
             @async begin
-                Cthulhu._descend(term, simplef, Tuple{Float32, Int32}; interruptexc=false, iswarn=false)
+                descend(simplef, Tuple{Float32, Int32}; interruptexc=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
@@ -138,7 +140,7 @@ const keydict = Dict(:up => "\e[A",
         # Multicall & iswarn=true
         fake_terminal() do term, in, out
             @async begin
-                Cthulhu._descend(term, MultiCall.callfmulti, Tuple{Any}; interruptexc=false, optimize=false, iswarn=true)
+                descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("\nBody\e[91m\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
@@ -154,7 +156,7 @@ const keydict = Dict(:up => "\e[A",
         ftask() = @sync @async show(io, "Hello")
         fake_terminal() do term, in, out
             @async begin
-                Cthulhu._descend(term, ftask, Tuple{}; interruptexc=false, iswarn=false)
+                @descend terminal=term ftask()
             end
             lines = cread(out)
             @test occursin(r"• %\d\d  = task", lines)
