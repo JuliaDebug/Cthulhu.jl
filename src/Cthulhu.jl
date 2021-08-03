@@ -212,7 +212,14 @@ end
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, hide_type_stable::Bool=false, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing, inline_cost::Bool=false)
+    if !(isnothing(verbose) || isnothing(hide_type_stable))
+        error("`verbose` is being replaced with `hide_type_stable`, do not use both")
+    end
+    if isnothing(hide_type_stable)
+        hide_type_stable = something(verbose, false)
+    end
+    isnothing(verbose) || @warn "use `hide_type_stable` instead of `verbose`." maxlog=1
     if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
