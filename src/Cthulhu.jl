@@ -127,10 +127,10 @@ descend_code_warntype(foo)
 descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
     _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(args...; kwargs...)
+function _descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
     @nospecialize
     try
-        _descend(args...; kwargs...)
+        _descend(terminal, args...; kwargs...)
     catch x
         if x isa InterruptException
             return nothing
@@ -140,6 +140,8 @@ function _descend_with_error_handling(args...; kwargs...)
     end
     return nothing
 end
+
+default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
 
 """
     descend
@@ -378,7 +380,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     end
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(REPL.LineEdit.terminal(Base.active_repl), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
+    _descend(default_terminal(), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
@@ -421,13 +423,13 @@ descend_code_warntype(b::Bookmark; kw...) =
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-function ascend(mi; kwargs...)
+function ascend(term, mi; kwargs...)
     root = treelist(mi)
     menu = TreeMenu(root)
     choice = menu.current
     while choice !== nothing
         menu.chosen = false
-        choice = TerminalMenus.request("Choose a call for analysis (q to quit):", menu; cursor=menu.currentidx)
+        choice = TerminalMenus.request(term, "Choose a call for analysis (q to quit):", menu; cursor=menu.currentidx)
         browsecodetyped = true
         if choice !== nothing
             node = menu.current
@@ -443,7 +445,7 @@ function ascend(mi; kwargs...)
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1
-                        choice2 = TerminalMenus.request("\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                        choice2 = TerminalMenus.request(term, "\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
                             loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))
@@ -458,11 +460,11 @@ function ascend(mi; kwargs...)
             # warn highlighting is useful.
             interp = CthulhuInterpreter()
             do_typeinf!(interp, mi)
-            browsecodetyped && _descend(interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end
-
+ascend(mi; kwargs...) = ascend(default_terminal(), mi; kwargs...)
 
 """
     ascend(mi::MethodInstance; kwargs...)
