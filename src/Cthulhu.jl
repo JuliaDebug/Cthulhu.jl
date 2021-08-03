@@ -212,7 +212,11 @@ end
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, verbose=true, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing, inline_cost::Bool=false)
+    if isnothing(hide_type_stable)
+        hide_type_stable = something(verbose, false)
+    end
+    isnothing(verbose) || Base.depwarn("The `verbose` keyword argument to `Cthulhu.descend` is deprecated. Use `hide_type_stable` instead.")
     if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
@@ -259,7 +263,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             display_CI && cthulhu_typed(term.out_stream::IO, debuginfo,
                 codeinf, rt, mi;
-                iswarn, verbose, inline_cost)
+                iswarn, hide_type_stable, inline_cost)
             display_CI = true
         end
 
@@ -304,7 +308,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 _descend(term, next_interp, next_mi;
                          debuginfo,
                          params, optimize, interruptexc,
-                         iswarn, verbose, inline_cost)
+                         iswarn, hide_type_stable, inline_cost)
                 continue
             end
 
@@ -321,12 +325,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      params,optimize, interruptexc,
-                     iswarn, verbose, inline_cost)
+                     iswarn, hide_type_stable, inline_cost)
 
         elseif toggle === :warn
             iswarn ⊻= true
-        elseif toggle === :verbose
-            verbose ⊻= true
+        elseif toggle === :hide_type_stable
+            hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
             if !is_cached(mi)
