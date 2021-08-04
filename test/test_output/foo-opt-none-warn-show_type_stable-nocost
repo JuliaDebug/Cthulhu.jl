@@ -1,0 +1,25 @@
+Body[36m::Union{}[39m
+[90m1 ──[39m %1  = Core.Box[36m::Core.Const(Core.Box)[39m
+[90m│   [39m %2  = %new(%1)[91m[1m::Core.Box[22m[39m
+[90m│   [39m %3  = Base.add_int(_2, _3)[36m::Int64[39m
+[90m└───[39m       Core.setfield!(%2, :contents, %3)
+[90m2 ┄─[39m %5  = Core.isdefined(%2, :contents)[36m::Bool[39m
+[90m└───[39m       goto #4 if not %5
+[90m3 ──[39m       goto #5
+[90m4 ──[39m       $(Expr(:throw_undef_if_not, :z, false))
+[90m5 ┄─[39m %9  = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m│   [39m %10 = (%9 < 4)[91m[1m::Any[22m[39m
+[90m└───[39m       goto #10 if not %10
+[90m6 ──[39m %12 = Core.isdefined(%2, :contents)[36m::Bool[39m
+[90m└───[39m       goto #8 if not %12
+[90m7 ──[39m       goto #9
+[90m8 ──[39m       $(Expr(:throw_undef_if_not, :z, false))
+[90m9 ┄─[39m %16 = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m│   [39m %17 = (%16 + 1)[91m[1m::Any[22m[39m
+[90m│   [39m       Core.setfield!(%2, :contents, %17)
+[90m└───[39m       goto #2
+[90m10 ─[39m %20 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
+[90m│   [39m       invoke %20(_2::Int64)
+[90m│   [39m %22 = %new(Base.RefValue{Union{Missing, Int64}}, _2)[36m::Base.RefValue{Union{Missing, Int64}}[39m
+[90m│   [39m       (%22 + _3)
+[90m└───[39m       unreachable

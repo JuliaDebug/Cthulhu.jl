@@ -1,0 +1,7 @@
+│ ─ %-1  = invoke foo(::Int64,::Int64)::Union{}
+[90m│   [39m       (z@_7 = Core.Box())[90m::Core.Box[39m
+[90m5 ┄─[39m %12 = Core.getfield(z@_7, :contents)[36m::Any[39m
+[90m│   [39m %13 = (%12 < 4)[36m::Any[39m
+[90m9 ┄─[39m %20 = Core.getfield(z@_7, :contents)[36m::Any[39m
+[90m│   [39m %21 = (%20 + 1)[36m::Any[39m
+[90m│   [39m       (u = (%25)(x))[90m::Any[39m
