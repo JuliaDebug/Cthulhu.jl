@@ -132,6 +132,10 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         function preprinter(io, linestart, idx)
             str = idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1)
             str = sprint(io -> Base.printstyled(io, str; color=:green); context=:color=>true)
+            if debuginfo === :source
+                str *= " "
+                linestart *= " "^(nd+2)
+            end
             return str * _lineprinter(io, linestart, idx)
         end
     else
