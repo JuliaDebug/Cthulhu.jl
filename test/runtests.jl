@@ -741,7 +741,7 @@ end
         let # should omit type stable statements
             s = prints(; hide_type_stable=true)
             @test !occursin("globalvar", s)
-            @test_broken occursin("undefvar", s)
+            @test occursin("undefvar", s)
         end
 
         # should work for warn mode
@@ -753,7 +753,7 @@ end
         let
             s = prints(; iswarn=true, hide_type_stable=true)
             @test !occursin("globalvar", s)
-            @test_broken occursin("undefvar", s)
+            @test occursin("undefvar", s)
         end
     end
 end
