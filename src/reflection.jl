@@ -7,18 +7,17 @@ using .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo
 
-const is_return_type = Core.Compiler.is_return_type
 const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
 const may_invoke_generator = Base.may_invoke_generator
 code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
 
 transform(::Val, callsite) = callsite
-function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=nothing)
+function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=current_params())
     sptypes = sptypes_from_meth_instance(mi)
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
     isa(tt, Const) || return callsite
-    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params=params)), callsite.head)
+    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params)), callsite.head)
 end
 
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
@@ -126,11 +125,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             if c.head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 at = argextype(c.args[2], CI, sptypes, slottypes)
-                if isa(at, Const) && is_return_type(at.val)
-                    callsite = process_return_type(id, c, rt)
-                else
-                    callsite = Callsite(id, MICallInfo(c.args[1], rt), c.head)
-                end
+                callsite = Callsite(id, MICallInfo(c.args[1], rt), c.head)
             elseif c.head === :foreigncall
                 # special handling of jl_new_task
                 length(c.args) > 0 || continue
@@ -204,7 +199,8 @@ current_params() = CompilerParams()
 
 function callinfo(sig, rt, max_methods=-1; params=current_params())
     methds = Base._methods_by_ftype(sig, max_methods, params.world)
-    (methds === false || length(methds) < 1) && return FailedCallInfo(sig, rt)
+    methds isa Bool && return FailedCallInfo(sig, rt)
+    length(methds) < 1 && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
     for x in methds
         meth = x[3]
