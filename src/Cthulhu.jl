@@ -270,15 +270,16 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         cthulhu_typed(io, debuginfo, codeinf, rt, mi;
                                     iswarn, hide_type_stable, inline_cost)
                     end
-                    rmatch = match(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
+                    rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
                     if rmatch !== nothing
-                        str = chop(str, tail = 27 + sum(length, rmatch.captures))
+                        str = str[begin:prevind(str, first(rmatch))]
                     end
                     print(term.out_stream::IO, str)
                 else
                     cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
                                   iswarn, hide_type_stable, inline_cost)
                 end
+                view_cmd = cthulhu_typed
             end
             display_CI = true
         end

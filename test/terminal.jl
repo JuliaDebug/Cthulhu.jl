@@ -105,6 +105,7 @@ const keydict = Dict(:up => "\e[A",
             @test occursin('[' * colorize(true, 'w') * "]arn", lines)
             @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
             @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)
+            # Source view
             write(in, 'S')
             lines = cread(out)
             @test occursin("""
@@ -122,11 +123,18 @@ const keydict = Dict(:up => "\e[A",
             @test occursin("\u001B", first(split(lines, '\n')))
             @test occursin('[' * colorize(true, 's') * "]yntax", lines)
             write(in, 's'); cread(out)  # off again
+            # Toggling 'o' goes back to typed code, make sure it also updates the selector status
+            write(in, 'o')
+            lines = cread(out)
+            @test occursin('[' * colorize(true, 'T') * "]yped", lines)
+            write(in, 'o'); cread(out)   # toggle it back for later tests
+            # AST view
             write(in, 'A')
             lines = cread(out)
             @test occursin("Symbol simplef", lines)
             @test occursin("Symbol call", lines)
             @test occursin('[' * colorize(true, 'A') * "]ST", lines)
+            # LLVM view
             write(in, 'L')
             lines = cread(out)
             @test occursin(r"sitofp i(64|32)", lines)
@@ -140,11 +148,13 @@ const keydict = Dict(:up => "\e[A",
             lines = cread(out)
             @test occursin('[' * colorize(false, 'd') * "]ebuginfo", lines)
             @test !occursin("┌ @ promotion.jl", lines)
+            # Native-code view
             write(in, 'N')
             lines = cread(out)
             @test occursin(".text", lines) || occursin("__text", lines)
             @test occursin("retq", lines)
             @test occursin('[' * colorize(true, 'N') * "]ative", lines)
+            # Typed-view (by selector)
             write(in, 'T')
             lines = cread(out)
             @test occursin(r"\(z \+ b\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
