@@ -1,4 +1,4 @@
-Body[36m::Union{}[39m
+Body[91m[1m::Any[22m[39m
 [90m1 ──[39m[32m    0[39m %1  = Core.Box[36m::Core.Const(Core.Box)[39m
 [90m│   [39m[32m    0[39m %2  = %new(%1)[91m[1m::Core.Box[22m[39m
 [90m│   [39m[32m    1[39m %3  = Base.add_int(_2, _3)[36m::Int64[39m
@@ -19,7 +19,16 @@ Body[36m::Union{}[39m
 [90m│   [39m[32m    3[39m       Core.setfield!(%2, :contents, %17)
 [90m└───[39m[32m   40[39m       goto #2
 [90m10 ─[39m[32m    0[39m %20 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
-[90m│   [39m[32m   20[39m       invoke %20(_2::Int64)
-[90m│   [39m[32m    0[39m %22 = %new(Base.RefValue{Union{Missing, Int64}}, _2)[36m::Base.RefValue{Union{Missing, Int64}}[39m
-[90m│   [39m[32m    0[39m       (%22 + _3)
+[90m│   [39m[32m   20[39m %21 = invoke %20(_2::Int64)[91m[1m::Any[22m[39m
+[90m│   [39m[32m    1[39m %22 = (isa)(_2, Missing)[36m::Bool[39m
+[90m└───[39m[32m    0[39m       goto #12 if not %22
+[90m11 ─[39m[32m    0[39m       goto #15
+[90m12 ─[39m[32m    1[39m %25 = (isa)(_2, Int64)[36m::Bool[39m
+[90m└───[39m[32m    0[39m       goto #14 if not %25
+[90m13 ─[39m[32m    1[39m %27 = Base.add_int(_2, _3)[36m::Int64[39m
+[90m└───[39m[32m    0[39m       goto #15
+[90m14 ─[39m[32m    0[39m       Core.throw(ErrorException("fatal error in type inference (type bound)"))
 [90m└───[39m[32m    0[39m       unreachable
+[90m15 ┄[39m[32m    0[39m %31 = φ (#11 => $(QuoteNode(missing)), #13 => %27)[33m[1m::Union{Missing, Int64}[22m[39m
+[90m│   [39m[32m 1000[39m %32 = (%21 + %31)[91m[1m::Any[22m[39m
+[90m└───[39m[32m    0[39m       return %32

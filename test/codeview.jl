@@ -46,8 +46,8 @@ function foo(x, y)
         z += 1
     end
     u = (x -> x + z)(x)
-    v = Ref{Union{Int, Missing}}(x) + y
-    return z * 7
+    v = Ref{Union{Int, Missing}}(x)[] + y
+    return u + v
 end
 """; filename="foobar.jl"))
 

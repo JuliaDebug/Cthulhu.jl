@@ -3,14 +3,13 @@ Variables
   x[36m::Int64[39m
   y[36m::Int64[39m
   #1[36m::Main.anonymous.var"#1#2"[39m
-  v[36m::Union{}[39m
+  v[33m[1m::Union{Missing, Int64}[22m[39m
   u[91m[1m::Any[22m[39m
   z@_7[91m[1m::Core.Box[22m[39m
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
-  z@_10[36m::Union{}[39m
 
-│ ─ %-1  = invoke foo(::Int64,::Int64)::Union{}
+│ ─ %-1  = invoke foo(::Int64,::Int64)::Any
 [90m1 ──[39m       Core.NewvarNode(:(#1))[90m::Any[39m
 [90m│   [39m       Core.NewvarNode(:(v))[90m::Any[39m
 [90m│   [39m       Core.NewvarNode(:(u))[90m::Any[39m
@@ -40,4 +39,7 @@ Variables
 [90m│   [39m %27 = Core.apply_type(Main.anonymous.Union, Main.anonymous.Int, Main.anonymous.Missing)[36m::Core.Const(Union{Missing, Int64})[39m
 [90m│   [39m %28 = Core.apply_type(Main.anonymous.Ref, %27)[36m::Core.Const(Ref{Union{Missing, Int64}})[39m
 [90m│   [39m %29 = (%28)(x)[36m::Base.RefValue{Union{Missing, Int64}}[39m
-[90m└───[39m       (v = %29 + y)[90m::Union{}[39m
+[90m│   [39m %30 = Base.getindex(%29)[36m::Union{Missing, Int64}[39m
+[90m│   [39m       (v = %30 + y)[90m::Union{Missing, Int64}[39m
+[90m│   [39m %32 = (u + v)[36m::Any[39m
+[90m└───[39m       return %32

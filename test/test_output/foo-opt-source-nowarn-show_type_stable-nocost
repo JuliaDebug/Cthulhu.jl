@@ -1,4 +1,4 @@
-│ ─ %-1  = invoke foo(::Int64,::Int64)::Union{}
+│ ─ %-1  = invoke foo(::Int64,::Int64)::Any
     [33m @ foobar.jl:2 within `foo`[39m
     [33m┌ @ boot.jl: within `Box`[39m
 [90m1 ──[39m[33m│[39m %1  = Core.Box[36m::Core.Const(Core.Box)[39m
@@ -27,11 +27,20 @@
 [90m└───[39m       goto #2
     [33m @ foobar.jl:6 within `foo`[39m
 [90m10 ─[39m %20 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
-[90m│   [39m       invoke %20(_2::Int64)[90m::Any[39m
+[90m│   [39m %21 = invoke %20(_2::Int64)[36m::Any[39m
 [90m│ [39m  [33m @ foobar.jl:7 within `foo`[39m
-[90m│ [39m  [33m┌ @ refpointer.jl: within `Ref`[39m
-[90m│ [39m  [33m│┌ @ refvalue.jl: within `RefValue`[39m
-[90m│   [39m[33m││[39m %22 = %new(Base.RefValue{Union{Missing, Int64}}, _2)[36m::Base.RefValue{Union{Missing, Int64}}[39m
-[90m│ [39m  [33m└└[39m
-[90m│   [39m       (%22 + _3)[90m::Union{}[39m
+[90m│   [39m %22 = (isa)(_2, Missing)[36m::Bool[39m
+[90m└───[39m       goto #12 if not %22
+[90m11 ─[39m       goto #15
+[90m12 ─[39m %25 = (isa)(_2, Int64)[36m::Bool[39m
+[90m└───[39m       goto #14 if not %25
+    [33m┌ @ int.jl: within `+`[39m
+[90m13 ─[39m[33m│[39m %27 = Base.add_int(_2, _3)[36m::Int64[39m
+[90m│ [39m  [33m└[39m
+[90m└───[39m       goto #15
+[90m14 ─[39m       Core.throw(ErrorException("fatal error in type inference (type bound)"))[90m::Union{}[39m
 [90m└───[39m       unreachable
+[90m15 ┄[39m %31 = φ (#11 => $(QuoteNode(missing)), #13 => %27)[36m::Union{Missing, Int64}[39m
+[90m│ [39m  [33m @ foobar.jl:8 within `foo`[39m
+[90m│   [39m %32 = (%21 + %31)[36m::Any[39m
+[90m└───[39m       return %32
