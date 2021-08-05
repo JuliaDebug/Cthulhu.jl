@@ -1,3 +1,8 @@
+# NOTE setup too for `cthulhu_ast`
+include("sandbox.jl")
+using .CthulhuTestSandbox
+Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
+
 @testset "printer test" begin
     _, src, infos, mi, rt, slottypes = process(testf_revise);
     tf = (true, false)

@@ -650,11 +650,6 @@ let callsites = find_callsites_by_ftt(issue152_another, (Tuple{Float64,Vararg{Fl
     @test !isempty(callsites)
 end
 
-# NOTE setup too for `cthulhu_ast`
-include("sandbox.jl")
-using .CthulhuTestSandbox
-Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
-
 include("codeview.jl")
 
 @testset "Bookmarks" begin
