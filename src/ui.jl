@@ -12,19 +12,19 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     config::TerminalMenus.Config
 end
 
-function show_as_line(el, optimize::Bool)
+function show_as_line(el, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     buf = ctx = IOBuffer()
     if (color = get(stdout, :color, nothing)) !== nothing
         ctx = IOContext(ctx, :color=>color)
     end
-    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize), el)
+    show(IOContext(ctx, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize, :iswarn=>iswarn), el)
     String(take!(buf))
 end
 
 
-function CthulhuMenu(callsites, optimize::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
-    options = vcat(map(site->show_as_line(site, optimize), callsites), ["↩"])
+function CthulhuMenu(callsites, optimize::Bool, iswarn::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
+    options = vcat(map(site->show_as_line(site, optimize, iswarn), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
