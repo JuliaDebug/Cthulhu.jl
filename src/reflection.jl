@@ -30,7 +30,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
     for (id, c) in enumerate(isa(CI, IRCode) ? CI.stmts.inst : CI.code)
         callsite = nothing
         isa(c, Expr) || continue
-        if stmt_info !== nothing
+        if stmt_info !== nothing && is_call_expr(c, optimize)
             info = stmt_info[id]
             if info !== nothing
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
@@ -38,9 +38,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 # so extract rhs for such an case
                 args = c.args
                 if !optimize
-                    if isexpr(c, :(=))
-                        args = c.args[2].args
-                    end
+                    args = (ignorelhs(c)::Expr).args
                 end
                 types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
                 was_return_type = false
@@ -118,10 +116,8 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
         end
 
         if callsite === nothing && c isa Expr
-            if c.head === :(=)
-                c = c.args[2]
-                (c isa Expr) || continue
-            end
+            c = ignorelhs(c)
+            (c isa Expr) || continue
             if c.head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 at = argextype(c.args[2], CI, sptypes, slottypes)
@@ -153,6 +149,12 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
         end
     end
     return callsites
+end
+
+ignorelhs(@nospecialize(x)) = isexpr(x, :(=)) ? last(x.args) : x
+function is_call_expr(x::Expr, optimize::Bool)
+    optimize && isexpr(x, :invoke) && return true
+    return isexpr(ignorelhs(x), :call)
 end
 
 function dce!(ci, mi)
