@@ -164,25 +164,25 @@ end
 function headstring(@nospecialize(T))
     T = widenconst(Base.unwrapva(T))
     if T isa Union || T === Union{}
-        return string(T)
+        return string(T)::String
     elseif T isa UnionAll
         return headstring(Base.unwrap_unionall(T))
     else
-        return string(T.name.name)
+        return string(T.name.name)::String
     end
 end
 
 
-function __show_limited(limiter, name, tt, rt)
-    vastring(@nospecialize(T)) = Base.isvarargtype(T) ? headstring(T)*"..." : string(T)
+function __show_limited(limiter, name, tt, @nospecialize(rt))
+    vastring(@nospecialize(T)) = (Base.isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
     if !has_space(limiter, name)
         print(limiter, '…')
         return
     end
     print(limiter, string(name))
-    pstrings = map(vastring, tt)
-    headstrings = map(headstring, tt)
+    pstrings = String[vastring(T) for T in tt]
+    headstrings = String[headstring(T) for T in tt]
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
@@ -201,7 +201,7 @@ function __show_limited(limiter, name, tt, rt)
     print(limiter, ")")
 
     # If we have space for the return type, print it
-    rts = string(rt)
+    rts = string(rt)::String
     if has_space(limiter, textwidth(rts)+2)
         print(limiter, string("::", rts))
     elseif has_space(limiter, 3)
@@ -213,7 +213,7 @@ end
 function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
-    name = mi.def.name
+    name = (mi.def::Method).name
     rt = mici.rt
     __show_limited(limiter, name, tt, rt)
 end
