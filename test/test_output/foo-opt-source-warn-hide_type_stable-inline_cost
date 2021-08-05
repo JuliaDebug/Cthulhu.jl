@@ -1,0 +1,11 @@
+Body[36m::Union{}[39m
+[90m│ [39m        [33m @ foobar.jl:2 within `foo`[39m
+[90m│ [39m        [33m┌ @ boot.jl: within `Box`[39m
+[90m│   [39m[32m    0[39m [33m│[39m %2  = %new(%1)[91m[1m::Core.Box[22m[39m
+          [33m└[39m
+          [33m @ foobar.jl:3 within `foo`[39m
+[90m5 ┄─[39m[32m    0[39m  %9  = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m│   [39m[32m 1000[39m  %10 = (%9 < 4)[91m[1m::Any[22m[39m
+          [33m @ foobar.jl:4 within `foo`[39m
+[90m9 ┄─[39m[32m    0[39m  %16 = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m│   [39m[32m 1000[39m  %17 = (%16 + 1)[91m[1m::Any[22m[39m
