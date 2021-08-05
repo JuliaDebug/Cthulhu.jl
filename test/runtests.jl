@@ -27,7 +27,7 @@ end
 
 function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(f, TT)
-    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize)
+    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_codeinf=true)
     if ci !== nothing
         ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     end

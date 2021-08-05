@@ -29,6 +29,9 @@ const keydict = Dict(:up => "\e[A",
     if isdefined(Base, :active_repl)
         @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     end
+    colorize(use_color::Bool, c::Char) = Cthulhu.stringify() do io
+        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    end
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
     fn = tempname()
@@ -43,7 +46,12 @@ const keydict = Dict(:up => "\e[A",
     end
     includet(fn)
 
+    # Copy the user's current settings and set up the defaults
     CONFIG = deepcopy(Cthulhu.CONFIG)
+    config = Cthulhu.CthulhuConfig()
+    for fn in fieldnames(Cthulhu.CthulhuConfig)
+        setfield!(Cthulhu.CONFIG, fn, getfield(config, fn))
+    end
 
     try
         fake_terminal() do term, in, out
@@ -53,23 +61,27 @@ const keydict = Dict(:up => "\e[A",
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
             @test occursin(r"Base\.mul_float\(.*, .*\)\u001B\[36m::Float32\u001B\[39m", lines)
-            @test_broken occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('[' * colorize(true, 'o') * "]ptimize", lines)
+            @test occursin('[' * colorize(true, 'T') * "]yped", lines)
+
+            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
             @test occursin('•', lines)
             write(in, 'o')            # switch to unoptimized
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
             @test occursin(r"\(z = a \* a\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
-            @test_broken occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('[' * colorize(false, 'o') * "]ptimize", lines)
+            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
             @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)
             # Call selection
             write(in, keydict[:down])
             write(in, keydict[:enter])
-            lines = cread(out)
+            lines = cread1(out)
             lines = cread(out)
             @test occursin("• %1  = promote(::Float32,::Int32)::Tuple{Float32, Float32}", lines)
             write(in, keydict[:up])
             write(in, keydict[:enter])
-            lines = cread(out)
+            lines = cread1(out)
             lines = cread(out)
             @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)  # back to where we started
             write(in, 'o')            # back to optimized
@@ -79,21 +91,22 @@ const keydict = Dict(:up => "\e[A",
             write(in, 'i')            # inline cost
             lines = cread(out)
             @test occursin(r"\u001B\[32m \d\u001B\[39m %\d += Base\.mul_float", lines)
+            @test occursin('[' * colorize(true, 'i') * "]nlining costs", lines)
             write(in, 'i')
             lines = cread(out)
             write(in, 'o')
             lines = cread(out)
-            @test !occursin("Variables", lines)
+            @test occursin("Variables", lines)
             write(in, 'w')            # unoptimized + warntype
             lines = cread(out)
             @test occursin("Variables", lines)
             @test occursin(r"z.*::Float32", lines)
             @test occursin(r"\nBody.*Float32", lines)
-            @test_broken occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('[' * colorize(true, 'w') * "]arn", lines)
+            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
             @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)
-            # turn off syntax highlighting
-            write(in, "s"); cread(out)
-            write(in, "S")
+            # Source view
+            write(in, 'S')
             lines = cread(out)
             @test occursin("""
             \n\nfunction simplef(a, b)
@@ -101,25 +114,51 @@ const keydict = Dict(:up => "\e[A",
                 return z + b
             end
             """, lines)
-            write(in, "A")
+            @test occursin('[' * colorize(true, 'S') * "]ource", lines)
+            # turn on syntax highlighting
+            write(in, 's'); cread(out)
+            write(in, 'S')
+            lines = cread(out)
+            @test occursin("simplef", lines)
+            @test occursin("\u001B", first(split(lines, '\n')))
+            @test occursin('[' * colorize(true, 's') * "]yntax", lines)
+            write(in, 's'); cread(out)  # off again
+            # Toggling 'o' goes back to typed code, make sure it also updates the selector status
+            write(in, 'o')
+            lines = cread(out)
+            @test occursin('[' * colorize(true, 'T') * "]yped", lines)
+            write(in, 'o'); cread(out)   # toggle it back for later tests
+            # AST view
+            write(in, 'A')
             lines = cread(out)
             @test occursin("Symbol simplef", lines)
             @test occursin("Symbol call", lines)
-            write(in, "L")
+            @test occursin('[' * colorize(true, 'A') * "]ST", lines)
+            # LLVM view
+            write(in, 'L')
             lines = cread(out)
             @test occursin(r"sitofp i(64|32)", lines)
             @test occursin("fadd float", lines)
             @test occursin("┌ @ promotion.jl", lines)  # debug info on by default
+            @test occursin('[' * colorize(true, 'L') * "]LVM", lines)
             # turn off debug info
-            write(in, "d"); cread(out)
-            write(in, "d"); cread(out)
-            write(in, "L")
+            write(in, 'd'); cread(out)
+            write(in, 'd'); cread(out)
+            write(in, 'L')
             lines = cread(out)
+            @test occursin('[' * colorize(false, 'd') * "]ebuginfo", lines)
             @test !occursin("┌ @ promotion.jl", lines)
-            write(in, "N")
+            # Native-code view
+            write(in, 'N')
             lines = cread(out)
             @test occursin(".text", lines) || occursin("__text", lines)
             @test occursin("retq", lines)
+            @test occursin('[' * colorize(true, 'N') * "]ative", lines)
+            # Typed-view (by selector)
+            write(in, 'T')
+            lines = cread(out)
+            @test occursin(r"\(z \+ b\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
+            @test occursin('[' * colorize(true, 'T') * "]yped", lines)
             # Revise
             open(fn, "w") do io
                 println(io,
@@ -131,13 +170,12 @@ const keydict = Dict(:up => "\e[A",
                 """)
             end
             sleep(0.1)
-            write(in, "R")
+            write(in, 'R')
             lines = cread(out)
-            write(in, "o"); cread(out)     # optimized code
-            write(in, "o")     # unoptimized code
+            write(in, 'T')
             lines = cread(out)
             @test occursin("z = a * b", lines)
-            write(in, "q")
+            write(in, 'q')
         end
         # Multicall & iswarn=true
         fake_terminal() do term, in, out
@@ -152,7 +190,7 @@ const keydict = Dict(:up => "\e[A",
             @test occursin("%2  = fmulti(::Int32)::Union{Float32, $Int}", lines)
             @test occursin("%2  = fmulti(::Float32)::Union{Float32, $Int}", lines)
             @test occursin("%2  = fmulti(::Char)::Union{Float32, $Int}", lines)
-            write(in, "q")
+            write(in, 'q')
         end
         # Tasks (see the special handling in `_descend`)
         ftask() = @sync @async show(io, "Hello")
@@ -165,7 +203,7 @@ const keydict = Dict(:up => "\e[A",
             write(in, keydict[:enter])
             lines = cread(out)
             @test occursin("call show(::IO,::String)", lines)
-            write(in, "q")
+            write(in, 'q')
         end
         # ascend
         @noinline inner3(x) = 3x
@@ -188,8 +226,8 @@ const keydict = Dict(:up => "\e[A",
                  occursin(r"caller.*inner3", lines[8]) ? 8 : error("not found")
             @test occursin("inner2", lines[ln+1])
             @test any(str -> occursin("Variables", str), lines[ln+2:end])
-            write(in, "q")
-            write(in, "q")
+            write(in, 'q')
+            write(in, 'q')
         end
     finally
         # Restore the previous settings

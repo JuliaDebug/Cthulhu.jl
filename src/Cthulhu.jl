@@ -175,7 +175,8 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
+# `Base.@aggressive_constprop` here in order to make sure the constant propagation of `allow_no_codeinf`
+Base.@aggressive_constprop function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_codeinf::Bool=false)
     if !optimize
         codeinf = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
@@ -193,12 +194,19 @@ function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool)
             codeinf = ir
             infos = ir.stmts.info
             slottypes = ir.argtypes
-        else
+        elseif allow_no_codeinf
             # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
             # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
             codeinf = nothing
             infos = []
             slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
+        else
+            Core.eval(Main, quote
+                interp = $interp
+                mi = $mi
+                optimize = $optimize
+            end)
+            error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
     end
     (codeinf, rt, infos, slottypes::Vector{Any})
@@ -225,6 +233,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
+    view_cmd = cthulhu_typed
     while true
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
@@ -261,14 +270,31 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             ci = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
 
-            display_CI && cthulhu_typed(term.out_stream::IO, debuginfo,
-                codeinf, rt, mi;
-                iswarn, hide_type_stable, inline_cost)
+            if display_CI
+                printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
+                if debuginfo == DInfo.compact
+                    # Eliminate trailing indentation (see first item in bullet list in PR #189)
+                    str = stringify() do io
+                        cthulhu_typed(io, debuginfo, codeinf, rt, mi;
+                                    iswarn, hide_type_stable, inline_cost)
+                    end
+                    rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
+                    if rmatch !== nothing
+                        str = str[begin:prevind(str, first(rmatch))]
+                    end
+                    print(term.out_stream::IO, str)
+                else
+                    cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
+                                  iswarn, hide_type_stable, inline_cost)
+                end
+                view_cmd = cthulhu_typed
+            end
             display_CI = true
         end
 
         menu = CthulhuMenu(callsites, optimize; menu_options...)
-        cid = request(term, menu)
+        msg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_cost, CONFIG.enable_highlighter)
+        cid = request(term, msg, menu)
         toggle = menu.toggle
 
         if toggle === nothing
@@ -288,7 +314,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     continue
                 end
                 menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true, menu_options...)
-                cid = request(term, menu)
+                cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
                 end
@@ -372,17 +398,22 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 do_typeinf!(interp, mi)
             end
         elseif toggle === :edit
-            edit(whereis(mi.def)...)
+            edit(whereis(mi.def::Method)...)
             display_CI = false
         else
             #Handle Standard alternative view, e.g. :native, :llvm
-            view_cmd = get(CODEVIEWS, toggle, nothing)
-            @assert !isnothing(view_cmd) "invalid option $toggle"
-            println(term.out_stream)
-            view_cmd(term.out_stream::IO, mi, optimize, debuginfo, params, CONFIG)
-            display_CI = false
+            if toggle === :typed
+                view_cmd = cthulhu_typed
+                display_CI = true
+            else
+                view_cmd = get(CODEVIEWS, toggle, nothing)
+                @assert !isnothing(view_cmd) "invalid option $toggle"
+                println(term.out_stream)
+                view_cmd(term.out_stream::IO, mi, optimize, debuginfo, params, CONFIG)
+                display_CI = false
+            end
         end
-        println(term.out_stream)
+        println(term.out_stream::IO)
     end
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
@@ -390,7 +421,10 @@ _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
-    frame = InferenceState(result, true, interp)
+    # we may want to handle the case when `InferenceState(...)` returns `nothing`,
+    # which indicates code generation of a `@generated` has been failed,
+    # and show it in the UI in some way ?
+    frame = InferenceState(result, true, interp)::InferenceState
     Core.Compiler.typeinf(interp, frame)
     return nothing
 end
@@ -411,6 +445,12 @@ function mkinterp(@nospecialize(args...))
     do_typeinf!(interp, mi)
     (interp, mi)
 end
+
+# function mkinterp(mi::MethodInstance)
+#     interp = CthulhuInterpreter()
+#     do_typeinf!(interp, mi)
+#     interp
+# end
 
 function _descend(@nospecialize(args...); kwargs...)
     (interp, mi) = mkinterp(args...)

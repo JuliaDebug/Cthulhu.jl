@@ -77,7 +77,7 @@ function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
         if isdefined(opt, :ir)
-            return OptimizedSource(opt.ir, opt.src.inlineable)
+            return OptimizedSource(opt.ir::IRCode, opt.src.inlineable)
         end
     end
     return inferred_result
