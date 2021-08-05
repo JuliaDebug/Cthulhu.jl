@@ -585,16 +585,22 @@ end
     @test lines == [line2]
 end
 
-@test "ascend interface" begin
-    struct FunnyMI end
-    struct HasName
-        name::Symbol
+
+@testset "ascend interface" begin
+    m = Module()
+    @eval m begin
+        using Cthulhu
+        struct FunnyMI end
+        struct HasName
+            name::Symbol
+        end
+        Cthulhu.method(::FunnyMI) = HasName(:funny)
+        funny(c::Char) = "haha"
+        Cthulhu.specTypes(::FunnyMI) = Tuple{typeof(funny),Char}
     end
-    Cthulhu.method(::FunnyMI) = HasName(:funny)
-    funny(c::Char) = "haha"
-    Cthulhu.specTypes(::FunnyMI) = Tuple{typeof(funny),Char}
+
     io = IOBuffer()
-    @test Cthulhu.callstring(io, FunnyMI()) == "funny(::Char)"
+    @test Cthulhu.callstring(io, m.FunnyMI()) == "funny(::Char)"
 end
 
 ##
