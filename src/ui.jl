@@ -44,15 +44,41 @@ end
 TerminalMenus.options(m::CthulhuMenu) = m.options
 TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
-function TerminalMenus.header(m::CthulhuMenu)
-    m.sub_menu && return ""
+function stringify(@nospecialize(f), io=IOBuffer())
+    f(IOContext(io, :color=>true))
+    return String(take!(io))
+end
+
+const debugcolors = (:nothing, :light_black, :yellow)
+function usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_cost, highlight)
+    colorize(use_color::Bool, c::Char) = stringify(iotmp) do io
+        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    end
+
+    io, iotmp = IOBuffer(), IOBuffer()
+    ioctx = IOContext(io, :color=>true)
+
+    println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
+    println(ioctx, "Toggles: [",
+        colorize(optimize, 'o'), "]ptimize, [",
+        colorize(iswarn, 'w'), "]arn, [",
+        colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
+        stringify(iotmp) do io
+            printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
+        end, "]ebuginfo, [",
+        colorize(inline_cost, 'i'), "]nlining costs, [",
+        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
+    println(ioctx, "Show: [",
+        colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
+        colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
+        colorize(view_cmd === cthulhu_typed, 'T'), "]yped code, [",
+        colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
+        colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
+    print(ioctx,
     """
-    Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.
-    Toggles: [o]ptimize, [w]arn, [h]ide type-stable statements, [d]ebuginfo, [i]nlining costs, [s]yntax highlight for Source/LLVM/Native.
-    Show: [S]ource code, [A]ST, [L]LVM IR, [N]ative code
     Actions: [E]dit source code, [R]evise and redisplay
-    Advanced: dump [P]arams cache.
-    """
+    Advanced: dump [P]arams cache.""")
+    return String(take!(io))
 end
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
@@ -75,11 +101,14 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('s')
         m.toggle = :highlighter
         return true
-   elseif key == UInt32('S')
+    elseif key == UInt32('S')
         m.toggle = :source
         return true
-   elseif key == UInt32('A')
+    elseif key == UInt32('A')
         m.toggle = :ast
+        return true
+    elseif key == UInt32('T')
+        m.toggle = :typed
         return true
     elseif key == UInt32('L')
         m.toggle = :llvm
