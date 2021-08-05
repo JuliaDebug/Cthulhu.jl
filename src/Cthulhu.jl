@@ -229,7 +229,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
+    is_cached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
@@ -274,9 +274,11 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
                     # Eliminate trailing indentation (see first item in bullet list in PR #189)
-                    str = stringify() do io
-                        cthulhu_typed(io, debuginfo, codeinf, rt, mi;
-                                    iswarn, hide_type_stable, inline_cost)
+                    str = let iswarn=iswarn, hide_type_stable=hide_type_stable, inline_cost=inline_cost, mi=mi, debuginfo=debuginfo, codeinf=codeinf, rt=rt
+                        stringify() do io
+                            cthulhu_typed(io, debuginfo, codeinf, rt, mi;
+                                          iswarn, hide_type_stable, inline_cost)
+                        end
                     end
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
                     if rmatch !== nothing
@@ -308,7 +310,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             info = callsite.info
             if info isa MultiCallInfo
-                sub_callsites = map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
+                sub_callsites = let callsite=callsite
+                    map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
+                end
                 if isempty(sub_callsites)
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
@@ -343,7 +347,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
 
             # recurse
-            next_mi = get_mi(callsite)
+            next_mi = get_mi(callsite)::Union{MethodInstance,Nothing}
             if next_mi === nothing
                 continue
             end
@@ -359,7 +363,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
-            if !is_cached(mi)
+            if !is_cached(mi, optimize)
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
@@ -380,7 +384,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
-            Core.show(map(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
+            Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
             Core.println()
             display_CI = false
         elseif toggle === :bookmark
@@ -394,7 +398,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if mod !== nothing
                 revise = getfield(mod, :revise)::Function
                 revise()
-                mi = get_specialization(mi.specTypes)
+                mi = get_specialization(mi.specTypes)::MethodInstance
                 do_typeinf!(interp, mi)
             end
         elseif toggle === :edit
@@ -487,7 +491,7 @@ function ascend(term, mi; kwargs...)
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
-                    linemenu = TerminalMenus.RadioMenu(strlocs)
+                    linemenu = TerminalMenus.RadioMenu(strlocs; charset=:ascii)
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1

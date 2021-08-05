@@ -26,7 +26,7 @@ CthulhuInterpreter() = CthulhuInterpreter(
     NativeInterpreter(),
     Dict{MethodInstance, InferredSource}(),
     Dict{MethodInstance, CodeInstance}(),
-    Dict{MethodInstance, Vector{Tuple{Int, String}}}()
+    Dict{MethodInstance, Vector{Pair{Int, String}}}()
 )
 
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
