@@ -75,8 +75,9 @@ function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
     should_print_ssa_type(stmt) || return false
     # `used` only contains used SSA values and ignores slots
     in_use = in(idx, used) || Meta.isexpr(stmt, :(=))
-    return in_use && type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+    return in_use && is_type_unstable(type)
 end
+is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::Union{DebugInfo,Symbol},

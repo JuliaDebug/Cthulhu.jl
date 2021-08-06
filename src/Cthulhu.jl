@@ -296,7 +296,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             display_CI = true
         end
 
-        menu = CthulhuMenu(callsites, optimize; menu_options...)
+        menu = CthulhuMenu(callsites, optimize, iswarn&get(term.out_stream::IO, :color, false)::Bool; menu_options...)
         msg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_cost, CONFIG.enable_highlighter)
         cid = request(term, msg, menu)
         toggle = menu.toggle
@@ -319,7 +319,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, optimize; sub_menu=true, menu_options...)
+                menu = CthulhuMenu(sub_callsites, optimize, false; sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
