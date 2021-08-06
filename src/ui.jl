@@ -44,14 +44,14 @@ end
 TerminalMenus.options(m::CthulhuMenu) = m.options
 TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
-function stringify(@nospecialize(f), io=IOBuffer())
+function stringify(@nospecialize(f), io::IO=IOBuffer())
     f(IOContext(io, :color=>true))
     return String(take!(io))
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_cost, highlight)
-    colorize(use_color::Bool, c::Char) = stringify(iotmp) do io
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, inline_cost, highlight)
+    colorize(iotmp, use_color::Bool, c::Char) = stringify(iotmp) do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
 
@@ -60,20 +60,20 @@ function usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_c
 
     println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
     println(ioctx, "Toggles: [",
-        colorize(optimize, 'o'), "]ptimize, [",
-        colorize(iswarn, 'w'), "]arn, [",
-        colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
+        colorize(iotmp, optimize, 'o'), "]ptimize, [",
+        colorize(iotmp, iswarn, 'w'), "]arn, [",
+        colorize(iotmp, hide_type_stable, 'h'), "]ide type-stable statements, [",
         stringify(iotmp) do io
             printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
         end, "]ebuginfo, [",
-        colorize(inline_cost, 'i'), "]nlining costs, [",
-        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
+        colorize(iotmp, inline_cost, 'i'), "]nlining costs, [",
+        colorize(iotmp, highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
     println(ioctx, "Show: [",
-        colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
-        colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
-        colorize(view_cmd === cthulhu_typed, 'T'), "]yped code, [",
-        colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
-        colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
+        colorize(iotmp, view_cmd === cthulhu_source, 'S'), "]ource code, [",
+        colorize(iotmp, view_cmd === cthulhu_ast, 'A'), "]ST, [",
+        colorize(iotmp, view_cmd === cthulhu_typed, 'T'), "]yped code, [",
+        colorize(iotmp, view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
+        colorize(iotmp, view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
     """
     Actions: [E]dit source code, [R]evise and redisplay

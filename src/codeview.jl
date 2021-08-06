@@ -37,7 +37,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::Cthulhu
 end
 
 function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
-    meth = mi.def
+    meth = mi.def::Method
     ast = definition(Expr, meth)
     if ast!==nothing
         if !config.pretty_ast
@@ -53,7 +53,7 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuCon
 end
 
 function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
-    meth = mi.def
+    meth = mi.def::Method
     def = definition(String, meth)
     if isnothing(def)
         return @warn "couldn't retrieve source of $meth"
@@ -239,7 +239,7 @@ function InteractiveUtils.code_typed(b::Bookmark; optimize = true)
     if ci isa IRCode
         ir = ci
         ci = copy(interp.unopt[mi].src)
-        nargs = Int(mi.def.nargs) - 1
+        nargs = Int((mi.def::Method).nargs) - 1
         Core.Compiler.replace_code_newstyle!(ci, ir, nargs)
     end
     return ci => rt
