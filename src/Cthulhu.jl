@@ -1,5 +1,7 @@
 module Cthulhu
 
+Base.Experimental.@compiler_options compile=min optimize=1
+
 using CodeTracking: definition, whereis
 using InteractiveUtils
 using UUIDs
@@ -524,5 +526,14 @@ Follow a chain of calls (either through a backtrace `bt` or the backedges of a `
 with the option to `descend` into intermediate calls. `kwargs` are passed to [`descend`](@ref).
 """
 ascend
+
+if ccall(:jl_generating_output, Cint, ()) == 1
+    input = Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    term = REPL.Terminals.TTYTerminal("dumb", input.out, IOBuffer(), IOBuffer())
+    write(input.in, 'q')
+    descend(gcd, (Int, Int); terminal=term)
+    nothing
+end
 
 end
