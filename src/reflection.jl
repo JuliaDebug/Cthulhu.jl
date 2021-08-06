@@ -40,64 +40,14 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 if !optimize
                     args = (ignorelhs(c)::Expr).args
                 end
-                types = mapany(arg -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
+                types = mapany(@nospecialize(arg) -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
                 was_return_type = false
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
                     was_return_type = true
                 end
-                is_cached(key) = haskey(optimize ? interp.opt : interp.unopt, key)
-                function process_info(info)
-                    if isa(info, MethodMatchInfo)
-                        if info.results === missing
-                            return []
-                        end
 
-                        matches = info.results.matches
-                        return map(matches) do match
-                            mi = Core.Compiler.specialize_method(match)
-                            mici = MICallInfo(mi, rt)
-                            return is_cached(mi) ? mici : UncachedCallInfo(mici)
-                        end
-                    elseif isa(info, MethodResultPure)
-                        return Any[PureCallInfo(types, rt)]
-                    elseif isa(info, UnionSplitInfo)
-                        return mapreduce(process_info, vcat, info.matches)
-                    elseif isa(info, UnionSplitApplyCallInfo)
-                        return mapreduce(process_info, vcat, info.infos; init=Core.Compiler.ApplyCallInfo[])
-                    elseif isa(info, ApplyCallInfo)
-                        # XXX: This could probably use its own info. For now,
-                        # we ignore any implicit iterate calls.
-                        return process_info(info.call)
-                    elseif isa(info, ConstCallInfo)
-                        infos = process_info(info.call)
-                        @assert length(infos) == length(info.results)
-                        return map(enumerate(info.results)) do (i, result)
-                            if isnothing(result)
-                                infos[i]
-                            else
-                                linfo = result.linfo
-                                mici = MICallInfo(linfo, rt)
-                                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-                            end
-                        end
-                    elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-                        return [InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt)]
-                    elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
-                        return [OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
-                    elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
-                        # TODO: Add ability to descend into OCs at creation site
-                        return []
-                    elseif info == false
-                        return []
-                    else
-                        @show CI
-                        @show c
-                        @show info
-                        error()
-                    end
-                end
-                callinfos = process_info(info)
+                callinfos = process_info(interp, info, types, rt, optimize)
                 if !was_return_type && isempty(callinfos)
                     continue
                 end
@@ -138,9 +88,11 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
         end
 
         if callsite !== nothing
-            if callsite.info isa MICallInfo
-                mi = get_mi(callsite)
-                if nameof(mi.def.module) === :CUDAnative && mi.def.name === :cufunction
+            info = callsite.info
+            if info isa MICallInfo
+                mi = get_mi(info)
+                meth = mi.def
+                if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
                     callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params)
                 end
             end
@@ -150,6 +102,62 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
     end
     return callsites
 end
+
+function process_info(interp, @nospecialize(info), types, @nospecialize(rt), optimize::Bool)
+    is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
+    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, types, rt, optimize)
+
+
+    if isa(info, MethodMatchInfo)
+        if info.results === missing
+            return []
+        end
+
+        matches = info.results.matches
+        return mapany(matches) do match::Core.MethodMatch
+            mi = Core.Compiler.specialize_method(match)
+            mici = MICallInfo(mi, rt)
+            return is_cached(mi) ? mici : UncachedCallInfo(mici)
+        end
+    elseif isa(info, MethodResultPure)
+        return Any[PureCallInfo(types, rt)]
+    elseif isa(info, UnionSplitInfo)
+        return mapreduce(process_recursive, vcat, info.matches; init=[])::Vector{Any}
+    elseif isa(info, UnionSplitApplyCallInfo)
+        return mapreduce(process_recursive, vcat, info.infos; init=[])::Vector{Any}
+    elseif isa(info, ApplyCallInfo)
+        # XXX: This could probably use its own info. For now,
+        # we ignore any implicit iterate calls.
+        return process_recursive(info.call)
+    elseif isa(info, ConstCallInfo)
+        infos = process_recursive(info.call)
+        @assert length(infos) == length(info.results)
+        return mapany(enumerate(info.results)) do (i, result)
+            if isnothing(result)
+                infos[i]
+            else
+                linfo = result.linfo
+                mici = MICallInfo(linfo, rt)
+                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+            end
+        end
+    elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
+        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt)]
+    elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
+        return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
+    elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
+        # TODO: Add ability to descend into OCs at creation site
+        return []
+    elseif info == false
+        return []
+    else
+        @show CI
+        @show c
+        @show info
+        error()
+    end
+end
+
 
 ignorelhs(@nospecialize(x)) = isexpr(x, :(=)) ? last(x.args) : x
 function is_call_expr(x::Expr, optimize::Bool)
