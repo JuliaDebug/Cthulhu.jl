@@ -102,7 +102,8 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
-    iswarn::Bool=false, hide_type_stable::Bool=false, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Bool=false, inline_cost::Bool=false, frame=nothing,
+)
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -124,7 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if iswarn
         print(io, "Body")
-        InteractiveUtils.warntype_type_printer(iolim, rettype, true)
+        InteractiveUtils.warntype_type_printer(iolim, rettype, true, 0)
         println(io)
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
@@ -153,6 +154,24 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         preprinter = lineprinter(src)
     end
     postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
+    if frame !== nothing
+        ssavals = frame.framedata.ssavalues
+        let _postprinter = postprinter
+            function postprinter(io, typ, used, idx)
+                _postprinter(io, typ, used, idx)
+                print(io, " = ")
+                ex = src.code[idx]
+                if Meta.isexpr(ex, :(=))
+                    show(io, JuliaInterpreter.@lookup(frame, ex.args[1]))
+                elseif isassigned(ssavals, idx)
+                    show(io, ssavals[idx])
+                else
+                    print(io, "#undef")
+                end
+                nothing
+            end
+        end
+    end
 
     should_print_stmt = hide_type_stable ? is_type_unstable : Returns(true)
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
@@ -169,7 +188,7 @@ function show_variables(io, src, slotnames)
     for i = 1:length(slotnames)
         print(io, "  ", slotnames[i])
         if isa(slottypes, Vector{Any})
-            InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
+            InteractiveUtils.warntype_type_printer(io, slottypes[i], true, 0)
         end
         println(io)
     end

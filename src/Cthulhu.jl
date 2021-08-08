@@ -11,6 +11,8 @@ using Core: MethodInstance
 const Compiler = Core.Compiler
 using Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
 
+using JuliaInterpreter
+
 const mapany = Base.mapany
 
 Base.@kwdef mutable struct CthulhuConfig
@@ -222,7 +224,7 @@ end
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing, inline_cost::Bool=false, frameargs=nothing)
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -236,6 +238,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
     view_cmd = cthulhu_typed
+    frame = nothing
     while true
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
@@ -271,15 +274,21 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
             codeinf = preprocess_ci!(codeinf, mi, optimize, CONFIG)
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
+            if frameargs !== nothing
+                framecode = JuliaInterpreter.FrameCode(mi.def, codeinf)
+                frame = JuliaInterpreter.prepare_frame(framecode, frameargs, mi.sparam_vals)
+                dump(frame)
+                @show JuliaInterpreter.finish_and_return!(frame)
+            end
 
             if display_CI
                 printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
                     # Eliminate trailing indentation (see first item in bullet list in PR #189)
-                    str = let iswarn=iswarn, hide_type_stable=hide_type_stable, inline_cost=inline_cost, mi=mi, debuginfo=debuginfo, codeinf=codeinf, rt=rt
+                    str = let iswarn=iswarn, hide_type_stable=hide_type_stable, inline_cost=inline_cost, mi=mi, debuginfo=debuginfo, codeinf=codeinf, rt=rt, frame=frame
                         stringify() do io
                             cthulhu_typed(io, debuginfo, codeinf, rt, mi;
-                                          iswarn, hide_type_stable, inline_cost)
+                                          iswarn, hide_type_stable, inline_cost, frame)
                         end
                     end
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
@@ -289,7 +298,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     print(term.out_stream::IO, str)
                 else
                     cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
-                                  iswarn, hide_type_stable, inline_cost)
+                                  iswarn, hide_type_stable, inline_cost, frame)
                 end
                 view_cmd = cthulhu_typed
             end
@@ -354,10 +363,25 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 continue
             end
 
+            next_args = nothing
+            if frame !== nothing
+                (; id) = callsite
+                ex = codeinf.code[id]
+
+                if Meta.isexpr(ex, :call)
+                    next_args = ex.args
+                elseif Meta.isexpr(ex, :invoke)
+                    next_args = ex.args[2:end]
+                end
+                if next_args !== nothing
+                    next_args = Any[JuliaInterpreter.@lookup(frame, i) for i in next_args]
+                end
+            end
+
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      params,optimize, interruptexc,
-                     iswarn, hide_type_stable, inline_cost)
+                     iswarn, hide_type_stable, inline_cost, frameargs=next_args)
 
         elseif toggle === :warn
             iswarn ⊻= true
