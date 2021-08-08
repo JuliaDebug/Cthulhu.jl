@@ -277,7 +277,6 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if frameargs !== nothing
                 framecode = JuliaInterpreter.FrameCode(mi.def, codeinf)
                 frame = JuliaInterpreter.prepare_frame(framecode, frameargs, mi.sparam_vals)
-                dump(frame)
                 @show JuliaInterpreter.finish_and_return!(frame)
             end
 

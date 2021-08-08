@@ -125,7 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if iswarn
         print(io, "Body")
-        InteractiveUtils.warntype_type_printer(iolim, rettype, true, 0)
+        InteractiveUtils.warntype_type_printer(iolim, rettype, true)
         println(io)
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
@@ -157,16 +157,17 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     if frame !== nothing
         ssavals = frame.framedata.ssavalues
         let _postprinter = postprinter
-            function postprinter(io, typ, used, idx)
-                _postprinter(io, typ, used, idx)
-                print(io, " = ")
+            function postprinter(io, typ, used)
+                _postprinter(io, typ, used)
+                haskey(io, :idx) || return
+                idx = io[:idx]::Int
                 ex = src.code[idx]
                 if Meta.isexpr(ex, :(=))
-                    show(io, JuliaInterpreter.@lookup(frame, ex.args[1]))
+                    print(io, " = ")
+                    printstyled(io, repr(JuliaInterpreter.@lookup(frame, ex.args[1])); color=:magenta)
                 elseif isassigned(ssavals, idx)
-                    show(io, ssavals[idx])
-                else
-                    print(io, "#undef")
+                    print(io, " = ")
+                    printstyled(io, repr(ssavals[idx]); color=:blue)
                 end
                 nothing
             end
@@ -188,7 +189,7 @@ function show_variables(io, src, slotnames)
     for i = 1:length(slotnames)
         print(io, "  ", slotnames[i])
         if isa(slottypes, Vector{Any})
-            InteractiveUtils.warntype_type_printer(io, slottypes[i], true, 0)
+            InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
         end
         println(io)
     end
