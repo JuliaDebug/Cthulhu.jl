@@ -327,13 +327,24 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, optimize, false; sub_menu=true, menu_options...)
-                cid = request(term, "", menu)
-                if cid == length(sub_callsites) + 1
-                    continue
+
+                _args = _lookup_call(frame, codeinf, callsite)
+                cid = if _args !== nothing
+                    _mi = get_specialization(@show Tuple{mapany(Core.Typeof, _args)...})
+                    findfirst(ci -> get_mi(ci) == _mi, info.callinfos)
+                else
+                    nothing
                 end
-                if cid == -1
-                    interruptexc ? throw(InterruptException()) : break
+
+                if cid === nothing
+                    menu = CthulhuMenu(sub_callsites, optimize, false; sub_menu=true, menu_options...)
+                    cid = request(term, "", menu)
+                    if cid == length(sub_callsites) + 1
+                        continue
+                    end
+                    if cid == -1
+                        interruptexc ? throw(InterruptException()) : break
+                    end
                 end
 
                 callsite = sub_callsites[cid]
@@ -362,20 +373,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 continue
             end
 
-            next_args = nothing
-            if frame !== nothing
-                (; id) = callsite
-                ex = codeinf.code[id]
-
-                if Meta.isexpr(ex, :call)
-                    next_args = ex.args
-                elseif Meta.isexpr(ex, :invoke)
-                    next_args = ex.args[2:end]
-                end
-                if next_args !== nothing
-                    next_args = Any[JuliaInterpreter.@lookup(frame, i) for i in next_args]
-                end
-            end
+            next_args = _lookup_call(frame, codeinf, callsite)
 
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
@@ -447,6 +445,22 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
     _descend(default_terminal(), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
+
+function _lookup_call(frame, codeinf, callsite)
+    frame === nothing && return
+    (; id) = callsite
+    ex = codeinf.code[id]
+    dump(ex)
+
+    if Meta.isexpr(ex, :call)
+        next_args = ex.args
+    elseif Meta.isexpr(ex, :invoke)
+        next_args = ex.args[2:end]
+    else
+        return
+    end
+    return Any[(i isa SSAValue && (i = JuliaInterpreter.SSAValue(i.id)); JuliaInterpreter.@lookup(frame, i)) for i in next_args]
+end
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
