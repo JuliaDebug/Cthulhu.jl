@@ -155,13 +155,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     end
     postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
     if frame !== nothing
-        ssavals = frame.framedata.ssavalues
         let _postprinter = postprinter
+            ssavals = frame.framedata.ssavalues
+            code = frame.framecode.src.code
             function postprinter(io, typ, used)
                 _postprinter(io, typ, used)
                 haskey(io, :idx) || return
                 idx = io[:idx]::Int
-                ex = src.code[idx]
+                ex = code[idx]
                 if Meta.isexpr(ex, :(=))
                     print(io, " = ")
                     printstyled(io, repr(JuliaInterpreter.@lookup(frame, ex.args[1])); color=:magenta)
