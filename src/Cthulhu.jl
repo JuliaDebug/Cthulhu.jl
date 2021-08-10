@@ -448,18 +448,17 @@ _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
 
 function _lookup_call(frame, codeinf, callsite)
     frame === nothing && return
-    (; id) = callsite
-    ex = codeinf.code[id]
-    dump(ex)
+    ex = codeinf.code[callsite.id]
 
     if Meta.isexpr(ex, :call)
-        next_args = ex.args
+        next_args = deepcopy(ex.args)
     elseif Meta.isexpr(ex, :invoke)
-        next_args = ex.args[2:end]
+        next_args = deepcopy(ex.args[2:end])
     else
         return
     end
-    return Any[(i isa SSAValue && (i = JuliaInterpreter.SSAValue(i.id)); JuliaInterpreter.@lookup(frame, i)) for i in next_args]
+    JuliaInterpreter.replace_coretypes_list!(next_args; rev=false)
+    return Any[JuliaInterpreter.@lookup(frame, i) for i in next_args]
 end
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
