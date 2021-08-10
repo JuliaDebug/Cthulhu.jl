@@ -1,18 +1,22 @@
 highlighter_exists(config::CthulhuConfig) =
     Sys.which(config.highlighter.exec[1]) !== nothing
 
-__init__() = CONFIG.enable_highlighter = highlighter_exists(CONFIG)
-
 function highlight(io, x, lexer, config::CthulhuConfig)
     _print = endswith(x, '\n') ? print : println
     config.enable_highlighter || return _print(io, x)
-    if !highlighter_exists(config)
-        @warn "Highlighter command $(config.highlighter.exec[1]) does not exist."
-        return _print(io, x)
-    end
-    cmd = `$(config.highlighter) $lexer`
-    open(pipeline(cmd; stdout=io, stderr=stderr), "w") do io
-        _print(io, x)
+    if lexer == "llvm"
+        InteractiveUtils.print_llvm(io, x)
+    elseif lexer == "asm"
+        InteractiveUtils.print_native(io, x)
+    else
+        if !highlighter_exists(config)
+            @warn "Highlighter command $(config.highlighter.exec[1]) does not exist."
+            return _print(io, x)
+        end
+        cmd = `$(config.highlighter) $lexer`
+        open(pipeline(cmd; stdout=io, stderr=stderr), "w") do io
+            _print(io, x)
+        end
     end
 end
 

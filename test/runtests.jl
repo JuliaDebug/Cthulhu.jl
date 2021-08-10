@@ -618,7 +618,7 @@ let config = Cthulhu.CthulhuConfig(
     highlighter = `I_am_hoping_this_command_does_not_exist`,
     enable_highlighter = true,
 )
-    for lexer in ["llvm", "asm"]
+    for lexer in ["julia"]
         @test begin
             @test_logs (:warn, r"Highlighter command .* does not exist.") begin
                 sprint() do io

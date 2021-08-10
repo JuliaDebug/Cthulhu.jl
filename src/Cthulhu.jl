@@ -26,10 +26,9 @@ end
 
 # Options
 - `enable_highlighter::Bool`: Use command line `highlighter` to syntax highlight
-  LLVM and native code.  Set to `true` if `highlighter` exists at the import
-  time.
-- `highlighter::Cmd`: A command line program that receives "llvm" or "asm" as
-  an argument and the code as stdin.  Defaults to `$(CthulhuConfig().highlighter)`.
+  Julia, LLVM and native code.
+- `highlighter::Cmd`: A command line program that receives "julia" as an argument and julia
+   code as stdin. Defaults to `$(CthulhuConfig().highlighter)`.
 - `asm_syntax::Symbol`: Set the syntax of assembly code being used.
   Defaults to `$(CthulhuConfig().asm_syntax)`.
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
@@ -381,7 +380,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if CONFIG.enable_highlighter
                 @info "Using syntax highlighter $(CONFIG.highlighter)"
             else
-                @info "Turned off syntax highlighter for LLVM and native code."
+                @info "Turned off syntax highlighter for Julia, LLVM and native code."
             end
             display_CI = false
         elseif toggle === :dump_params
