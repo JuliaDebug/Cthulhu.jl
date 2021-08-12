@@ -121,7 +121,7 @@ By default,
 
 You can toggle between these with `o` and `w`.
 
-## Combining `Cthulhu` with `Infiltrator.jl`
+## Combining `Cthulhu` with execution
 
 Cthulhu has access only to "static" type information, the same information available to the Julia compiler and type inference.
 In some situations, this will lead to incomplete or misleading information about type instabilities.
@@ -173,7 +173,7 @@ Variables
 The text of `Union{Float64, Int64}`  will be in red, but it is likely that `bar` will be called via dynamic dispatch.
 `bar` will be a ["function barrier"](https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions), and the types will be fully inferred within `bar`.
 
-To give Cthulhu more complete type information, we have to actually run some Julia code. [`Infiltrator.jl`](https://github.com/JuliaDebug/Infiltrator.jl) makes this convenient.
+To give Cthulhu more complete type information, we have to actually run some Julia code. There are many ways to do this. In this example, we use [`Infiltrator.jl`](https://github.com/JuliaDebug/Infiltrator.jl).
 
 Add an `@infiltrate`:
 
