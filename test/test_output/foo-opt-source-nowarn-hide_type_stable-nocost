@@ -9,6 +9,9 @@
     [33m @ foobar.jl:4 within `foo`[39m
 [90m8 ┄─[39m %16 = Core.getfield(%2, :contents)[36m::Any[39m
 [90m│   [39m %17 = (%16 + 1)[36m::Any[39m
-    [33m @ foobar.jl:8 within `foo`[39m
-[90m17 ┄[39m %33 = Core.getfield(%2, :contents)[36m::Any[39m
-[90m│   [39m %34 = (%33 * 7)[36m::Any[39m
+[90m│ [39m  [33m @ foobar.jl:6 within `foo`[39m
+[90m│   [39m %20 = invoke %19(_2::Int64)[36m::Any[39m
+    [33m @ foobar.jl:7 within `foo`[39m
+[90m14 ┄[39m %30 = φ (#10 => $(QuoteNode(missing)), #12 => %26)[36m::Union{Missing, Int64}[39m
+[90m│ [39m  [33m @ foobar.jl:8 within `foo`[39m
+[90m│   [39m %31 = (%20 + %30)[36m::Any[39m

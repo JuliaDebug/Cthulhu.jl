@@ -26,21 +26,20 @@ Body[91m[1m::Any[22m[39m
 [90m└───[39m[32m    3[39m        Core.setfield!(%2, :contents, %17)
           [33m @ foobar.jl:6 within `foo`[39m
 [90m9 ┄─[39m[32m    0[39m  %19 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
-[90m│   [39m[32m   20[39m        invoke %19(_2::Int64)
+[90m│   [39m[32m   20[39m  %20 = invoke %19(_2::Int64)[91m[1m::Any[22m[39m
 [90m│ [39m        [33m @ foobar.jl:7 within `foo`[39m
 [90m│   [39m[32m    1[39m  %21 = (isa)(_2, Missing)[36m::Bool[39m
 [90m└───[39m[32m    0[39m        goto #11 if not %21
 [90m10 ─[39m[32m    0[39m        goto #14
 [90m11 ─[39m[32m    1[39m  %24 = (isa)(_2, Int64)[36m::Bool[39m
 [90m└───[39m[32m    0[39m        goto #13 if not %24
-[90m12 ─[39m[32m    0[39m        goto #14
+          [33m┌ @ int.jl: within `+`[39m
+[90m12 ─[39m[32m    1[39m [33m│[39m %26 = Base.add_int(_2, _3)[36m::Int64[39m
+[90m│ [39m        [33m└[39m
+[90m└───[39m[32m    0[39m        goto #14
 [90m13 ─[39m[32m    0[39m        Core.throw(ErrorException("fatal error in type inference (type bound)"))
 [90m└───[39m[32m    0[39m        unreachable
-          [33m @ foobar.jl:8 within `foo`[39m
-[90m14 ┄[39m[32m    1[39m  %29 = Core.isdefined(%2, :contents)[36m::Bool[39m
-[90m└───[39m[32m    0[39m        goto #16 if not %29
-[90m15 ─[39m[32m    0[39m        goto #17
-[90m16 ─[39m[32m    0[39m        $(Expr(:throw_undef_if_not, :z, false))
-[90m17 ┄[39m[32m    0[39m  %33 = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
-[90m│   [39m[32m 1000[39m  %34 = (%33 * 7)[91m[1m::Any[22m[39m
-[90m└───[39m[32m    0[39m        return %34
+[90m14 ┄[39m[32m    0[39m  %30 = φ (#10 => $(QuoteNode(missing)), #12 => %26)[33m[1m::Union{Missing, Int64}[22m[39m
+[90m│ [39m        [33m @ foobar.jl:8 within `foo`[39m
+[90m│   [39m[32m 1000[39m  %31 = (%20 + %30)[91m[1m::Any[22m[39m
+[90m└───[39m[32m    0[39m        return %31
