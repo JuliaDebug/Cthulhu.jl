@@ -567,6 +567,24 @@ end
     @test lines == [line2]
 end
 
+
+@testset "ascend interface" begin
+    m = Module()
+    @eval m begin
+        using Cthulhu
+        struct FunnyMI end
+        struct HasName
+            name::Symbol
+        end
+        Cthulhu.method(::FunnyMI) = HasName(:funny)
+        funny(c::Char) = "haha"
+        Cthulhu.specTypes(::FunnyMI) = Tuple{typeof(funny),Char}
+    end
+
+    io = IOBuffer()
+    @test Cthulhu.callstring(io, m.FunnyMI()) == "funny(::Char)"
+end
+
 ##
 # Cthulhu config test
 ##
@@ -582,7 +600,7 @@ let config = Cthulhu.CthulhuConfig(
     highlighter = `I_am_hoping_this_command_does_not_exist`,
     enable_highlighter = true,
 )
-    for lexer in ["llvm", "asm"]
+    for lexer in ["julia"]
         @test begin
             @test_logs (:warn, r"Highlighter command .* does not exist.") begin
                 sprint() do io

@@ -92,8 +92,8 @@ method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? Core.Compiler.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
-function callstring(io::IO, mi::MethodInstance)
-    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(mi).name, specTypes(mi))
+function callstring(io::IO, obj)
+    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(obj).name, specTypes(obj))
     return String(take!(io))
 end
 function callstring(io::IO, sfs::Vector{StackTraces.StackFrame})
