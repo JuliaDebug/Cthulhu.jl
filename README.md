@@ -121,7 +121,7 @@ By default,
 
 You can toggle between these with `o` and `w`.
 
-## Combining `Cthulhu` with execution
+## Combine static and runtime information
 
 Cthulhu has access only to "static" type information, the same information available to the Julia compiler and type inference.
 In some situations, this will lead to incomplete or misleading information about type instabilities.
