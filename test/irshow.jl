@@ -1,3 +1,7 @@
+using Cthulhu, Test, DeepDiffs
+
+include("utils.jl")
+
 foo = Core.eval(Module(), Meta.parseall(raw"""
 function foo(x, y)
     z = x + y
@@ -9,49 +13,6 @@ function foo(x, y)
     return z * 7
 end
 """; filename="foobar.jl"))
-
-function strip_base_linenums(s)
-    s = replace(s, r"((boot|int|refvalue|refpointer)\.jl:)\d+" => s"\1")
-    return s
-end
-
-function filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost)
-    return "test_output/foo-$(optimize ? :opt : :unopt)-$(debuginfo)-$(iswarn ? :warn : :nowarn)\
--$(hide_type_stable ? :hide_type_stable : :show_type_stable)-$(inline_cost ? :inline_cost : :nocost)"
-end
-
-#=
-# to generate test cases
-function generate_test_cases(foo)
-    outputs = Dict()
-    tf = (true, false)
-    for optimize in tf
-        _, src, infos, mi, rt, slottypes = process(foo, (Int, Int); optimize);
-        for (debuginfo, iswarn, hide_type_stable, inline_cost) in Iterators.product(
-            instances(Cthulhu.DInfo.DebugInfo), tf, tf, tf,
-        )
-            !optimize && debuginfo === Cthulhu.DInfo.compact && continue
-            !optimize && inline_cost && continue
-
-            s = sprint(; context=:color=>true) do io
-                Cthulhu.cthulhu_typed(io, debuginfo,
-                                      src, rt, mi;
-                                      iswarn, hide_type_stable, inline_cost)
-            end
-            s = strip_base_linenums(s)
-            write(filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost), s)
-
-            in(s, values(outputs)) && (@show((optimize, debuginfo, iswarn, hide_type_stable, inline_cost)); @show(findfirst(==(s), pairs(outputs))))
-            @assert !in(s, values(outputs))
-            outputs[(optimize, debuginfo, iswarn, hide_type_stable, inline_cost)] = s
-        end
-    end
-end
-
-generate_test_cases(foo)
-=#
-
-using DeepDiffs
 
 @testset "IRShow tests" begin
     tf = (true, false)
@@ -73,7 +34,7 @@ using DeepDiffs
                         end
                         s = strip_base_linenums(s)
 
-                        ground_truth = read(filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost), String)
+                        ground_truth = read(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost), String)
                         if Sys.iswindows()
                             ground_truth = replace(ground_truth, "\r\n" => "\n")
                         end

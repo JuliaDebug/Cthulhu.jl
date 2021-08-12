@@ -8,6 +8,7 @@ Variables
   z@_7[91m[1m::Core.Box[22m[39m
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
+  z@_10[36m::Union{}[39m
 
 │ ─ %-1  = invoke foo(::Int64,::Int64)::Any
 [90m1 ──[39m       Core.NewvarNode(:(#1))[90m::Any[39m
@@ -15,31 +16,36 @@ Variables
 [90m│   [39m       Core.NewvarNode(:(u))[90m::Any[39m
 [90m│   [39m       (z@_7 = Core.Box())[90m::Core.Box[39m
 [90m│   [39m %5  = (x + y)[36m::Int64[39m
-[90m└───[39m       Core.setfield!(z@_7, :contents, %5)[90m::Int64[39m
-[90m2 ┄─[39m %7  = Core.isdefined(z@_7, :contents)[36m::Bool[39m
-[90m└───[39m       goto #4 if not %7
-[90m3 ──[39m       goto #5
-[90m4 ──[39m       Core.NewvarNode(:(z@_8))[90m::Any[39m
+[90m│   [39m       Core.setfield!(z@_7, :contents, %5)[90m::Int64[39m
+[90m│   [39m %7  = Core.isdefined(z@_7, :contents)[36m::Bool[39m
+[90m└───[39m       goto #3 if not %7
+[90m2 ──[39m       goto #4
+[90m3 ──[39m       Core.NewvarNode(:(z@_8))[90m::Any[39m
 [90m└───[39m       z@_8[90m::Union{}[39m
-[90m5 ┄─[39m %12 = Core.getfield(z@_7, :contents)[36m::Any[39m
+[90m4 ┄─[39m %12 = Core.getfield(z@_7, :contents)[36m::Any[39m
 [90m│   [39m %13 = (%12 < 4)[36m::Any[39m
-[90m└───[39m       goto #10 if not %13
-[90m6 ──[39m %15 = Core.isdefined(z@_7, :contents)[36m::Bool[39m
-[90m└───[39m       goto #8 if not %15
-[90m7 ──[39m       goto #9
-[90m8 ──[39m       Core.NewvarNode(:(z@_9))[90m::Any[39m
+[90m└───[39m       goto #9 if not %13
+[90m5 ──[39m %15 = Core.isdefined(z@_7, :contents)[36m::Bool[39m
+[90m└───[39m       goto #7 if not %15
+[90m6 ──[39m       goto #8
+[90m7 ──[39m       Core.NewvarNode(:(z@_9))[90m::Any[39m
 [90m└───[39m       z@_9[90m::Union{}[39m
-[90m9 ┄─[39m %20 = Core.getfield(z@_7, :contents)[36m::Any[39m
+[90m8 ┄─[39m %20 = Core.getfield(z@_7, :contents)[36m::Any[39m
 [90m│   [39m %21 = (%20 + 1)[36m::Any[39m
-[90m│   [39m       Core.setfield!(z@_7, :contents, %21)[90m::Any[39m
-[90m└───[39m       goto #2
-[90m10 ─[39m       (#1 = %new(Main.anonymous.:(var"#1#2"), z@_7))[90m::Main.anonymous.var"#1#2"[39m
-[90m│   [39m %25 = #1[36m::Main.anonymous.var"#1#2"[39m
-[90m│   [39m       (u = (%25)(x))[90m::Any[39m
-[90m│   [39m %27 = Core.apply_type(Main.anonymous.Union, Main.anonymous.Int, Main.anonymous.Missing)[36m::Core.Const(Union{Missing, Int64})[39m
-[90m│   [39m %28 = Core.apply_type(Main.anonymous.Ref, %27)[36m::Core.Const(Ref{Union{Missing, Int64}})[39m
-[90m│   [39m %29 = (%28)(x)[36m::Base.RefValue{Union{Missing, Int64}}[39m
-[90m│   [39m %30 = Base.getindex(%29)[36m::Union{Missing, Int64}[39m
-[90m│   [39m       (v = %30 + y)[90m::Union{Missing, Int64}[39m
-[90m│   [39m %32 = (u + v)[36m::Any[39m
-[90m└───[39m       return %32
+[90m└───[39m       Core.setfield!(z@_7, :contents, %21)[90m::Any[39m
+[90m9 ┄─[39m       (#1 = %new(Main.anonymous.:(var"#1#2"), z@_7))[90m::Main.anonymous.var"#1#2"[39m
+[90m│   [39m %24 = #1[36m::Main.anonymous.var"#1#2"[39m
+[90m│   [39m       (u = (%24)(x))[90m::Any[39m
+[90m│   [39m %26 = Core.apply_type(Main.anonymous.Union, Main.anonymous.Int, Main.anonymous.Missing)[36m::Core.Const(Union{Missing, Int64})[39m
+[90m│   [39m %27 = Core.apply_type(Main.anonymous.Ref, %26)[36m::Core.Const(Ref{Union{Missing, Int64}})[39m
+[90m│   [39m %28 = (%27)(x)[36m::Base.RefValue{Union{Missing, Int64}}[39m
+[90m│   [39m %29 = Base.getindex(%28)[36m::Union{Missing, Int64}[39m
+[90m│   [39m       (v = %29 + y)[90m::Union{Missing, Int64}[39m
+[90m│   [39m %31 = Core.isdefined(z@_7, :contents)[36m::Bool[39m
+[90m└───[39m       goto #11 if not %31
+[90m10 ─[39m       goto #12
+[90m11 ─[39m       Core.NewvarNode(:(z@_10))[90m::Any[39m
+[90m└───[39m       z@_10[90m::Union{}[39m
+[90m12 ┄[39m %36 = Core.getfield(z@_7, :contents)[36m::Any[39m
+[90m│   [39m %37 = (%36 * 7)[36m::Any[39m
+[90m└───[39m       return %37

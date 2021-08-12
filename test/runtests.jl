@@ -8,25 +8,7 @@ using Revise
 
 @test isempty(detect_ambiguities(Cthulhu))
 
-function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
-    (interp, mi) = Cthulhu.mkinterp(f, TT)
-    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_codeinf=true)
-    if ci !== nothing
-        ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
-    end
-    interp, ci, infos, mi, rt, slottypes
-end
-
-function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
-    interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
-    ci === nothing && return Cthulhu.Callsite[]
-    callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
-    return callsites
-end
-
-macro find_callsites_by_ftt(ex0...)
-    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
-end
+include("utils.jl")
 
 function testf_simple()
     T = rand() > 0.5 ? Int64 : Float64
