@@ -65,8 +65,7 @@ end
 function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     r = @invoke Compiler.finish(state::InferenceState, interp::AbstractInterpreter)
     interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
-        copy(isa(state.src, OptimizationState) ?
-            state.src.src : state.src),
+        copy(state.src),
         copy(state.stmt_info),
         state.result.result)
     return r
@@ -91,8 +90,9 @@ function Compiler.inlining_policy(interp::CthulhuInterpreter)
 end
 
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
-    if isa(caller.src, OptimizationState)
-        opt = caller.src
+    src = caller.src
+    if isa(src, OptimizationState)
+        opt = src
         if isdefined(opt, :ir)
             caller.src = OptimizedSource(opt.ir, opt.src.inlineable)
         end

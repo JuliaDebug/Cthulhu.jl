@@ -42,6 +42,7 @@ module DInfo
     @enum DebugInfo none compact source
 end
 using .DInfo: DebugInfo
+const AnyDebugInfo = Union{DebugInfo,Symbol}
 
 include("interpreter.jl")
 include("callsite.jl")
