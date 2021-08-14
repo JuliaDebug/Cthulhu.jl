@@ -3,17 +3,19 @@ Variables
   x[36m::Int64[39m
   y[36m::Int64[39m
   #1[36m::Main.anonymous.var"#1#2"[39m
-  v[36m::Union{}[39m
+  v[33m[1m::Union{Missing, Int64}[22m[39m
   u[91m[1m::Any[22m[39m
   z@_7[91m[1m::Core.Box[22m[39m
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
-  z@_10[36m::Union{}[39m
 
-Body[36m::Union{}[39m
-[90m│   [39m       (z@_7 = Core.Box())
-[90m5 ┄─[39m %12 = Core.getfield(z@_7, :contents)[91m[1m::Any[22m[39m
-[90m│   [39m %13 = (%12 < 4)[91m[1m::Any[22m[39m
-[90m9 ┄─[39m %20 = Core.getfield(z@_7, :contents)[91m[1m::Any[22m[39m
-[90m│   [39m %21 = (%20 + 1)[91m[1m::Any[22m[39m
-[90m│   [39m       (u = (%25)(x))
+Body[91m[1m::Any[22m[39m
+[90m│  [39m       (z@_7 = Core.Box())
+[90m4 ┄[39m %12 = Core.getfield(z@_7, :contents)[91m[1m::Any[22m[39m
+[90m│  [39m %13 = (%12 < 4)[91m[1m::Any[22m[39m
+[90m8 ┄[39m %20 = Core.getfield(z@_7, :contents)[91m[1m::Any[22m[39m
+[90m│  [39m %21 = (%20 + 1)[91m[1m::Any[22m[39m
+[90m│  [39m       (u = (%24)(x))
+[90m│  [39m %29 = Base.getindex(%28)[33m[1m::Union{Missing, Int64}[22m[39m
+[90m│  [39m       (v = %29 + y)
+[90m│  [39m %31 = (u + v)[91m[1m::Any[22m[39m
