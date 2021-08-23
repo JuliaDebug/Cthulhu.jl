@@ -9,7 +9,14 @@ using .Compiler: widenconst, argextype, Const, MethodMatchInfo,
 
 const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
 const may_invoke_generator = Base.may_invoke_generator
-code_for_method(method, metharg, methsp, world, force=false) = Core.Compiler.specialize_method(method, metharg, methsp, force)
+function code_for_method(method, metharg, methsp, world, preexisting=false)
+    @static if VERSION ≥ v"1.8.0-DEV.369"
+        # https://github.com/JuliaLang/julia/pull/41920
+        Core.Compiler.specialize_method(method, metharg, methsp; preexisting)
+    else
+        Core.Compiler.specialize_method(method, metharg, methsp, preexisting)
+    end
+end
 
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=current_params())
