@@ -189,29 +189,23 @@ end
         @test occursin("= call #getproperty", String(take!(io)))
     end
 
-    # successful and unsuccessful constant prop'
-    let callsites = (@eval Module() begin
-            struct F32
-                val::Float32
-                _v::Int
+    # const and non-const splits
+    let callsites = find_callsites_by_ftt((Bool,Vector{Any},); optimize=false) do cond, t
+            if cond
+                t = (1, nothing)
             end
-            struct FZero end
-            Base.getproperty(::FZero, ::Symbol) = 0.0 # constant prop' won't happen here
-
-            $find_callsites_by_ftt((Union{F32,FZero},); optimize = false) do f
-                f.val
-            end
-        end)
-        @test length(callsites) == 1
+            t[1]
+        end
+        @test length(callsites) == 1                                        # getindex(::Union{Vector{Any}, Const(tuple(1,nothing))}, ::Const(1))
         callinfo = callsites[1].info
         @test isa(callinfo, Cthulhu.MultiCallInfo)
         callinfos = callinfo.callinfos
         @test length(callinfos) == 2
-        @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1
-        @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1
+        @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1        # getindex(::Vector{Any}, ::Const(1))
+        @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
     end
 
-    callsites = (@eval Module() begin
+    let callsites = (@eval Module() begin
             struct F32
                 val::Float32
                 _v::Int
@@ -221,9 +215,10 @@ end
                 f.val
             end
         end)
-    io = IOBuffer()
-    print(io, callsites[1])
-    @test occursin("= < constprop > getproperty(", String(take!(io)))
+        io = IOBuffer()
+        print(io, callsites[1])
+        @test occursin("= < constprop > getproperty(", String(take!(io)))
+    end
 end
 
 # Failed return_type
