@@ -332,6 +332,7 @@ end
     @test Cthulhu.headstring(Union{}) == "Union{}"
     @test Cthulhu.headstring(Vector{Int}) == "Array"
     @test Cthulhu.headstring(Vector{T} where T) == "Array"
+    @test Cthulhu.headstring(TypeVar(:F)) == "F"
 
     function checklim(f, n, strchar::Union{AbstractString,AbstractChar})
         io = IOBuffer()

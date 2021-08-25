@@ -181,6 +181,8 @@ function headstring(@nospecialize(T))
         return string(T)::String
     elseif T isa UnionAll
         return headstring(Base.unwrap_unionall(T))
+    elseif T isa TypeVar
+        return string(T.name)
     else
         return string(T.name.name)::String
     end
