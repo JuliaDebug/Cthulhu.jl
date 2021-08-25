@@ -133,7 +133,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
-    @test occursin(r"#g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
+    @test occursin(r"g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
 end
 
 @testset "wrapped callinfo" begin
@@ -186,7 +186,7 @@ end
         @test startswith(String(take!(io)), "getproperty")
         io = IOBuffer()
         print(io, callsites[1])
-        @test occursin("= call #getproperty", String(take!(io)))
+        @test occursin("= call getproperty", String(take!(io)))
     end
 
     # const and non-const splits
@@ -232,10 +232,10 @@ let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optim
     @test callinfo isa Cthulhu.MultiCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
-    @test String(take!(io)) == "#return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
+    @test String(take!(io)) == "return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
     io = IOBuffer()
     print(io, callsites[1])
-    @test occursin("return_type < #return_type", String(take!(io)))
+    @test occursin("return_type < return_type", String(take!(io)))
     @test length(callinfo.callinfos) == 0
 end
 
