@@ -236,15 +236,17 @@ end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = (ci.sig::DataType).parameters
-    f = types[1]
-    if f isa Union
-        name = string(f)
+    ft, tt... = types
+    f = Compiler.argtype_to_function(ft)
+    if f !== nothing
+        name = "→ $f"
+    elseif f isa Union
+        name = "→ (::$ft)"
     else
-        name = nameof(f)
+        name = "→ (::$(nameof(f)))"
     end
-    tt = types[2:end]
     rt = ci.rt
-    __show_limited(limiter, name, tt, rt)
+    __show_limited(limiter, name::String, tt, rt)
 end
 
 function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
