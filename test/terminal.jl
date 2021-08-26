@@ -185,7 +185,7 @@ const keydict = Dict(:up => "\e[A",
             lines = cread(out)
             @test occursin("\nBody\e[91m\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
-            @test occursin("\e[31m%\e[39m2  = call fmulti(::Any)::Union{Float32, Int64}", lines)
+            @test occursin("\e[31m%\e[39m2  = call → fmulti(::Any)::Union{Float32, Int64}", lines)
             write(in, keydict[:enter])
             lines = cread1(out)
             @test occursin("%2  = fmulti(::Int32)::Union{Float32, $Int}", lines)

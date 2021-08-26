@@ -237,11 +237,11 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     ft, tt... = types
     f = Compiler.argtype_to_function(ft)
     if f !== nothing
-        name = string(f)
+        name = "→ $f"
     elseif f isa Union
-        name = "(::$ft)"
+        name = "→ (::$ft)"
     else
-        name = "(::$(nameof(f)))"
+        name = "→ (::$(nameof(f)))"
     end
     rt = ci.rt
     __show_limited(limiter, name::String, tt, rt)
