@@ -170,8 +170,10 @@ Variables
 [...]
 ```
 
-The text of `Union{Float64, Int64}`  will be in red, but it is likely that `bar` will be called via dynamic dispatch.
-`bar` will be a ["function barrier"](https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions), and the types will be fully inferred within `bar`.
+The text of `Union{Float64, Int64}` will be colored in red indicating there are type-instabilities,
+but they are unlikely to be problem in actual execution,
+because `bar` here serves as a ["function barrier"](https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions) and
+`bar` will be called with fully concrete runtime types via dynamic dispatch.
 
 To give Cthulhu more complete type information, we have to actually run some Julia code. There are many ways to do this. In this example, we use [`Infiltrator.jl`](https://github.com/JuliaDebug/Infiltrator.jl).
 
