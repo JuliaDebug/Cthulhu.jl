@@ -82,12 +82,25 @@ function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::
     return inferred_result
 end
 
+# branch on https://github.com/JuliaLang/julia/pull/41328
+@static if isdefined(Compiler, :is_stmt_inline)
+function Compiler.inlining_policy(interp::CthulhuInterpreter, @nospecialize(src), stmt_flag::UInt8)
+    @assert isa(src, OptimizedSource) || isnothing(src)
+    if isa(src, OptimizedSource)
+        if Compiler.is_stmt_inline(stmt_flag) || src.isinlineable
+            return src.ir
+        end
+    end
+    return nothing
+end
+else # @static if isdefined(Compiler, :is_stmt_inline)
 function Compiler.inlining_policy(interp::CthulhuInterpreter)
     function (src)
         @assert isa(src, OptimizedSource)
         return src.isinlineable ? src.ir : nothing
     end
 end
+end # @static if isdefined(Compiler, :is_stmt_inline)
 
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     src = caller.src
