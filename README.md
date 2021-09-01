@@ -120,3 +120,102 @@ By default,
 - `ascend` views non-optimized code with "warn" coloration
 
 You can toggle between these with `o` and `w`.
+
+## Combine static and runtime information
+
+Cthulhu has access only to "static" type information, the same information available to the Julia compiler and type inference.
+In some situations, this will lead to incomplete or misleading information about type instabilities.
+
+Take for example: 
+```julia
+using Infiltrator: @infiltrate
+using Cthulhu: @descend
+using Base: @noinline # already exported, but be explcit
+
+
+function foo(n)
+    x = n < 2 ? 2 * n : 2.5 * n
+    y = n < 4 ? 3 * n : 3.5 * n
+    z = n < 5 ? 4 * n : 4.5 * n
+    # on Julia v1.6, there is no union splitting for this number of cases.
+    bar(x, y, z)
+end
+
+@noinline function bar(x, y, z)
+    string(x + y + z)
+end
+```
+
+Then invoke:
+
+```julia
+Cthulhu.@descend foo(5)
+```
+
+Now, descend:
+
+```
+%22  = call bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
+```
+
+which shows (after typing `w`)
+
+```
+│ ─ %-1  = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
+Variables
+  #self#::Core.Const(bar)
+  x::Union{Float64, Int64}
+  y::Union{Float64, Int64}
+  z::Union{Float64, Int64}
+[...]
+```
+
+The text of `Union{Float64, Int64}` will be colored in red indicating there are type-instabilities,
+but they are unlikely to be problem in actual execution,
+because `bar` here serves as a ["function barrier"](https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions) and
+`bar` will be called with fully concrete runtime types via dynamic dispatch.
+
+To give Cthulhu more complete type information, we have to actually run some Julia code. There are many ways to do this. In this example, we use [`Infiltrator.jl`](https://github.com/JuliaDebug/Infiltrator.jl).
+
+Add an `@infiltrate`:
+
+```julia
+function foo(n)
+    x = n < 2 ? 2 * n : 2.5 * n
+    y = n < 4 ? 3 * n : 3.5 * n
+    z = n < 5 ? 4 * n : 4.5 * n
+    # on Julia v1.6, there is no union splitting for this number of cases.
+    @infiltrate
+    bar(x, y, z)
+end
+
+@noinline function bar(x, y, z)
+    string(x + y + z)
+end
+```
+
+Now invoke `foo` to get REPL in the scope just before `bar` gets called:
+
+```julia
+julia> foo(4)
+Infiltrating foo(n::Int64) at ex.jl:10:
+
+infil> 
+```
+
+Enter `@descend bar(x, y, z)` and type `w`:
+
+```
+infil> @descend bar(x, y, z)
+
+│ ─ %-1  = invoke bar(::Float64,::Float64,::Int64)::String
+Variables
+  #self#::Core.Const(bar)
+  x::Float64
+  y::Float64
+  z::Int64
+[...]
+```
+
+You can see that, for `foo(4)`, the types within `bar` are fully inferred.
+
