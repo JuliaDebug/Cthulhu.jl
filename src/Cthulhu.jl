@@ -222,7 +222,8 @@ end
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
+    remarks::Bool=false, inline_cost::Bool=false)
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -273,13 +274,16 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
 
             if display_CI
+                _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
                 printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
-                    # Eliminate trailing indentation (see first item in bullet list in PR #189)
-                    str = let iswarn=iswarn, hide_type_stable=hide_type_stable, inline_cost=inline_cost, mi=mi, debuginfo=debuginfo, codeinf=codeinf, rt=rt
-                        stringify() do io
+                    str = let debuginfo=debuginfo, codeinf=codeinf, rt=rt, mi=mi,
+                              iswarn=iswarn, hide_type_stable=hide_type_stable,
+                              remarks=_remarks, inline_cost=inline_cost
+                        stringify() do io # eliminate trailing indentation (see first item in bullet list in PR #189)
                             cthulhu_typed(io, debuginfo, codeinf, rt, mi;
-                                          iswarn, hide_type_stable, inline_cost)
+                                          iswarn, hide_type_stable,
+                                          remarks, inline_cost)
                         end
                     end
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
@@ -289,7 +293,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     print(term.out_stream::IO, str)
                 else
                     cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
-                                  iswarn, hide_type_stable, inline_cost)
+                                  iswarn, hide_type_stable,
+                                  remarks=_remarks, inline_cost)
                 end
                 view_cmd = cthulhu_typed
             end
@@ -297,8 +302,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         end
 
         menu = CthulhuMenu(callsites, optimize, iswarn&get(term.out_stream::IO, :color, false)::Bool; menu_options...)
-        msg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, inline_cost, CONFIG.enable_highlighter)
-        cid = request(term, msg, menu)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, CONFIG.enable_highlighter)
+        cid = request(term, usg, menu)
         toggle = menu.toggle
 
         if toggle === nothing
@@ -340,7 +345,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 _descend(term, next_interp, next_mi;
                          debuginfo,
                          params, optimize, interruptexc,
-                         iswarn, hide_type_stable, inline_cost)
+                         iswarn, hide_type_stable,
+                         remarks, inline_cost)
                 continue
             end
 
@@ -357,7 +363,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      params,optimize, interruptexc,
-                     iswarn, hide_type_stable, inline_cost)
+                     iswarn, hide_type_stable,
+                     remarks, inline_cost)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -371,6 +378,11 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
+        elseif toggle === :remarks
+            remarks ⊻= true
+            if remarks && optimize
+                @warn "disable optimization to see the inference remarks"
+            end
         elseif toggle === :inline_cost
             inline_cost ⊻= true
             if inline_cost && !optimize
