@@ -99,29 +99,32 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-if Base.JLOptions().check_bounds ∈ (0, 2)
-    @testset "DCE & boundscheck" begin
-        Base.@propagate_inbounds function f(x)
-            @boundscheck error()
-        end
-        g(x) = @inbounds f(x)
-        h(x) = f(x)
-
-        (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
-        @test all(CI.stmts.inst) do stmt
-            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)) || Base.Meta.isexpr(stmt, :code_coverage_effect, 0)
-        end
-
-        (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
-        i = 1
-        while CI.stmts.inst[i] === nothing || Base.Meta.isexpr(CI.stmts.inst[i], :code_coverage_effect, 0)
-            i += 1
-        end
-        @test length(CI.stmts) - i + 1 == 2
-        stmt = CI.stmts.inst[end]
-        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
-    end
-end
+# # TODO run this testset in a separate process
+# # julia --check-bounds=auto --code-coverage=none
+# @testset "DCE & boundscheck" begin
+#     M = Module()
+#     @eval M begin
+#         Base.@propagate_inbounds function f(x)
+#             @boundscheck error()
+#         end
+#         g(x) = @inbounds f(x)
+#         h(x) = f(x)
+#     end
+#
+#     let
+#         (_,CI, _, _, _, _) = process(M.g, Tuple{Vector{Float64}})
+#         @test all(CI.stmts.inst) do stmt
+#             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+#         end
+#     end
+#
+#     let
+#         (_,CI, _, _, _, _) = process(M.h, Tuple{Vector{Float64}})
+#         @test count(!isnothing, CI.stmts.inst) == 2
+#         stmt = CI.stmts.inst[end]
+#         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+#     end
+# end
 
 # Something with many methods, but enough to be under the match limit
 g_matches(a::Int, b::Int) = a+b

@@ -430,7 +430,10 @@ function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
     # and show it in the UI in some way ?
-    frame = InferenceState(result, true, interp)::InferenceState
+    # branch on https://github.com/JuliaLang/julia/pull/42082
+    frame = @static hasmethod(InferenceState, (InferenceResult,Symbol,AbstractInterpreter)) ?
+            InferenceState(result, #=cache=# :global, interp)::InferenceState :
+            InferenceState(result, #=cached=# true, interp)::InferenceState
     Core.Compiler.typeinf(interp, frame)
     return nothing
 end
