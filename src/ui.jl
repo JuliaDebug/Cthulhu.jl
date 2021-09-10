@@ -12,15 +12,15 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     config::TerminalMenus.Config
 end
 
-function show_as_line(el, optimize::Bool, iswarn::Bool)
+function show_as_line(callsite::Callsite, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     sprint() do io
-        show(IOContext(io, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize, :iswarn=>iswarn, :color=>iswarn), el)
+        show(IOContext(io, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize, :iswarn=>iswarn, :color=>iswarn), callsite)
     end
 end
 
 function CthulhuMenu(callsites, optimize::Bool, iswarn::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
-    options = vcat(map(site->show_as_line(site, optimize, iswarn), callsites), ["↩"])
+    options = vcat(map(callsite->show_as_line(callsite, optimize, iswarn), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -46,7 +46,7 @@ function stringify(@nospecialize(f), io::IO=IOBuffer())
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, inline_cost, highlight)
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, highlight)
     colorize(iotmp, use_color::Bool, c::Char) = stringify(iotmp) do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
@@ -62,6 +62,7 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
         stringify(iotmp) do io
             printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
         end, "]ebuginfo, [",
+        colorize(iotmp, remarks, 'r'), "]emarks, [",
         colorize(iotmp, inline_cost, 'i'), "]nlining costs, [",
         colorize(iotmp, highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
     println(ioctx, "Show: [",
@@ -91,6 +92,9 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('d')
         m.toggle = :debuginfo
         return true
+    elseif key == UInt32('r')
+        m.toggle = :remarks
+        return true
     elseif key == UInt32('i')
         m.toggle = :inline_cost
         return true
@@ -118,7 +122,7 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('b')
         m.toggle = :bookmark
         return true
-    elseif key == UInt32('r') || key == UInt32('R')
+    elseif key == UInt32('R')
         m.toggle = :revise
         return true
     elseif key == UInt32('e') || key == UInt32('E')

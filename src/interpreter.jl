@@ -13,20 +13,22 @@ struct OptimizedSource
     isinlineable::Bool
 end
 
+const Remarks = Vector{Pair{Int, String}}
+
 mutable struct CthulhuInterpreter <: AbstractInterpreter
     native::NativeInterpreter
 
     unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
 
-    msgs::Dict{MethodInstance, Vector{Pair{Int, String}}}
+    remarks::Dict{MethodInstance, Remarks}
 end
 
 CthulhuInterpreter() = CthulhuInterpreter(
     NativeInterpreter(),
     Dict{MethodInstance, InferredSource}(),
     Dict{MethodInstance, CodeInstance}(),
-    Dict{MethodInstance, Vector{Pair{Int, String}}}()
+    Dict{MethodInstance, Remarks}()
 )
 
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
@@ -58,8 +60,10 @@ Compiler.may_discard_trees(interp::CthulhuInterpreter) = false
 Compiler.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
 function Compiler.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
-    push!(get!(interp.msgs, sv.linfo, Tuple{Int, String}[]),
-        sv.currpc => msg)
+    if !haskey(interp.remarks, sv.linfo)
+        interp.remarks[sv.linfo] = Remarks()
+    end
+    push!(interp.remarks[sv.linfo], sv.currpc => msg)
 end
 
 function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)

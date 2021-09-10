@@ -106,7 +106,8 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
-    iswarn::Bool=false, hide_type_stable::Bool=false, inline_cost::Bool=false)
+    iswarn::Bool=false, hide_type_stable::Bool=false,
+    remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false)
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -136,6 +137,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         println(iolim, Callsite(-1, MICallInfo(mi, rettype), :invoke))
     end
 
+    # preprinter configuration
     if src isa IRCode && inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
@@ -156,7 +158,22 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     else
         preprinter = lineprinter(src)
     end
-    postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
+    # postprinter configuration
+    _postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
+    if !isnothing(remarks)
+        function postprinter(io::IO, @nospecialize(typ), used::Bool)
+            _postprinter(io, typ, used)
+            haskey(io, :idx) || return
+            idx = io[:idx]::Int
+            for (pc, remark) in remarks
+                if pc == idx
+                    printstyled(io, ' ', remark; color=:light_black)
+                end
+            end
+        end
+    else
+        postprinter = _postprinter
+    end
 
     should_print_stmt = hide_type_stable ? is_type_unstable : Returns(true)
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
