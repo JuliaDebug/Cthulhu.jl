@@ -13,6 +13,14 @@ using Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
 
 const mapany = Base.mapany
 
+# branch on https://github.com/JuliaLang/julia/pull/42125
+# TODO remove me once v1.7 is released
+@static if isdefined(Base, Symbol("@constprop"))
+    import Base: @constprop
+else
+    macro constprop(_, ex); esc(ex); end
+end
+
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
@@ -177,8 +185,8 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-# `Base.@aggressive_constprop` here in order to make sure the constant propagation of `allow_no_codeinf`
-Base.@aggressive_constprop function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_codeinf::Bool=false)
+# `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_codeinf`
+@constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_codeinf::Bool=false)
     if !optimize
         codeinf = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
