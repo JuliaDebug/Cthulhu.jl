@@ -241,7 +241,7 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     if f !== nothing
         name = "→ $f"
     elseif ft isa Union
-        name = "→ (::$ft)"
+        name = "→ (::Union{$(join(String[String(nameof(T)) for T in Base.uniontypes(ft)], ", "))})"
     else
         name = "→ (::$(nameof(ft)))"
     end

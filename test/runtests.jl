@@ -691,5 +691,5 @@ include("terminal.jl")
     ci = MultiCallInfo(Tuple{m.Foo, Float64}, Float64, CallInfo[])
     @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
     ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
-    @test sprint(show_callinfo, ci) == "→ (::Union{Main.m.Bar, Main.m.Foo})(::Float64)::Float64"
+    @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
 end
