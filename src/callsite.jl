@@ -243,7 +243,7 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     elseif f isa Union
         name = "→ (::$ft)"
     else
-        name = "→ (::$(nameof(f)))"
+        name = "→ (::$(nameof(ft)))"
     end
     rt = ci.rt
     __show_limited(limiter, name::String, tt, rt)
