@@ -240,7 +240,7 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     f = Compiler.argtype_to_function(ft)
     if f !== nothing
         name = "→ $f"
-    elseif tf isa Union
+    elseif ft isa Union
         name = "→ (::$ft)"
     else
         name = "→ (::$(nameof(ft)))"
