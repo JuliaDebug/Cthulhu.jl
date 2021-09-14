@@ -679,6 +679,8 @@ end
 
 include("terminal.jl")
 
+using Cthulhu: MultiCallInfo, show_callinfo, CallInfo
+
 @testset "printing of MultiCallInfo" begin
     # PR 226
     m = Module()
