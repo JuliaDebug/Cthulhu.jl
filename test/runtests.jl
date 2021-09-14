@@ -678,3 +678,20 @@ include("codeview.jl")
 end
 
 include("terminal.jl")
+
+using Cthulhu: MultiCallInfo, show_callinfo, CallInfo
+
+@testset "printing of MultiCallInfo" begin
+    # PR 226
+    m = Module()
+    @eval m begin
+        struct Foo
+            x
+        end
+        struct Bar end
+    end
+    ci = MultiCallInfo(Tuple{m.Foo, Float64}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
+    ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
+end
