@@ -2,7 +2,8 @@ using Cthulhu, Test, DeepDiffs
 
 include("utils.jl")
 
-foo = Core.eval(Module(), Meta.parseall(raw"""
+m = Module()
+Core.eval(m, Meta.parseall(raw"""
 function foo(x, y)
     z = x + y
     if z < 4
@@ -18,7 +19,7 @@ end
     tf = (true, false)
 
     @testset "optimize: $optimize" for optimize in tf
-        _, src, infos, mi, rt, slottypes = process(foo, (Int, Int); optimize);
+        _, src, infos, mi, rt, slottypes = process(m.foo, (Int, Int); optimize);
 
         @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
             @testset "iswarn: $iswarn" for iswarn in tf
