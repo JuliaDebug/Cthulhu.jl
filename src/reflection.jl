@@ -47,7 +47,10 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 if !optimize
                     args = (ignorelhs(c)::Expr).args
                 end
-                types = mapany(@nospecialize(arg) -> widenconst(argextype(arg, CI, sptypes, slottypes)), args)
+                types = mapany(function (@nospecialize(arg),)
+                                   t = argextype(arg, CI, sptypes, slottypes)
+                                   return widenconst(ignorelimited(t))
+                               end, args)
                 was_return_type = false
                 if isa(info, Core.Compiler.ReturnTypeCallInfo)
                     info = info.info
