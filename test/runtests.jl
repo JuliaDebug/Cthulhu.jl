@@ -224,6 +224,16 @@ end
     end
 end
 
+struct SingletonPureCallable{N} end
+
+@testset "PureCallInfo" begin
+    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[typeof(sin), Float64], Float64))
+    @test s == "sin(::Float64)::Float64"
+
+    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[SingletonPureCallable{1}, Float64], Float64))
+    @test s == "SingletonPureCallable{1}()(::Float64)::Float64"
+end
+
 # Failed return_type
 only_ints(::Integer) = 1
 return_type_failure(::T) where T = Base._return_type(only_ints, Tuple{T})

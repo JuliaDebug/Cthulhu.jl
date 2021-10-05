@@ -252,7 +252,7 @@ end
 function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
     ft, tt... = argtypes
     f = Compiler.singleton_type(ft)
-    name = isnothing(f) ? "unknown" : nameof(f)
+    name = isnothing(f) ? "unknown" : string(f)
     __show_limited(limiter, name, tt, rt)
 end
 
