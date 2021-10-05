@@ -64,6 +64,7 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
         end, "]ebuginfo, [",
         colorize(iotmp, remarks, 'r'), "]emarks, [",
         colorize(iotmp, inline_cost, 'i'), "]nlining costs, [",
+        colorize(iotmp, inline_cost, 't'), "]ype annotations, [",
         colorize(iotmp, highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
     println(ioctx, "Show: [",
         colorize(iotmp, view_cmd === cthulhu_source, 'S'), "]ource code, [",
@@ -97,6 +98,9 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('i')
         m.toggle = :inline_cost
+        return true
+    elseif key == UInt32('t')
+        m.toggle = :type_annotations
         return true
     elseif key == UInt32('s')
         m.toggle = :highlighter

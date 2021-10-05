@@ -1,0 +1,33 @@
+Body[91m[1m::Any[22m[39m
+[90m1 ──[39m %1  = Core.Box
+[90m│   [39m %2  = %new(%1)
+[90m│   [39m %3  = Base.add_int(_2, _3)
+[90m│   [39m       Core.setfield!(%2, :contents, %3)
+[90m│   [39m %5  = Core.isdefined(%2, :contents)
+[90m└───[39m       goto #3 if not %5
+[90m2 ──[39m       goto #4
+[90m3 ──[39m       $(Expr(:throw_undef_if_not, :z, false))
+[90m4 ┄─[39m %9  = Core.getfield(%2, :contents)
+[90m│   [39m %10 = (%9 < 4)
+[90m└───[39m       goto #9 if not %10
+[90m5 ──[39m %12 = Core.isdefined(%2, :contents)
+[90m└───[39m       goto #7 if not %12
+[90m6 ──[39m       goto #8
+[90m7 ──[39m       $(Expr(:throw_undef_if_not, :z, false))
+[90m8 ┄─[39m %16 = Core.getfield(%2, :contents)
+[90m│   [39m %17 = (%16 + 1)
+[90m└───[39m       Core.setfield!(%2, :contents, %17)
+[90m9 ┄─[39m %19 = %new(Main.anonymous.:(var"#1#2"), %2)
+[90m│   [39m %20 = invoke %19(_2::Int64)
+[90m│   [39m %21 = (isa)(_2, Missing)
+[90m└───[39m       goto #11 if not %21
+[90m10 ─[39m       goto #14
+[90m11 ─[39m %24 = (isa)(_2, Int64)
+[90m└───[39m       goto #13 if not %24
+[90m12 ─[39m %26 = Base.add_int(_2, _3)
+[90m└───[39m       goto #14
+[90m13 ─[39m       Core.throw(ErrorException("fatal error in type inference (type bound)"))
+[90m└───[39m       unreachable
+[90m14 ┄[39m %30 = φ (#10 => $(QuoteNode(missing)), #12 => %26)
+[90m│   [39m %31 = (%20 + %30)
+[90m└───[39m       return %31
