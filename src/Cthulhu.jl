@@ -310,7 +310,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         end
 
         menu = CthulhuMenu(callsites, optimize, iswarn&get(term.out_stream::IO, :color, false)::Bool; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, CONFIG.enable_highlighter)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, type_annotations, CONFIG.enable_highlighter)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
