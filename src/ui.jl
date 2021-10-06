@@ -93,8 +93,8 @@ end
 const debugcolors = (:nothing, :light_black, :yellow)
 function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
     custom_toggles::Vector{CustomToggle})
-    colorize(use_color::Bool, c::Char) = stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = stringify() do io
+        active_option ? printstyled(io, c; color=:green) : printstyled(io, c; color=:red)
     end
 
     io = IOBuffer()
