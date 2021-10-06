@@ -40,9 +40,14 @@ end
     if isdefined(Base, :active_repl)
         @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     end
-    colorize(use_color::Bool, c::Char) = Cthulhu.stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = Cthulhu.stringify() do io
+        active_option ? printstyled(io, c; color=:green) : printstyled(io, c; color=:red)
     end
+
+    colorize(s::AbstractString; color::Symbol = :cyan) = Cthulhu.stringify() do io
+        printstyled(io, s; color)
+    end
+
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
     revisedfile = tempname()
@@ -75,14 +80,14 @@ end
             @test occursin('[' * colorize(true, 'o') * "]ptimize", lines)
             @test occursin('[' * colorize(true, 'T') * "]yped", lines)
 
-            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), lines)   # beginning of the line
             @test occursin('•', lines)
             write(in, 'o')            # switch to unoptimized
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
             @test occursin(r"\(z = a \* a\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
             @test occursin('[' * colorize(false, 'o') * "]ptimize", lines)
-            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), lines)   # beginning of the line
             @test occursin("• %1 = *(::Float32,::Float32)::Float32", lines)
             # Call selection
             write(in, keydict[:down])
@@ -114,7 +119,7 @@ end
             @test occursin(r"z.*::Float32", lines)
             @test occursin(r"\nBody.*Float32", lines)
             @test occursin('[' * colorize(true, 'w') * "]arn", lines)
-            @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
+            @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), lines)   # beginning of the line
             @test occursin("• %1 = *(::Float32,::Float32)::Float32", lines)
             # Source view
             write(in, 'S')
@@ -153,7 +158,7 @@ end
             write(in, 'd'); cread(out)
             write(in, 'L')
             lines = cread(out)
-            @test occursin('[' * colorize(false, 'd') * "]ebuginfo", lines)
+            @test occursin("[d]ebuginfo", lines)
             @test !occursin("┌ @ promotion.jl", lines)
             # Native-code view
             write(in, 'N')
