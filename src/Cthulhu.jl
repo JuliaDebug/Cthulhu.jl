@@ -173,9 +173,9 @@ function codeinst_rt(code::CodeInstance)
         rettype_const = code.rettype_const
         if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
             return Core.PartialStruct(rettype, rettype_const)
-        elseif rettype <: Core.OpaqueClosure && isa(rettype_const, Core.PartialOpaque)
+        elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
             return rettype_const
-        elseif isa(rettype_const, Core.InterConditional)
+        elseif isa(rettype_const, Core.InterConditional) && !(Core.InterConditional <: rettype)
             return rettype_const
         else
             return Const(rettype_const)
