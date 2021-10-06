@@ -27,11 +27,13 @@ Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
         @testset "iswarn: $iswarn" for iswarn in tf
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                 @testset "inline_cost: $inline_cost" for inline_cost in tf
-                    io = IOBuffer()
-                    Cthulhu.cthulhu_typed(io, debuginfo,
-                        src, rt, mi;
-                        iswarn, hide_type_stable, inline_cost)
-                    @test !isempty(String(take!(io))) # just check it works
+                    @testset "type_annotations: $type_annotations" for type_annotations in tf
+                        io = IOBuffer()
+                        Cthulhu.cthulhu_typed(io, debuginfo,
+                            src, rt, mi;
+                            iswarn, hide_type_stable, inline_cost, type_annotations)
+                        @test !isempty(String(take!(io))) # just check it works
+                    end
                 end
             end
         end

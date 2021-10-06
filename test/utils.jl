@@ -23,9 +23,10 @@ function strip_base_linenums(s)
     return s
 end
 
-function irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost)
+function irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)
     return "test_output/foo-$(optimize ? :opt : :unopt)-$(debuginfo)-$(iswarn ? :warn : :nowarn)\
--$(hide_type_stable ? :hide_type_stable : :show_type_stable)-$(inline_cost ? :inline_cost : :nocost)"
+        -$(hide_type_stable ? :hide_type_stable : :show_type_stable)-$(inline_cost ? :inline_cost : :nocost)\
+        -$(type_annotations ? :types : :notypes)"
 end
 
 # to generate test cases for IRShow tests
@@ -34,8 +35,8 @@ function generate_test_cases(foo)
     tf = (true, false)
     for optimize in tf
         _, src, infos, mi, rt, slottypes = process(foo, (Int, Int); optimize);
-        for (debuginfo, iswarn, hide_type_stable, inline_cost) in Iterators.product(
-            instances(Cthulhu.DInfo.DebugInfo), tf, tf, tf,
+        for (debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations) in Iterators.product(
+            instances(Cthulhu.DInfo.DebugInfo), tf, tf, tf, tf,
         )
             !optimize && debuginfo === Cthulhu.DInfo.compact && continue
             !optimize && inline_cost && continue
@@ -43,14 +44,14 @@ function generate_test_cases(foo)
             s = sprint(; context=:color=>true) do io
                 Cthulhu.cthulhu_typed(io, debuginfo,
                                       src, rt, mi;
-                                      iswarn, hide_type_stable, inline_cost)
+                                      iswarn, hide_type_stable, inline_cost, type_annotations)
             end
             s = strip_base_linenums(s)
-            write(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost), s)
+            write(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations), s)
 
-            in(s, values(outputs)) && (@show((optimize, debuginfo, iswarn, hide_type_stable, inline_cost)); @show(findfirst(==(s), pairs(outputs))))
+            in(s, values(outputs)) && (@show((optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)); @show(findfirst(==(s), pairs(outputs))))
             @assert !in(s, values(outputs))
-            outputs[(optimize, debuginfo, iswarn, hide_type_stable, inline_cost)] = s
+            outputs[(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)] = s
         end
     end
 end

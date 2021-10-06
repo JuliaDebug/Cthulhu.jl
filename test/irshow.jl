@@ -25,22 +25,24 @@ end
             @testset "iswarn: $iswarn" for iswarn in tf
                 @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                     @testset "inline_cost: $inline_cost" for inline_cost in tf
-                        !optimize && debuginfo === Cthulhu.DInfo.compact && continue
-                        !optimize && inline_cost && continue
+                        @testset "type_annotations: $type_annotations" for type_annotations in tf
+                            !optimize && debuginfo === Cthulhu.DInfo.compact && continue
+                            !optimize && inline_cost && continue
 
-                        s = sprint(; context=:color=>true) do io
-                            Cthulhu.cthulhu_typed(io, debuginfo,
-                                                  src, rt, mi;
-                                                  iswarn, hide_type_stable, inline_cost)
-                        end
-                        s = strip_base_linenums(s)
+                            s = sprint(; context=:color=>true) do io
+                                Cthulhu.cthulhu_typed(io, debuginfo,
+                                                      src, rt, mi;
+                                                      iswarn, hide_type_stable, inline_cost, type_annotations)
+                            end
+                            s = strip_base_linenums(s)
 
-                        ground_truth = read(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost), String)
-                        if Sys.iswindows()
-                            ground_truth = replace(ground_truth, "\r\n" => "\n")
+                            ground_truth = read(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations), String)
+                            if Sys.iswindows()
+                                ground_truth = replace(ground_truth, "\r\n" => "\n")
+                            end
+                            @test s == ground_truth
+                            s != ground_truth && println(deepdiff(s, ground_truth))
                         end
-                        @test s == ground_truth
-                        s != ground_truth && println(deepdiff(s, ground_truth))
                     end
                 end
             end

@@ -107,7 +107,9 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
-    remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false)
+    remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
+    type_annotations::Bool=true)
+
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
@@ -159,7 +161,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         preprinter = lineprinter(src)
     end
     # postprinter configuration
-    _postprinter = iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
+    _postprinter = if type_annotations
+        iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
+    else
+        Returns(nothing)
+    end
     if !isnothing(remarks)
         function postprinter(io::IO, @nospecialize(typ), used::Bool)
             _postprinter(io, typ, used)

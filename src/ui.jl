@@ -46,7 +46,7 @@ function stringify(@nospecialize(f), io::IO=IOBuffer())
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, highlight)
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, type_annotations, highlight)
     colorize(iotmp, use_color::Bool, c::Char) = stringify(iotmp) do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
@@ -64,6 +64,7 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
         end, "]ebuginfo, [",
         colorize(iotmp, remarks, 'r'), "]emarks, [",
         colorize(iotmp, inline_cost, 'i'), "]nlining costs, [",
+        colorize(iotmp, type_annotations, 't'), "]ype annotations, [",
         colorize(iotmp, highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
     println(ioctx, "Show: [",
         colorize(iotmp, view_cmd === cthulhu_source, 'S'), "]ource code, [",
@@ -97,6 +98,9 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
         return true
     elseif key == UInt32('i')
         m.toggle = :inline_cost
+        return true
+    elseif key == UInt32('t')
+        m.toggle = :type_annotations
         return true
     elseif key == UInt32('s')
         m.toggle = :highlighter

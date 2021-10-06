@@ -231,7 +231,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=false, inline_cost::Bool=false)
+    remarks::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -287,11 +287,11 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 if debuginfo == DInfo.compact
                     str = let debuginfo=debuginfo, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
-                              remarks=_remarks, inline_cost=inline_cost
+                              remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
                         stringify() do io # eliminate trailing indentation (see first item in bullet list in PR #189)
                             cthulhu_typed(io, debuginfo, codeinf, rt, mi;
                                           iswarn, hide_type_stable,
-                                          remarks, inline_cost)
+                                          remarks, inline_cost, type_annotations)
                         end
                     end
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
@@ -302,7 +302,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 else
                     cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
                                   iswarn, hide_type_stable,
-                                  remarks=_remarks, inline_cost)
+                                  remarks=_remarks, inline_cost, type_annotations)
                 end
                 view_cmd = cthulhu_typed
             end
@@ -310,7 +310,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         end
 
         menu = CthulhuMenu(callsites, optimize, iswarn&get(term.out_stream::IO, :color, false)::Bool; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, CONFIG.enable_highlighter)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, type_annotations, CONFIG.enable_highlighter)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -354,7 +354,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                          debuginfo,
                          params, optimize, interruptexc,
                          iswarn, hide_type_stable,
-                         remarks, inline_cost)
+                         remarks, inline_cost, type_annotations)
                 continue
             end
 
@@ -372,7 +372,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      params,optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, inline_cost)
+                     remarks, inline_cost, type_annotations)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -396,6 +396,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if inline_cost && !optimize
                 @warn "enable optimization to see the inlining costs"
             end
+        elseif toggle === :type_annotations
+            type_annotations ⊻= true
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
