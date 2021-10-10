@@ -93,8 +93,8 @@ end
 @static if isdefined(Compiler, :is_stmt_inline)
 function Compiler.inlining_policy(
     interp::CthulhuInterpreter, @nospecialize(src), stmt_flag::UInt8,
-    mi::MethodInstance, argtypes::Vector{Any})
-    @assert isa(src, OptimizedSource) || isnothing(src)
+    mi::MethodInstance, argtypes::Argtypes)
+    @assert isa(src, OptimizedSource) || isnothing(src) "`inlining_policy(::CthulhuInterpreter, ...)` got unexpected source: `$(typeof(src))`"
     if isa(src, OptimizedSource)
         if Compiler.is_stmt_inline(stmt_flag) || src.isinlineable
             return src.ir
@@ -103,7 +103,7 @@ function Compiler.inlining_policy(
         # the default inlining policy may try additional effor to find the source in a local cache
         return Base.@invoke Compiler.inlining_policy(
             interp::AbstractInterpreter, nothing, stmt_flag::UInt8,
-            mi::MethodInstance, argtypes::Vector{Any})
+            mi::MethodInstance, argtypes::Argtypes)
     end
     return nothing
 end

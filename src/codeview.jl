@@ -119,7 +119,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     if isa(src, Core.CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
         src = copy(src)
-        src.ssavaluetypes = Base.mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
+        @static if IS_OVERHAULED
+            src.ssavaluetypes = SSAValueTypes([ignorelimited(t) for t in src.ssavaluetypes::SSAValueTypes])
+        else
+            src.ssavaluetypes = Base.mapany(ignorelimited, src.ssavaluetypes::SSAValueTypes)
+        end
         src.rettype = ignorelimited(src.rettype)
 
         if src.slotnames !== nothing
@@ -144,8 +148,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
+        sptypes = Core.Compiler.sptypes_from_meth_instance(mi)
         params = Core.Compiler.OptimizationParams(interp)
-        maxcost = Core.Compiler.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
+        maxcost = Core.Compiler.statement_costs!(cst, code, src, sptypes, false, params)
         nd = ndigits(maxcost)
         _lineprinter = lineprinter(src)
         function preprinter(io, linestart, idx)
@@ -195,8 +200,9 @@ function show_variables(io, src, slotnames)
     slottypes = src.slottypes
     for i = 1:length(slotnames)
         print(io, "  ", slotnames[i])
-        if isa(slottypes, Vector{Any})
-            InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
+        if isa(slottypes, Argtypes)
+            typ = (@static IS_OVERHAULED ? Core.Compiler.unwraptype : identity)(slottypes[i])
+            InteractiveUtils.warntype_type_printer(io, typ, true)
         end
         println(io)
     end

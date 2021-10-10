@@ -7,7 +7,7 @@ struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
     function MICallInfo(mi::MethodInstance, @nospecialize(rt))
-        if isa(rt, LimitedAccuracy)
+        if @static IS_OVERHAULED ? isLimitedAccuracy(rt) : isa(rt, LimitedAccuracy)
             return LimitedCallInfo(new(mi, ignorelimited(rt)))
         else
             return new(mi, rt)
@@ -36,9 +36,9 @@ struct UncachedCallInfo <: WrappedCallInfo
 end
 
 struct PureCallInfo <: CallInfo
-    argtypes::Vector{Any}
+    argtypes::Argtypes
     rt
-    PureCallInfo(argtypes::Vector{Any}, @nospecialize(rt)) =
+    PureCallInfo(argtypes::Argtypes, @nospecialize(rt)) =
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
@@ -242,7 +242,7 @@ end
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = (ci.sig::DataType).parameters
     ft, tt = types[1], types[2:end]
-    f = Compiler.singleton_type(ft)
+    f = Compiler.singleton_type((@static IS_OVERHAULED ? LatticeElement : identity)(ft))
     if f !== nothing
         name = "→ $f"
     elseif ft isa Union
