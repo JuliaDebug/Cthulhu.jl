@@ -94,7 +94,7 @@ const debugcolors = (:nothing, :light_black, :yellow)
 function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
     custom_toggles::Vector{CustomToggle})
     colorize(active_option::Bool, c::Char) = stringify() do io
-        active_option ? printstyled(io, c; color=:green) : printstyled(io, c; color=:red)
+        active_option ? printstyled(io, c; color=:blue) : printstyled(io, c; color=:magenta)
     end
 
     colorize(s::AbstractString; color::Symbol = :cyan) = stringify() do io
@@ -105,7 +105,7 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
     ioctx = IOContext(io, :color=>true)
 
     println(ioctx,
-        colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color=:blue))
+        colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color=:green))
     print(ioctx,
         colorize("Toggles"), ": [",
         colorize(iswarn, 'w'), "]arn, [",
