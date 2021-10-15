@@ -10,7 +10,7 @@ using REPL: REPL, AbstractTerminal
 using Core: MethodInstance
 const Compiler = Core.Compiler
 using Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
-
+import Base: unwrapva, isvarargtype
 const mapany = Base.mapany
 
 # branch on https://github.com/JuliaLang/julia/pull/42125
