@@ -3,7 +3,7 @@
 ##
 
 using Base.Meta
-using .Compiler: widenconst, argextype, Const, MethodMatchInfo,
+import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo
 

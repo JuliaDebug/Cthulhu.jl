@@ -176,21 +176,23 @@ function Base.take!(io::TextWidthLimiter)
 end
 
 function headstring(@nospecialize(T))
-    T = widenconst(Base.unwrapva(T))
+    if isvarargtype(T)
+        T = unwrapva(T)
+    elseif isa(T, TypeVar)
+        return string(T.name)
+    end
+    T = widenconst(T)
     if T isa Union || T === Union{}
         return string(T)::String
     elseif T isa UnionAll
         return headstring(Base.unwrap_unionall(T))
-    elseif T isa TypeVar
-        return string(T.name)
     else
         return string(T.name.name)::String
     end
 end
 
-
 function __show_limited(limiter, name, tt, @nospecialize(rt))
-    vastring(@nospecialize(T)) = (Base.isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
+    vastring(@nospecialize(T)) = (isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
     if !has_space(limiter, name)
         print(limiter, '…')
