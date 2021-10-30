@@ -5,16 +5,16 @@
 using Base.Meta
 import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
-    MethodResultPure, ApplyCallInfo
+    MethodResultPure, ApplyCallInfo,
+    sptypes_from_meth_instance, argtypes_to_type
+import Base: may_invoke_generator
 
-const sptypes_from_meth_instance = Core.Compiler.sptypes_from_meth_instance
-const may_invoke_generator = Base.may_invoke_generator
 function code_for_method(method, metharg, methsp, world, preexisting=false)
     @static if VERSION ≥ v"1.8.0-DEV.369"
         # https://github.com/JuliaLang/julia/pull/41920
-        Core.Compiler.specialize_method(method, metharg, methsp; preexisting)
+        specialize_method(method, metharg, methsp; preexisting)
     else
-        Core.Compiler.specialize_method(method, metharg, methsp, preexisting)
+        specialize_method(method, metharg, methsp, preexisting)
     end
 end
 
@@ -26,6 +26,8 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; pa
     isa(tt, Const) || return callsite
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params)), callsite.head)
 end
+
+const ArgTypes = Vector{Any}
 
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
@@ -47,28 +49,17 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 if !optimize
                     args = (ignorelhs(c)::Expr).args
                 end
-                types = mapany(function (@nospecialize(arg),)
-                                   t = argextype(arg, CI, sptypes, slottypes)
-                                   return widenconst(ignorelimited(t))
-                               end, args)
-                was_return_type = false
-                if isa(info, Core.Compiler.ReturnTypeCallInfo)
-                    info = info.info
-                    was_return_type = true
-                end
-
-                callinfos = process_info(interp, info, types, rt, optimize)
-                if !was_return_type && isempty(callinfos)
-                    continue
-                end
+                argtypes = mapany(function (@nospecialize(arg),)
+                                      t = argextype(arg, CI, sptypes, slottypes)
+                                      return widenconst(ignorelimited(t))
+                                  end, args)
+                callinfos = process_info(interp, info, argtypes, rt, optimize)
+                isempty(callinfos) && continue
                 callsite = let
                     if length(callinfos) == 1
                         callinfo = callinfos[1]
                     else
-                        callinfo = MultiCallInfo(Compiler.argtypes_to_type(types), rt, callinfos)
-                    end
-                    if was_return_type
-                        callinfo = ReturnTypeCallInfo(callinfo)
+                        callinfo = MultiCallInfo(argtypes_to_type(argtypes), rt, callinfos)
                     end
                     Callsite(id, callinfo, c.head)
                 end
@@ -113,10 +104,9 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
     return callsites
 end
 
-function process_info(interp, @nospecialize(info), types, @nospecialize(rt), optimize::Bool)
+function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
     is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
-    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, types, rt, optimize)
-
+    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
     if isa(info, MethodMatchInfo)
         if info.results === missing
@@ -125,12 +115,12 @@ function process_info(interp, @nospecialize(info), types, @nospecialize(rt), opt
 
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
-            mi = Core.Compiler.specialize_method(match)
+            mi = specialize_method(match)
             mici = MICallInfo(mi, rt)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
     elseif isa(info, MethodResultPure)
-        return Any[PureCallInfo(types, rt)]
+        return Any[PureCallInfo(argtypes, rt)]
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.matches; init=[])::Vector{Any}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -158,16 +148,33 @@ function process_info(interp, @nospecialize(info), types, @nospecialize(rt), opt
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
+    elseif isa(info, Compiler.ReturnTypeCallInfo)
+        newargtypes = argtypes[2:end]
+        callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize)
+        if length(callinfos) == 1
+            vmi = only(callinfos)
+        else
+            @assert isempty(callinfos)
+            argt = unwrapType(widenconst(newargtypes[2]))::DataType
+            sig = Tuple{widenconst(newargtypes[1]), argt.parameters...}
+            vmi = FailedCallInfo(sig, Union{})
+        end
+        return Any[ReturnTypeCallInfo(vmi)]
     elseif info == false
         return []
     else
-        @show CI
-        @show c
-        @show info
-        error()
+        @eval Main begin
+            interp = $interp
+            info = $info
+            argtypes = $argtypes
+            rt = $rt
+            optimize = $optimize
+        end
+        error("inspect `Main.interp|info|argtypes|rt|optimize`")
     end
 end
 
+unwrapType(@nospecialize t) = Compiler.isType(t) ? t.parameters[1] : t
 
 ignorelhs(@nospecialize(x)) = isexpr(x, :(=)) ? last(x.args) : x
 function is_call_expr(x::Expr, optimize::Bool)
