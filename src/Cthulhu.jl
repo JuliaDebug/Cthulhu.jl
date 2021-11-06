@@ -9,7 +9,7 @@ using REPL: REPL, AbstractTerminal
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
-using Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
+import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_method
 import Base: unwrapva, isvarargtype
 const mapany = Base.mapany
 
@@ -462,7 +462,7 @@ end
 
 function get_specialization(@nospecialize(TT))
     match = Base._which(TT)
-    mi = Core.Compiler.specialize_method(match)
+    mi = specialize_method(match)
     return mi
 end
 

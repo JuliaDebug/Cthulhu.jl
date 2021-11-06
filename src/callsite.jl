@@ -1,6 +1,6 @@
 using Unicode
 
-abstract type CallInfo; end
+abstract type CallInfo end
 
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
@@ -97,10 +97,10 @@ get_rt(tci::OCCallInfo) = get_rt(tci.ci)
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
-    called_mi::CallInfo
+    vmi::CallInfo # virtualized method call
 end
-get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
-get_rt(rtci::ReturnTypeCallInfo) = get_rt(rtci.called_mi)
+get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
+get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -232,7 +232,7 @@ function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     name = (mi.def::Method).name
-    rt = mici.rt
+    rt = get_rt(mici)
     __show_limited(limiter, name, tt, rt)
 end
 
@@ -247,8 +247,7 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     else
         name = "→ (::$(nameof(ft)))"
     end
-    rt = ci.rt
-    __show_limited(limiter, name::String, tt, rt)
+    __show_limited(limiter, name::String, tt, get_rt(ci))
 end
 
 function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
@@ -262,7 +261,19 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
     tt = ci.result.argtypes[2:end]
-    __show_limited(limiter, name, tt, (ignorewrappers(ci.mi)::MICallInfo).rt)
+    __show_limited(limiter, name, tt, get_rt(ignorewrappers(ci.mi)::MICallInfo))
+end
+
+function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
+    if isa(vmi, FailedCallInfo)
+        ft = Base.tuple_type_head(vmi.sig)
+        f = Compiler.singleton_type(ft)
+        name = isnothing(f) ? "unknown" : string(f)
+        tt = Base.tuple_type_tail(vmi.sig).parameters
+        __show_limited(limiter, name, tt, vmi.rt)
+    else
+        show_callinfo(limiter, vmi)
+    end
 end
 
 function Base.show(io::IO, c::Callsite)
@@ -306,7 +317,7 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " >")
     elseif isa(info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
-        show_callinfo(limiter, info.called_mi)
+        show_callinfo(limiter, info)
         print(limiter, " >")
     elseif isa(info, CuCallInfo)
         print(limiter, " = cucall < ")
@@ -342,7 +353,7 @@ is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
+is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.vmi, mi)
 is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
 function is_callsite(info::MultiCallInfo, mi::MethodInstance)
     for csi in info.callinfos

@@ -76,7 +76,7 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
 end
 
 function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
-        valid_worlds::Core.Compiler.WorldRange, @nospecialize(inferred_result))
+        valid_worlds::WorldRange, @nospecialize(inferred_result))
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
         if isdefined(opt, :ir)

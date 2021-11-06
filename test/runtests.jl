@@ -234,22 +234,34 @@ struct SingletonPureCallable{N} end
     @test s == "SingletonPureCallable{1}()(::Float64)::Float64"
 end
 
-# Failed return_type
-only_ints(::Integer) = 1
-return_type_failure(::T) where T = Base._return_type(only_ints, Tuple{T})
-let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optimize=false)
-    @test length(callsites) == 1
-    callinfo = callsites[1].info
-    @test callinfo isa Cthulhu.ReturnTypeCallInfo
-    callinfo = callinfo.called_mi
-    @test callinfo isa Cthulhu.MultiCallInfo
+@testset "ReturnTypeCallInfo" begin
+    only_ints(::Integer) = 1
+
+    callsites = find_callsites_by_ftt(; optimize=false) do
+            t1 = Base._return_type(only_ints, Tuple{Int})     # successful `return_type`
+            t2 = Base._return_type(only_ints, Tuple{Float64}) # failed `return_type`
+            t1, t2
+        end
+    @test length(callsites) == 2
+    callinfo1 = callsites[1].info
+    @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
+    @test callinfo1.vmi isa Cthulhu.MICallInfo
     io = IOBuffer()
-    Cthulhu.show_callinfo(io, callinfo)
-    @test String(take!(io)) == "→ return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
+    Cthulhu.show_callinfo(io, callinfo1)
+    @test String(take!(io)) == "only_ints(::$Int)::$Int"
     io = IOBuffer()
     print(io, callsites[1])
-    @test occursin("return_type < → return_type", String(take!(io)))
-    @test length(callinfo.callinfos) == 0
+    @test occursin("return_type < only_ints(::$Int)::$Int >", String(take!(io)))
+
+    callinfo2 = callsites[2].info
+    @test callinfo2 isa Cthulhu.ReturnTypeCallInfo
+    @test callinfo2.vmi isa Cthulhu.FailedCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo2)
+    @test String(take!(io)) == "only_ints(::Float64)::Union{}"
+    io = IOBuffer()
+    print(io, callsites[2])
+    @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 end
 
 # tasks
