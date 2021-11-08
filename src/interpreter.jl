@@ -16,7 +16,7 @@ end
 const Remarks = Vector{Pair{Int, String}}
 
 mutable struct CthulhuInterpreter <: AbstractInterpreter
-    native::NativeInterpreter
+    native::AbstractInterpreter
 
     unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
@@ -24,12 +24,13 @@ mutable struct CthulhuInterpreter <: AbstractInterpreter
     remarks::Dict{MethodInstance, Remarks}
 end
 
-CthulhuInterpreter() = CthulhuInterpreter(
-    NativeInterpreter(),
-    Dict{MethodInstance, InferredSource}(),
-    Dict{MethodInstance, CodeInstance}(),
-    Dict{MethodInstance, Remarks}()
-)
+CthulhuInterpreter(native_interp::AbstractInterpreter=NativeInterpreter()) =
+    CthulhuInterpreter(
+        native_interp,
+        Dict{MethodInstance, InferredSource}(),
+        Dict{MethodInstance, CodeInstance}(),
+        Dict{MethodInstance, Remarks}()
+    )
 
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
     get_inference_cache, code_cache, method_table,

@@ -250,8 +250,8 @@ function callinfo(sig, rt, max_methods=-1; params=current_params())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function find_caller_of(callee::MethodInstance, caller::MethodInstance)
-    interp = CthulhuInterpreter()
+function find_caller_of(native_interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance)
+    interp = CthulhuInterpreter(native_interp)
     do_typeinf!(interp, caller)
     params = current_params()
     locs = Tuple{Core.LineInfoNode,Int}[]

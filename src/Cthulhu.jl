@@ -347,6 +347,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             # forcibly enter and inspect the frame, although the native interpreter gave up
             if info isa UncachedCallInfo || info isa TaskCallInfo
+                # XXX: this may use a different native interpreter
                 next_interp = CthulhuInterpreter()
                 next_mi = get_mi(info)::MethodInstance
                 do_typeinf!(next_interp, next_mi)
@@ -470,25 +471,21 @@ function get_specialization(@nospecialize(F), @nospecialize(TT))
     return get_specialization(Base.signature_type(F, TT))
 end
 
-function mkinterp(@nospecialize(args...))
-    interp = CthulhuInterpreter()
+function mkinterp(native_interpreter::AbstractInterpreter, @nospecialize(args...))
+    interp = CthulhuInterpreter(native_interpreter)
     mi = get_specialization(args...)
     do_typeinf!(interp, mi)
     (interp, mi)
 end
 
-# function mkinterp(mi::MethodInstance)
-#     interp = CthulhuInterpreter()
-#     do_typeinf!(interp, mi)
-#     interp
-# end
-
-function _descend(@nospecialize(args...); kwargs...)
-    (interp, mi) = mkinterp(args...)
+function _descend(@nospecialize(args...);
+                  native_interpreter::AbstractInterpreter=NativeInterpreter(), kwargs...)
+    (interp, mi) = mkinterp(native_interpreter, args...)
     _descend(interp, mi; kwargs...)
 end
-function _descend(term::AbstractTerminal, @nospecialize(args...); kwargs...)
-    (interp, mi) = mkinterp(args...)
+function _descend(term::AbstractTerminal, @nospecialize(args...);
+                  native_interpreter=NativeInterpreter(), kwargs...)
+    (interp, mi) = mkinterp(native_interpreter, args...)
     _descend(term, interp, mi; kwargs...)
 end
 
@@ -500,7 +497,7 @@ descend_code_warntype(b::Bookmark; kw...) =
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-function ascend(term, mi; kwargs...)
+function ascend(term, mi; native_interpreter::AbstractInterpreter=NativeInterpreter(), kwargs...)
     root = treelist(mi)
     menu = TreeMenu(root)
     choice = menu.current
@@ -514,7 +511,7 @@ function ascend(term, mi; kwargs...)
             if !isroot(node)
                 # Help user find the sites calling the parent
                 miparent = instance(node.parent.data.nd)
-                ulocs = find_caller_of(miparent, mi)
+                ulocs = find_caller_of(native_interpreter, miparent, mi)
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
@@ -535,7 +532,7 @@ function ascend(term, mi; kwargs...)
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            interp = CthulhuInterpreter()
+            interp = CthulhuInterpreter(native_interpreter)
             do_typeinf!(interp, mi)
             browsecodetyped && _descend(term, interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
