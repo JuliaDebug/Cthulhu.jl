@@ -701,7 +701,7 @@ end
 
 include("terminal.jl")
 
-using Cthulhu: MultiCallInfo, show_callinfo, CallInfo
+using Cthulhu: MultiCallInfo, show_callinfo, CallInfo, TextWidthLimiter
 
 @testset "printing of MultiCallInfo" begin
     # PR 226
@@ -716,4 +716,7 @@ using Cthulhu: MultiCallInfo, show_callinfo, CallInfo
     @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
     ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
     @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
+    ci = MultiCallInfo(Tuple{m.Foo, Vararg{Float64, 30}}, Float64, CallInfo[])
+    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
+        "→ (::Foo)(…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…)::…"
 end

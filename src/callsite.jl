@@ -238,7 +238,7 @@ end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = (ci.sig::DataType).parameters
-    ft, tt... = types
+    ft, tt = types[1], types[2:end]
     f = Compiler.singleton_type(ft)
     if f !== nothing
         name = "→ $f"
