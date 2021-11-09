@@ -24,9 +24,9 @@ mutable struct CthulhuInterpreter <: AbstractInterpreter
     remarks::Dict{MethodInstance, Remarks}
 end
 
-CthulhuInterpreter(native_interp::AbstractInterpreter=NativeInterpreter()) =
+CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter()) =
     CthulhuInterpreter(
-        native_interp,
+        interp,
         Dict{MethodInstance, InferredSource}(),
         Dict{MethodInstance, CodeInstance}(),
         Dict{MethodInstance, Remarks}()

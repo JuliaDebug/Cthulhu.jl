@@ -471,22 +471,22 @@ function get_specialization(@nospecialize(F), @nospecialize(TT))
     return get_specialization(Base.signature_type(F, TT))
 end
 
-function mkinterp(native_interpreter::AbstractInterpreter, @nospecialize(args...))
-    interp = CthulhuInterpreter(native_interpreter)
+function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
+    interp′ = CthulhuInterpreter(interp)
     mi = get_specialization(args...)
-    do_typeinf!(interp, mi)
-    (interp, mi)
+    do_typeinf!(interp′, mi)
+    (interp′, mi)
 end
 
 function _descend(@nospecialize(args...);
-                  native_interpreter::AbstractInterpreter=NativeInterpreter(), kwargs...)
-    (interp, mi) = mkinterp(native_interpreter, args...)
-    _descend(interp, mi; kwargs...)
+                  interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
+    (interp′, mi) = mkinterp(interp, args...)
+    _descend(interp′, mi; kwargs...)
 end
 function _descend(term::AbstractTerminal, @nospecialize(args...);
-                  native_interpreter=NativeInterpreter(), kwargs...)
-    (interp, mi) = mkinterp(native_interpreter, args...)
-    _descend(term, interp, mi; kwargs...)
+                  interp=NativeInterpreter(), kwargs...)
+    (interp′, mi) = mkinterp(interp, args...)
+    _descend(term, interp′, mi; kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
@@ -497,7 +497,7 @@ descend_code_warntype(b::Bookmark; kw...) =
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-function ascend(term, mi; native_interpreter::AbstractInterpreter=NativeInterpreter(), kwargs...)
+function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     root = treelist(mi)
     menu = TreeMenu(root)
     choice = menu.current
@@ -511,7 +511,7 @@ function ascend(term, mi; native_interpreter::AbstractInterpreter=NativeInterpre
             if !isroot(node)
                 # Help user find the sites calling the parent
                 miparent = instance(node.parent.data.nd)
-                ulocs = find_caller_of(native_interpreter, miparent, mi)
+                ulocs = find_caller_of(interp, miparent, mi)
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
@@ -532,9 +532,9 @@ function ascend(term, mi; native_interpreter::AbstractInterpreter=NativeInterpre
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            interp = CthulhuInterpreter(native_interpreter)
-            do_typeinf!(interp, mi)
-            browsecodetyped && _descend(term, interp, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            interp′ = CthulhuInterpreter(interp)
+            do_typeinf!(interp′, mi)
+            browsecodetyped && _descend(term, interp′, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end
