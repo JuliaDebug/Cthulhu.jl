@@ -165,6 +165,12 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
+function descend(mi::MethodInstance; kwargs...)
+    interp = Cthulhu.CthulhuInterpreter()
+    Cthulhu.do_typeinf!(interp, mi)
+    descend(interp, mi; kwargs...)
+end
+
 descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
 
 function codeinst_rt(code::CodeInstance)
