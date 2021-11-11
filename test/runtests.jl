@@ -478,7 +478,7 @@ end
         end
     end
     function doprint(f)
-        interp, mi = Cthulhu.mkinterp(f, ())
+        interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f, ())
         src, rt = Cthulhu.lookup(interp, mi, true)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, :none, src, rt, mi; iswarn=false)
@@ -492,7 +492,7 @@ end
 
 @testset "Issue #132" begin
     f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
-    interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
+    interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f132, (Vector{Int}, Int))
     @test isa(mi, Core.MethodInstance)   # just check that the above succeeded
 end
 
@@ -562,9 +562,9 @@ end
     micaller = Cthulhu.get_specialization(caller, Tuple{Int})
     micallee_Int = Cthulhu.get_specialization(callee, Tuple{Int})
     micallee_Float4 = Cthulhu.get_specialization(callee, Tuple{Float64})
-    info, lines = only(Cthulhu.find_caller_of(micallee_Int, micaller))
+    info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Int, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line1, line3]
-    info, lines = only(Cthulhu.find_caller_of(micallee_Float4, micaller))
+    info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Float4, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
 
     # Detection in optimized (post-inlining) code
@@ -578,7 +578,7 @@ end
     _, line1, line2 = outercaller(7)
     micaller = Cthulhu.get_specialization(outercaller, Tuple{Int})
     micallee = Cthulhu.get_specialization(nicallee, Tuple{Int})
-    callerinfo = Cthulhu.find_caller_of(micallee, micaller)
+    callerinfo = Cthulhu.find_caller_of(NativeInterpreter(), micallee, micaller)
     @test length(callerinfo) == 2
     info, lines = callerinfo[1]
     @test info == (:outercaller, Symbol(@__FILE__), 0)
@@ -665,7 +665,7 @@ end
 include("codeview.jl")
 
 @testset "Bookmarks" begin
-    (interp, mi) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
+    (interp, mi) = Cthulhu.mkinterp(NativeInterpreter(), sqrt, Tuple{Float64})
     b = Cthulhu.Bookmark(mi, interp)
 
     @testset "code_typed(bookmark)" begin

@@ -16,7 +16,7 @@ end
 const Remarks = Vector{Pair{Int, String}}
 
 mutable struct CthulhuInterpreter <: AbstractInterpreter
-    native::NativeInterpreter
+    native::AbstractInterpreter
 
     unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
@@ -24,15 +24,16 @@ mutable struct CthulhuInterpreter <: AbstractInterpreter
     remarks::Dict{MethodInstance, Remarks}
 end
 
-CthulhuInterpreter() = CthulhuInterpreter(
-    NativeInterpreter(),
-    Dict{MethodInstance, InferredSource}(),
-    Dict{MethodInstance, CodeInstance}(),
-    Dict{MethodInstance, Remarks}()
-)
+CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter()) =
+    CthulhuInterpreter(
+        interp,
+        Dict{MethodInstance, InferredSource}(),
+        Dict{MethodInstance, CodeInstance}(),
+        Dict{MethodInstance, Remarks}()
+    )
 
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
-    get_inference_cache, code_cache,
+    get_inference_cache, code_cache, method_table,
     WorldView, lock_mi_inference, unlock_mi_inference, InferenceState
 using Base: @invoke
 
@@ -40,6 +41,7 @@ Compiler.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.na
 Compiler.OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
 Compiler.get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
 Compiler.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
+Compiler.method_table(interp::CthulhuInterpreter, sv::InferenceState) = method_table(interp.native, sv)
 
 # No need to do any locking since we're not putting our results into the runtime cache
 Compiler.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing

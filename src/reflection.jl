@@ -250,15 +250,15 @@ function callinfo(sig, rt, max_methods=-1; params=current_params())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function find_caller_of(callee::MethodInstance, caller::MethodInstance)
-    interp = CthulhuInterpreter()
-    do_typeinf!(interp, caller)
+function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance)
+    interp′ = CthulhuInterpreter(interp)
+    do_typeinf!(interp′, caller)
     params = current_params()
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
-        (CI, rt, infos, slottypes) = lookup(interp, caller, optimize)
+        (CI, rt, infos, slottypes) = lookup(interp′, caller, optimize)
         CI = preprocess_ci!(CI, caller, optimize, CONFIG)
-        callsites = find_callsites(interp, CI, infos, caller, slottypes, optimize; params=params)
+        callsites = find_callsites(interp′, CI, infos, caller, slottypes, optimize; params=params)
         callsites = filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
     end
