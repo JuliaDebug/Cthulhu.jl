@@ -42,7 +42,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
         if stmt_info !== nothing && is_call_expr(c, optimize)
             info = stmt_info[id]
             if info !== nothing
-                rt = argextype(SSAValue(id), CI, sptypes, slottypes)
+                rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
                 args = c.args
