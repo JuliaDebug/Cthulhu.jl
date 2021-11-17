@@ -716,6 +716,12 @@ using Cthulhu: MultiCallInfo, show_callinfo, CallInfo, TextWidthLimiter
     @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
     ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
     @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
+    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 2}}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) ==
+        "→ +(::Bool,::Rational{BigInt},::Rational{BigInt})::Float64"
+    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 4}}, Float64, CallInfo[])
+    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
+        "→ +(::Bool,::Rational{…},::Rational{…},::Rational{…},::Rational{…})::Float64"
     ci = MultiCallInfo(Tuple{m.Foo, Vararg{Float64, 30}}, Float64, CallInfo[])
     @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
         "→ (::Foo)(…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…)::…"

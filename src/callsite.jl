@@ -124,7 +124,7 @@ end
 get_mi(c::Callsite) = get_mi(c.info)
 
 # Callsite printing
-mutable struct TextWidthLimiter
+mutable struct TextWidthLimiter <: IO
     io::IO
     width::Int
     limit::Int
@@ -200,18 +200,21 @@ function __show_limited(limiter, name, tt, @nospecialize(rt))
     end
     print(limiter, string(name))
     pstrings = String[vastring(T) for T in tt]
-    headstrings = String[headstring(T) for T in tt]
+    headstrings = String[
+        T isa DataType && isempty(T.parameters) ? headstring(T) : string(headstring(T), "{…}")
+        for T in tt
+    ]
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
         if has_space(limiter, sum(textwidth, pstrings) + 3*length(pstrings))
-            print(limiter, join(map(T->string("::", T), pstrings), ","))
+            join(limiter, (string("::", T) for T in pstrings), ",")
         # Alright, see if we at least have enough space for each head
-        elseif has_space(limiter, sum(textwidth, headstrings) + 6*length(pstrings))
-            print(limiter, join(map(T->string("::", T, "{…}"), headstrings), ","))
+        elseif has_space(limiter, sum(textwidth, headstrings) + 3*length(pstrings))
+            join(limiter, (string("::", T) for T in headstrings), ",")
         # Fine, what about just indicating the number of arguments
         elseif has_space(limiter, 2*(length(tt)))
-            print(limiter, join(map(T->"…", pstrings), ","))
+            join(limiter, ("…" for _ in pstrings), ",")
         else
             print(limiter, "…")
         end
