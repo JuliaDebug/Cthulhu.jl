@@ -4,7 +4,7 @@ using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
 
 struct InferredSource
     src::CodeInfo
-    stmt_infos::Vector{Any}
+    stmt_info::Vector{Any}
     rt::Any
 end
 

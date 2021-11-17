@@ -190,7 +190,7 @@ end
     if !optimize
         codeinf = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
-        infos = interp.unopt[mi].stmt_infos
+        infos = interp.unopt[mi].stmt_info
         slottypes = codeinf.slottypes
         if isnothing(slottypes)
             slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
@@ -269,7 +269,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     end
                 else
                     codeinf = copy(codeinf)
-                    infos = interp.unopt[override].stmt_infos
+                    infos = interp.unopt[override].stmt_info
                     slottypes = codeinf.slottypes
                     if isnothing(slottypes)
                         slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
