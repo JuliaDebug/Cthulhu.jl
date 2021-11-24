@@ -229,7 +229,7 @@ end
 ##
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
-    params=current_params(), optimize::Bool=true, interruptexc::Bool=true,
+    optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
     remarks::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
     if isnothing(hide_type_stable)
@@ -284,7 +284,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             else
                 @assert length(codeinf.code) == length(infos)
             end
-            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize; params)
+            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize)
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
@@ -296,7 +296,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         stringify() do io # eliminate trailing indentation (see first item in bullet list in PR #189)
                             cthulhu_typed(io, debuginfo, codeinf, rt, mi;
                                           iswarn, hide_type_stable,
-                                          remarks, inline_cost, type_annotations)
+                                          remarks, inline_cost, type_annotations,
+                                          interp)
                         end
                     end
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
@@ -307,7 +308,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 else
                     cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
                                   iswarn, hide_type_stable,
-                                  remarks=_remarks, inline_cost, type_annotations)
+                                  remarks=_remarks, inline_cost, type_annotations,
+                                  interp)
                 end
                 view_cmd = cthulhu_typed
             end
@@ -358,7 +360,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 do_typeinf!(next_interp, next_mi)
                 _descend(term, next_interp, next_mi;
                          debuginfo,
-                         params, optimize, interruptexc,
+                         optimize, interruptexc,
                          iswarn, hide_type_stable,
                          remarks, inline_cost, type_annotations)
                 continue
@@ -376,7 +378,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
-                     params,optimize, interruptexc,
+                     optimize, interruptexc,
                      iswarn, hide_type_stable,
                      remarks, inline_cost, type_annotations)
 
@@ -414,7 +416,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache"
-            Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(params.cache)))
+            Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(get_inference_cache(interp))))
             Core.println()
             display_CI = false
         elseif toggle === :bookmark
@@ -443,7 +445,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 view_cmd = get(CODEVIEWS, toggle, nothing)
                 @assert !isnothing(view_cmd) "invalid option $toggle"
                 println(term.out_stream)
-                view_cmd(term.out_stream::IO, mi, optimize, debuginfo, params, CONFIG)
+                view_cmd(term.out_stream::IO, mi, optimize, debuginfo, interp, CONFIG)
                 display_CI = false
             end
         end
@@ -489,7 +491,7 @@ function _descend(@nospecialize(args...);
     _descend(interp′, mi; kwargs...)
 end
 function _descend(term::AbstractTerminal, @nospecialize(args...);
-                  interp=NativeInterpreter(), kwargs...)
+                  interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     (interp′, mi) = mkinterp(interp, args...)
     _descend(term, interp′, mi; kwargs...)
 end
