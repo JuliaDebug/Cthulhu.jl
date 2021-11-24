@@ -20,10 +20,10 @@ function highlight(io, x, lexer, config::CthulhuConfig)
     end
 end
 
-function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig,
+function cthulhu_llvm(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter, config::CthulhuConfig,
                       dump_module = false)
     dump = InteractiveUtils._dump_function_linfo_llvm(
-        mi, params.world,
+        mi, get_world_counter(interp),
         #=wrapper=# false, #=strip_ir_metadata=# true,
         dump_module,
         optimize, debuginfo != DInfo.none ? :source : :none,
@@ -31,16 +31,16 @@ function cthulhu_llvm(io::IO, mi, optimize, debuginfo, params, config::CthulhuCo
     highlight(io, dump, "llvm", config)
 end
 
-function cthulhu_native(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+function cthulhu_native(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter, config::CthulhuConfig)
     dump = InteractiveUtils._dump_function_linfo_native(
-        mi, params.world,
+        mi, get_world_counter(interp),
         #=wrapper=# false, #=syntax=# config.asm_syntax,
         debuginfo != DInfo.none ? :source : :none,
         #=binary=# false)
     highlight(io, dump, "asm", config)
 end
 
-function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+function cthulhu_ast(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, config::CthulhuConfig)
     meth = mi.def::Method
     ast = definition(Expr, meth)
     if ast!==nothing
@@ -56,7 +56,7 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, params, config::CthulhuCon
     end
 end
 
-function cthulhu_source(io::IO, mi, optimize, debuginfo, params, config::CthulhuConfig)
+function cthulhu_source(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, config::CthulhuConfig)
     meth = mi.def::Method
     def = definition(String, meth)
     if isnothing(def)
@@ -86,11 +86,11 @@ is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(t
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance}=nothing;
-    hide_type_stable::Bool=false, inline_cost::Bool=false)
+    hide_type_stable::Bool=false, inline_cost::Bool=false, interp::CthulhuInterpreter=CthulhuInterpreter())
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, hide_type_stable, inline_cost)
+    cthulhu_typed(io, debuginfo, src, rt, mi; iswarn=true, hide_type_stable, inline_cost, interp)
     return nothing
 end
 
@@ -108,7 +108,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
     remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
-    type_annotations::Bool=true)
+    type_annotations::Bool=true, interp::CthulhuInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -144,7 +144,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
-        params = Core.Compiler.OptimizationParams(Core.Compiler.NativeInterpreter())
+        params = Core.Compiler.OptimizationParams(interp)
         maxcost = Core.Compiler.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
         nd = ndigits(maxcost)
         _lineprinter = lineprinter(src)
@@ -240,15 +240,12 @@ See [`Cthulhu.Bookmark`](@ref) for other usages.
 """
 const BOOKMARKS = Bookmark[]
 
-# Default `show` is broken for `Core.Compiler.Params`. Trying not invoke it.
-Base.show(io::IO, b::Bookmark) =
-    print(io, "Cthulhu.Bookmark(", b.mi, ", ::", CompilerParams, ")")
-
 # Turn off `optimize` and `debuginfo` for default `show` so that the
 # output is smaller.
-function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
-                   optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
-    world = b.interp.native.world
+function Base.show(
+    io::IO, ::MIME"text/plain", b::Bookmark;
+    optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
+    world = get_world_counter(b.interp)
     CI, rt = InteractiveUtils.code_typed(b; optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
         print(io, Callsite(-1, MICallInfo(b.mi, rt), :invoke))
@@ -256,7 +253,7 @@ function Base.show(io::IO, ::MIME"text/plain", b::Bookmark;
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, hide_type_stable)
+    cthulhu_typed(io, debuginfo, CI, rt, b.mi; iswarn, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
@@ -283,7 +280,7 @@ function InteractiveUtils.code_warntype(
     kw...,
 )
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    cthulhu_warntype(io, debuginfo, CI, rt, b.mi; hide_type_stable)
+    cthulhu_warntype(io, debuginfo, CI, rt, b.mi; hide_type_stable, b.interp)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
@@ -299,7 +296,7 @@ InteractiveUtils.code_llvm(
     b.mi,
     optimize,
     debuginfo == :source,
-    b.interp.native,
+    b.interp,
     config,
     dump_module,
 )
@@ -312,4 +309,4 @@ InteractiveUtils.code_native(
     optimize = true,
     debuginfo = :source,
     config = CONFIG,
-) = cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.interp.native, config)
+) = cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.interp, config)

@@ -19,20 +19,19 @@ function code_for_method(method, metharg, methsp, world, preexisting=false)
 end
 
 transform(::Val, callsite) = callsite
-function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; params=current_params())
+function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; world=get_world_counter())
     sptypes = sptypes_from_meth_instance(mi)
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
     isa(tt, Const) || return callsite
-    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, params)), callsite.head)
+    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
 end
 
 const ArgTypes = Vector{Any}
 
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
-                        slottypes::Vector{Any}, optimize::Bool=true;
-                        params=current_params())
+                        slottypes::Vector{Any}, optimize::Bool=true)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -82,7 +81,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                         func = c.args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; params)), c.head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_world_counter(interp))), c.head)
                     end
                 end
             end
@@ -94,7 +93,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 mi = get_mi(info)
                 meth = mi.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; params)
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_world_counter(interp))
                 end
             end
 
@@ -221,11 +220,8 @@ function preprocess_ci!(ir::IRCode, mi, optimize, config::CthulhuConfig)
     return ir
 end
 
-const CompilerParams = Core.Compiler.NativeInterpreter
-current_params() = CompilerParams()
-
-function callinfo(sig, rt, max_methods=-1; params=current_params())
-    methds = Base._methods_by_ftype(sig, max_methods, params.world)
+function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
+    methds = Base._methods_by_ftype(sig, max_methods, world)
     methds isa Bool && return FailedCallInfo(sig, rt)
     length(methds) < 1 && return FailedCallInfo(sig, rt)
     callinfos = CallInfo[]
@@ -236,7 +232,7 @@ function callinfo(sig, rt, max_methods=-1; params=current_params())
         if isdefined(meth, :generator) && !may_invoke_generator(meth, atypes, sparams)
             push!(callinfos, GeneratedCallInfo(sig, rt))
         else
-            mi = code_for_method(meth, atypes, sparams, params.world)
+            mi = code_for_method(meth, atypes, sparams, world)
             if mi !== nothing
                 push!(callinfos, MICallInfo(mi, rt))
             else
@@ -253,12 +249,11 @@ end
 function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance)
     interp′ = CthulhuInterpreter(interp)
     do_typeinf!(interp′, caller)
-    params = current_params()
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
         (CI, rt, infos, slottypes) = lookup(interp′, caller, optimize)
         CI = preprocess_ci!(CI, caller, optimize, CONFIG)
-        callsites = find_callsites(interp′, CI, infos, caller, slottypes, optimize; params=params)
+        callsites = find_callsites(interp′, CI, infos, caller, slottypes, optimize)
         callsites = filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
     end

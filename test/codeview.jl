@@ -4,7 +4,7 @@ using .CthulhuTestSandbox
 Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
 
 @testset "printer test" begin
-    _, src, infos, mi, rt, slottypes = process(testf_revise);
+    interp, src, infos, mi, rt, slottypes = process(testf_revise);
     tf = (true, false)
 
     @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
@@ -13,11 +13,10 @@ Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
         end
         @testset "optimize: $optimize" for optimize in tf
             @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
-                params = Cthulhu.current_params()
                 config = Cthulhu.CONFIG
 
                 io = IOBuffer()
-                codeview(io, mi, optimize, debuginfo, params, config)
+                codeview(io, mi, optimize, debuginfo, interp, config)
                 @test !isempty(String(take!(io))) # just check it works
             end
         end
