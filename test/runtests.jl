@@ -479,7 +479,7 @@ end
     end
     function doprint(f)
         interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f, ())
-        src, rt = Cthulhu.lookup(interp, mi, true)
+        (; src, rt) = Cthulhu.lookup(interp, mi, true)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, :none, src, rt, mi; iswarn=false)
         return String(take!(io))

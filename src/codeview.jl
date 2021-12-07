@@ -97,9 +97,9 @@ end
 # # for API consistency with the others
 # function cthulhu_typed(io::IO, mi::MethodInstance, optimize, debuginfo, params, config::CthulhuConfig)
 #     interp = mkinterp(mi)
-#     codeinf, rt, infos, slottypes = lookup(interp, mi, optimize)
-#     ci = Cthulhu.preprocess_ci!(codeinf, mi, optimize, config)
-#     cthulhu_typed(io, debuginfo, codeinf, rt, mi)
+#     (; src, rt, infos, slottypes) = lookup(interp, mi, optimize)
+#     ci = Cthulhu.preprocess_ci!(src, mi, optimize, config)
+#     cthulhu_typed(io, debuginfo, src, rt, mi)
 # end
 
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
@@ -259,15 +259,13 @@ end
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     interp = b.interp
     mi = b.mi
-    (ci, rt) = lookup(interp, mi, optimize)
-    ci = preprocess_ci!(ci, mi, optimize, CONFIG)
-    if ci isa IRCode
-        ir = ci
-        ci = copy(interp.unopt[mi].src)
+    (; src, rt, codeinf) = lookup(interp, mi, optimize)
+    src = preprocess_ci!(src, mi, optimize, CONFIG)
+    if src isa IRCode
         nargs = Int((mi.def::Method).nargs) - 1
-        Core.Compiler.replace_code_newstyle!(ci, ir, nargs)
+        Core.Compiler.replace_code_newstyle!(codeinf, src, nargs)
     end
-    return ci => rt
+    return codeinf => rt
 end
 
 InteractiveUtils.code_warntype(b::Bookmark; kw...) =

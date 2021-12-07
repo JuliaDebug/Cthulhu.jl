@@ -185,29 +185,30 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-# `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_codeinf`
-@constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_codeinf::Bool=false)
+# `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
+@constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
     if !optimize
-        codeinf = copy(interp.unopt[mi].src)
+        codeinf = src = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
         infos = interp.unopt[mi].stmt_info
-        slottypes = codeinf.slottypes
+        slottypes = src.slottypes
         if isnothing(slottypes)
-            slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
+            slottypes = Any[ Any for i = 1:length(src.slotflags) ]
         end
     else
         codeinst = interp.opt[mi]
         rt = codeinst_rt(codeinst)
-        codeinf0 = codeinst.inferred
-        if codeinf0 !== nothing
-            ir = Core.Compiler.copy(codeinf0.ir::IRCode)
-            codeinf = ir
-            infos = ir.stmts.info
-            slottypes = ir.argtypes
-        elseif allow_no_codeinf
+        opt = codeinst.inferred
+        if opt !== nothing
+            opt = opt::OptimizedSource
+            src = Core.Compiler.copy(opt.ir)
+            codeinf = opt.src
+            infos = src.stmts.info
+            slottypes = src.argtypes
+        elseif allow_no_src
             # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
             # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
-            codeinf = nothing
+            codeinf = src = nothing
             infos = []
             slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
         else
@@ -219,7 +220,8 @@ end
             error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
     end
-    (codeinf, rt, infos, slottypes::Vector{Any})
+    # NOTE return `codeinf::CodeInfo` in any case since it can provide additional information on slot names
+    (; src, rt, infos, slottypes, codeinf)
 end
 
 ##
@@ -258,43 +260,47 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             callsites = Callsite[]
         else
             if override !== nothing
-                codeinf, rt = optimize ? (override.src, override.result) : (interp.unopt[override].src, interp.unopt[override].rt)
                 if optimize
-                    if isa(codeinf, Compiler.OptimizationState)
-                        codeinf = Compiler.copy(codeinf.ir::IRCode)
-                        infos = codeinf.stmts.info
-                        slottypes = codeinf.argtypes
+                    opt = override.src
+                    rt = override.result
+                    if isa(opt, Compiler.OptimizationState)
+                        src = Compiler.copy(src.ir::IRCode)
+                        codeinf = src.src
+                        infos = opt.stmts.info
+                        slottypes = opt.argtypes
                     else # source might be unavailable at this point, when a result is fully constant-folded etc.
-                        (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+                        (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
                     end
                 else
-                    codeinf = copy(codeinf)
+                    codeinf = src = copy(interp.unopt[override].src)
+                    rt = interp.unopt[override].rt
                     infos = interp.unopt[override].stmt_info
-                    slottypes = codeinf.slottypes
+                    slottypes = src.slottypes
                     if isnothing(slottypes)
-                        slottypes = Any[ Any for i = 1:length(codeinf.slotflags) ]
+                        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
                     end
                 end
             else
-                (codeinf, rt, infos, slottypes) = lookup(interp, mi, optimize)
+                (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
             end
-            codeinf = preprocess_ci!(codeinf, mi, optimize, CONFIG)
-            if optimize
-                infos = codeinf.stmts.info
+            src = preprocess_ci!(src, mi, optimize, CONFIG)
+            if optimize # optimization might have deleted some statements
+                infos = src.stmts.info
             else
-                @assert length(codeinf.code) == length(infos)
+                @assert length(src.code) == length(infos)
             end
-            callsites = find_callsites(interp, codeinf, infos, mi, slottypes, optimize)
+            callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
                 printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
-                    str = let debuginfo=debuginfo, codeinf=codeinf, rt=rt, mi=mi,
+                    str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
                               remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
                         stringify() do io # eliminate trailing indentation (see first item in bullet list in PR #189)
-                            cthulhu_typed(io, debuginfo, codeinf, rt, mi;
+                            lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
+                            cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                           iswarn, hide_type_stable,
                                           remarks, inline_cost, type_annotations,
                                           interp)
@@ -306,7 +312,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     end
                     print(term.out_stream::IO, str)
                 else
-                    cthulhu_typed(term.out_stream::IO, debuginfo, codeinf, rt, mi;
+                    lambda_io = IOContext(term.out_stream::IO, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
+                    cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                   iswarn, hide_type_stable,
                                   remarks=_remarks, inline_cost, type_annotations,
                                   interp)

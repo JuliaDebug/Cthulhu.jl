@@ -10,6 +10,7 @@ end
 
 struct OptimizedSource
     ir::IRCode
+    src::CodeInfo
     isinlineable::Bool
 end
 
@@ -82,7 +83,7 @@ function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
         if isdefined(opt, :ir)
-            return OptimizedSource(opt.ir::IRCode, opt.src.inlineable)
+            return OptimizedSource(opt.ir::IRCode, opt.src, opt.src.inlineable)
         end
     end
     return inferred_result
@@ -120,7 +121,7 @@ function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     if isa(src, OptimizationState)
         opt = src
         if isdefined(opt, :ir)
-            caller.src = OptimizedSource(opt.ir, opt.src.inlineable)
+            caller.src = OptimizedSource(opt.ir, opt.src, opt.src.inlineable)
         end
     end
 end

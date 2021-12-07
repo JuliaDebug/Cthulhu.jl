@@ -251,11 +251,11 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     do_typeinf!(interp′, caller)
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
-        (CI, rt, infos, slottypes) = lookup(interp′, caller, optimize)
-        CI = preprocess_ci!(CI, caller, optimize, CONFIG)
-        callsites = find_callsites(interp′, CI, infos, caller, slottypes, optimize)
+        (; src, rt, infos, slottypes) = lookup(interp′, caller, optimize)
+        src = preprocess_ci!(src, caller, optimize, CONFIG)
+        callsites = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = filter(cs->is_callsite(cs, callee), callsites)
-        foreach(cs -> add_sourceline!(locs, CI, cs.id), callsites)
+        foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
     end
     # Consolidate by method, but preserve the order
     prlookup = Dict{Tuple{Symbol,Symbol},Int}()

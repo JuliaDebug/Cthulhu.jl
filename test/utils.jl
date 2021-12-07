@@ -2,11 +2,11 @@ using Core.Compiler: NativeInterpreter
 
 function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(NativeInterpreter(), f, TT)
-    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_codeinf=true)
-    if ci !== nothing
-        ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
+    (; src, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
+    if src !== nothing
+        src = Cthulhu.preprocess_ci!(src, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     end
-    interp, ci, infos, mi, rt, slottypes
+    (; interp, src, infos, mi, rt, slottypes)
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
