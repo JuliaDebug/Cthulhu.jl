@@ -165,10 +165,15 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-function descend(mi::MethodInstance; kwargs...)
+function descend_code_typed(mi::MethodInstance; kwargs...)
     interp = Cthulhu.CthulhuInterpreter()
     Cthulhu.do_typeinf!(interp, mi)
-    descend(interp, mi; kwargs...)
+    _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
+end
+function descend_code_warntype(mi::MethodInstance; kwargs...)
+    interp = Cthulhu.CthulhuInterpreter()
+    Cthulhu.do_typeinf!(interp, mi)
+    _descend(interp, mi; iswarn=true, interruptexc=false, kwargs...)
 end
 
 descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
