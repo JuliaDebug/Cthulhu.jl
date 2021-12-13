@@ -206,6 +206,25 @@ const keydict = Dict(:up => "\e[A",
             @test occursin("call show(::IO,::String)", lines)
             write(in, 'q')
         end
+        # descend with MethodInstances
+        mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
+        fake_terminal() do term, in, out
+            @async begin
+                descend(mi; interruptexc=false, optimize=false, terminal=term)
+            end
+            lines = cread(out)
+            @test occursin("fmulti(::Any)", lines)
+            write(in, 'q')
+        end
+        fake_terminal() do term, in, out
+            @async begin
+                descend_code_warntype(mi; interruptexc=false, optimize=false, terminal=term)
+            end
+            lines = cread(out)
+            @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
+            write(in, 'q')
+        end
+
         # ascend
         @noinline inner3(x) = 3x
         @inline   inner2(x) = 2*inner3(x)
