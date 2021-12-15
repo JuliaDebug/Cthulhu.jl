@@ -485,7 +485,7 @@ function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
     (interp′, mi)
 end
 
-mkinterp(@nospecialize(args...)) = mkinterp(NativeInterpreter(), args...)
+mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
 
 function _descend(@nospecialize(args...);
                   interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
