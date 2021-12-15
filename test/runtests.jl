@@ -496,6 +496,21 @@ end
     @test isa(mi, Core.MethodInstance)   # just check that the above succeeded
 end
 
+@testset "@interp" begin
+    finterp1(x) = 2
+    (interp, mi) = Cthulhu.@interp finterp1(5)
+    @test isa(mi, Core.MethodInstance)
+
+    finterp2(x, y) = string(x, y)
+    (interp, mi) = Cthulhu.@interp finterp2("hi", " there")
+    @test isa(mi, Core.MethodInstance)
+
+    finterp3(x, y, z) = (x + y) / z
+    tt = Tuple{typeof(finterp3), Int64, Int64, Float64}
+    (interp, mi) = Cthulhu.mkinterp(tt)
+    @test isa(mi, Core.MethodInstance)
+end
+
 ## Functions for "backedges & treelist"
 # The printing changes when the functions are defined inside the testset
 fbackedge1() = 1
