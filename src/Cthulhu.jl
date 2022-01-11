@@ -10,7 +10,7 @@ using REPL: REPL, AbstractTerminal
 using Core: MethodInstance
 const Compiler = Core.Compiler
 import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_method
-import Base: unwrapva, isvarargtype
+import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
 # branch on https://github.com/JuliaLang/julia/pull/42125
@@ -99,8 +99,10 @@ Shortcut for [`@descend_code_typed`](@ref).
 const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, tt=Tuple{}; kwargs...)
+    descend_code_typed(f, argtypes=Tuple{}; kwargs...)
+    descend_code_typed(tt::Type{<:Tuple}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
+    descend_code_typed(mi::MethodInstance; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
 `code_typed` by descending into `invoke` statements. Type enter to select an
@@ -109,20 +111,30 @@ quit.
 
 # Usage:
 ```julia
-function foo()
-    T = rand() > 0.5 ? Int64 : Float64
-    sum(rand(T, 100))
-end
+julia> descend_code_typed(sin, (Int,))
+[...]
 
-descend_code_typed(foo)
+julia> descend_code_typed(sin, Tuple{Int})
+[...]
+
+julia> descend_code_typed(Tuple{typeof(sin), Int})
+[...]
+
+julia> descend_code_typed() do
+           T = rand() > 0.5 ? Int64 : Float64
+           sin(rand(T)
+       end
+[...]
 ```
 """
-descend_code_typed(f, @nospecialize(tt=Tuple{}); kwargs...) =
-    _descend_with_error_handling(f, tt; iswarn=false, kwargs...)
+descend_code_typed(@nospecialize(args...); kwargs...) =
+    _descend_with_error_handling(args...; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, tt=Tuple{})
+    descend_code_warntype(f, argtypes=Tuple{}; kwargs...)
+    descend_code_warntype(tt::Type{<:Tuple}; kwargs...)
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
+    descend_code_warntype(mi::MethodInstance; kwargs...)
 
 Given a function and a tuple-type, interactively explore the output of
 `code_warntype` by descending into `invoke` statements. Type enter to select an
@@ -131,18 +143,40 @@ quit.
 
 # Usage:
 ```julia
-function foo()
-    T = rand() > 0.5 ? Int64 : Float64
-    sum(rand(T, 100))
-end
+julia> descend_code_warntype(sin, (Int,))
+[...]
 
-descend_code_warntype(foo)
+julia> descend_code_warntype(sin, Tuple{Int})
+[...]
+
+julia> descend_code_warntype(Tuple{typeof(sin), Int})
+[...]
+
+julia> descend_code_warntype() do
+           T = rand() > 0.5 ? Int64 : Float64
+           sin(rand(T)
+       end
+[...]
 ```
 """
-descend_code_warntype(f, @nospecialize(tt=Tuple{}); kwargs...) =
-    _descend_with_error_handling(f, tt; iswarn=true, kwargs...)
+descend_code_warntype(@nospecialize(args...); kwargs...) =
+    _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
+function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = Tuple{}); kwargs...)
+    ft = Core.Typeof(f)
+    if isa(argtypes, Type)
+        u = unwrap_unionall(argtypes)
+        tt = rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
+    else
+        tt = Tuple{ft, argtypes...}
+    end
+    __descend_with_error_handling(tt; kwargs...)
+end
+_descend_with_error_handling(@nospecialize(tt::Type{<:Tuple}); kwargs...) =
+    __descend_with_error_handling(tt; kwargs...)
+_descend_with_error_handling(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
+    __descend_with_error_handling(interp, mi; kwargs...)
+function __descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
     @nospecialize
     try
         _descend(terminal, args...; kwargs...)
