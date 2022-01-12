@@ -287,7 +287,13 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    is_cached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
+    function is_cached(key, override, opt::Bool)
+        if override !== nothing
+            return opt ? true : haskey(interp.unopt, override)
+        else
+            haskey(opt ? interp.opt : interp.unopt, key)
+        end
+    end
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
@@ -440,7 +446,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
-            if !is_cached(mi, optimize)
+            if !is_cached(mi, override, optimize)
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
