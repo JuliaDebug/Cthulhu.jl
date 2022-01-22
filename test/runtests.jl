@@ -244,7 +244,7 @@ end
             end)
             callinfo = only(callsites).info
             @test isa(callinfo, Cthulhu.ConstEvalCallInfo)
-            @test callinfo.mi.rt == Core.Const(factorial(12))
+            @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
             io = IOBuffer()
             print(io, only(callsites))
             @test occursin("= < consteval > issue41694(::Core.Const(12))", String(take!(io)))

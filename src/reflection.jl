@@ -6,7 +6,8 @@ using Base.Meta
 import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo,
-    sptypes_from_meth_instance, argtypes_to_type
+    sptypes_from_meth_instance, argtypes_to_type,
+    decode_effects
 import Base: may_invoke_generator
 
 function code_for_method(method, metharg, methsp, world, preexisting=false)
@@ -69,7 +70,9 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             if c.head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 at = argextype(c.args[2], CI, sptypes, slottypes)
-                callsite = Callsite(id, MICallInfo(c.args[1], rt), c.head)
+                effects = get_effects(interp.unopt, c.args[1])
+                # effects = haskey(interp.unopt, c.args[1]) ? interp.unopt[c.args[1]].effects : Effects()
+                callsite = Callsite(id, MICallInfo(c.args[1], rt, effects), c.head)
             elseif c.head === :foreigncall
                 # special handling of jl_new_task
                 length(c.args) > 0 || continue
@@ -113,7 +116,8 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
-            mici = MICallInfo(mi, rt)
+            effects = get_effects(interp.unopt, mi)
+            mici = MICallInfo(mi, rt, effects)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
     elseif isa(info, MethodResultPure)
@@ -134,16 +138,19 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
                 infos[i]
             elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
                 linfo = result.mi
-                ConstEvalCallInfo(MICallInfo(linfo, rt), argtypes)
+                effects = get_effects(interp.unopt, linfo)
+                mici = MICallInfo(linfo, rt, effects)
+                ConstEvalCallInfo(mici, argtypes)
             else
                 @assert isa(result, Compiler.InferenceResult)
                 linfo = result.linfo
-                mici = MICallInfo(linfo, rt)
+                effects = get_effects(result)
+                mici = MICallInfo(linfo, rt, effects)
                 ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
             end
         end
     elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt)]
+        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt, Effects())]
     elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
         return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
@@ -236,7 +243,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
         else
             mi = code_for_method(meth, atypes, sparams, world)
             if mi !== nothing
-                push!(callinfos, MICallInfo(mi, rt))
+                push!(callinfos, MICallInfo(mi, rt, Effects()))
             else
                 push!(callinfos, FailedCallInfo(sig, rt))
             end

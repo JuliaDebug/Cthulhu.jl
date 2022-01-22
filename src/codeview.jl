@@ -136,7 +136,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         print(io, "│ ─ ")
-        println(iolim, Callsite(-1, MICallInfo(mi, rettype), :invoke))
+        println(iolim, Callsite(-1, MICallInfo(mi, rettype, Effects()), :invoke))
     end
 
     # preprinter configuration
@@ -249,7 +249,7 @@ function Base.show(
     world = get_world_counter(b.interp)
     CI, rt = InteractiveUtils.code_typed(b; optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt), :invoke))
+        print(io, Callsite(-1, MICallInfo(b.mi, rt, Effects()), :invoke))
         print(io, " (world: ", world, ")")
         return
     end

@@ -15,6 +15,14 @@ const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
 
+@static if !isdefined(Core.Compiler, :Effects)
+    const Effects = Nothing
+    const EFFECTS_ENABLED = false
+else
+    const Effects = Core.Compiler.Effects
+    const EFFECTS_ENABLED = true
+end
+
 import Base: @constprop
 
 Base.@kwdef mutable struct CthulhuConfig
@@ -226,12 +234,24 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
+if EFFECTS_ENABLED
+    get_effects(codeinst::CodeInstance) = Core.Compiler.decode_effects(codeinst.ipo_purity_bits)
+    get_effects(codeinst::CodeInfo) = Core.Compiler.decode_effects(codeinst.purity)
+    get_effects(src::InferredSource) = src.effects
+    get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
+        haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
+    get_effects(result::InferenceResult) = result.ipo_effects
+else
+    get_effects(_...) = nothing
+end
+
 # `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
 @constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
     if !optimize
         codeinf = src = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
         infos = interp.unopt[mi].stmt_info
+        effects = get_effects(interp.unopt[mi])
         slottypes = src.slottypes
         if isnothing(slottypes)
             slottypes = Any[ Any for i = 1:length(src.slotflags) ]
@@ -260,9 +280,10 @@ end
             end)
             error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
+        effects = get_effects(codeinst)
     end
     # NOTE return `codeinf::CodeInfo` in any case since it can provide additional information on slot names
-    (; src, rt, infos, slottypes, codeinf)
+    (; src, rt, infos, slottypes, codeinf, effects)
 end
 
 ##
@@ -274,7 +295,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
     optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
+    remarks::Bool=false, with_effects::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -295,7 +316,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             # but make something up that looks plausible.
             if display_CI
                 println(iostream)
-                println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
                 println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
                 println(iostream)
             end
@@ -310,6 +331,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = src.src
                         infos = opt.stmts.info
                         slottypes = opt.argtypes
+                        effects = get_effects(codeinf)
                     elseif isa(opt, OptimizedSource)
                         # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
                         # e.g. when we switch from constant-prop' unoptimized source
@@ -317,22 +339,24 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = opt.src
                         infos = src.stmts.info
                         slottypes = src.argtypes
+                        effects = get_effects(codeinf)
                     else
                         # the source might be unavailable at this point,
                         # when a result is fully constant-folded etc.
-                        (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
+                        (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
                     end
                 else
                     codeinf = src = copy(interp.unopt[override].src)
                     rt = interp.unopt[override].rt
                     infos = interp.unopt[override].stmt_info
+                    effects = get_effects(interp.unopt[override])
                     slottypes = src.slottypes
                     if isnothing(slottypes)
                         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
                     end
                 end
             else
-                (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
+                (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
             end
             src = preprocess_ci!(src, mi, optimize, CONFIG)
             if optimize # optimization might have deleted some statements
@@ -344,7 +368,11 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
-                printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
+                if with_effects
+                    printstyled(IOContext(iostream, :limit=>true), '[', effects, ']', mi.def, '\n'; bold=true)
+                else
+                    printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
+                end
                 if debuginfo == DInfo.compact
                     str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
@@ -374,8 +402,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             display_CI = true
         end
 
-        menu = CthulhuMenu(callsites, optimize, iswarn&get(iostream, :color, false)::Bool; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, type_annotations, CONFIG.enable_highlighter)
+        menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool; menu_options...)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -397,7 +425,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, optimize, false; sub_menu=true, menu_options...)
+                menu = CthulhuMenu(sub_callsites, with_effects, optimize, false; sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
@@ -420,7 +448,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                          debuginfo,
                          optimize, interruptexc,
                          iswarn, hide_type_stable,
-                         remarks, inline_cost, type_annotations)
+                         remarks, with_effects, inline_cost, type_annotations)
                 continue
             end
 
@@ -438,10 +466,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, inline_cost, type_annotations)
+                     remarks, with_effects, inline_cost, type_annotations)
 
         elseif toggle === :warn
             iswarn ⊻= true
+        elseif toggle === :with_effects
+            with_effects ⊻= true
         elseif toggle === :hide_type_stable
             hide_type_stable ⊻= true
         elseif toggle === :optimize
