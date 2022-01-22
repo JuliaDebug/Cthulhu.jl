@@ -5,6 +5,7 @@ using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
 struct InferredSource
     src::CodeInfo
     stmt_info::Vector{Any}
+    effects::Effects
     rt::Any
 end
 
@@ -74,6 +75,7 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(state.src),
         copy(state.stmt_info),
+        isdefined(Core.Compiler, :Effects) ? state.ipo_effects : nothing,
         state.result.result)
     return r
 end

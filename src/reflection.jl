@@ -132,7 +132,7 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return mapany(enumerate(info.results)) do (i, result)
-            if isnothing(result)
+            if isnothing(result) || isa(result, Core.Compiler.ConstResult) || isa(result, Bool)
                 infos[i]
             else
                 linfo = result.linfo

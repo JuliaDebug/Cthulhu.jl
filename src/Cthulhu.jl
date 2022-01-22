@@ -13,6 +13,12 @@ import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_me
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
+if !isdefined(Core.Compiler, :Effects)
+    const Effects = Nothing
+else
+    const Effects = Core.Compiler.Effects
+end
+
 # branch on https://github.com/JuliaLang/julia/pull/42125
 # TODO remove me once v1.7 is released
 @static if isdefined(Base, Symbol("@constprop"))
@@ -236,6 +242,7 @@ end
         codeinf = src = copy(interp.unopt[mi].src)
         rt = interp.unopt[mi].rt
         infos = interp.unopt[mi].stmt_info
+        effects = interp.unopt[mi].effects
         slottypes = src.slottypes
         if isnothing(slottypes)
             slottypes = Any[ Any for i = 1:length(src.slotflags) ]
@@ -264,9 +271,11 @@ end
             end)
             error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
         end
+        effects = isdefined(Core.Compiler, :decode_effects) ? Core.Compiler.decode_effects(codeinst.ipo_purity_bits) :
+            nothing
     end
     # NOTE return `codeinf::CodeInfo` in any case since it can provide additional information on slot names
-    (; src, rt, infos, slottypes, codeinf)
+    (; src, rt, infos, slottypes, codeinf, effects)
 end
 
 ##
@@ -320,19 +329,20 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         infos = opt.stmts.info
                         slottypes = opt.argtypes
                     else # source might be unavailable at this point, when a result is fully constant-folded etc.
-                        (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
+                        (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
                     end
                 else
                     codeinf = src = copy(interp.unopt[override].src)
                     rt = interp.unopt[override].rt
                     infos = interp.unopt[override].stmt_info
+                    effects = interp.unopt[override].effects
                     slottypes = src.slottypes
                     if isnothing(slottypes)
                         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
                     end
                 end
             else
-                (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
+                (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
             end
             src = preprocess_ci!(src, mi, optimize, CONFIG)
             if optimize # optimization might have deleted some statements
@@ -344,7 +354,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
-                printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
+                printstyled(IOContext(term.out_stream::IO, :limit=>true), '[', effects ,']', mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
                     str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
