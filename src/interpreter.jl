@@ -5,7 +5,9 @@ using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
 struct InferredSource
     src::CodeInfo
     stmt_info::Vector{Any}
-    rt::Any
+    rt
+    InferredSource(src::CodeInfo, stmt_info::Vector{Any}, @nospecialize(rt)) =
+        new(src, stmt_info, rt)
 end
 
 struct OptimizedSource
@@ -16,7 +18,7 @@ end
 
 const Remarks = Vector{Pair{Int, String}}
 
-mutable struct CthulhuInterpreter <: AbstractInterpreter
+struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
 
     unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
@@ -82,8 +84,9 @@ function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::
         valid_worlds::WorldRange, @nospecialize(inferred_result))
     if isa(inferred_result, OptimizationState)
         opt = inferred_result
-        if isdefined(opt, :ir)
-            return OptimizedSource(opt.ir::IRCode, opt.src, opt.src.inlineable)
+        ir = opt.ir
+        if ir !== nothing
+            return OptimizedSource(ir, opt.src, opt.src.inlineable)
         end
     end
     return inferred_result
@@ -101,7 +104,7 @@ function Compiler.inlining_policy(
         end
     else
         # the default inlining policy may try additional effor to find the source in a local cache
-        return Base.@invoke Compiler.inlining_policy(
+        return @invoke Compiler.inlining_policy(
             interp::AbstractInterpreter, nothing, stmt_flag::UInt8,
             mi::MethodInstance, argtypes::Vector{Any})
     end
@@ -120,8 +123,9 @@ function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     src = caller.src
     if isa(src, OptimizationState)
         opt = src
-        if isdefined(opt, :ir)
-            caller.src = OptimizedSource(opt.ir, opt.src, opt.src.inlineable)
+        ir = opt.ir
+        if ir !== nothing
+            caller.src = OptimizedSource(ir, opt.src, opt.src.inlineable)
         end
     end
 end
