@@ -292,15 +292,16 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
     view_cmd = cthulhu_typed
+    iostream = term.out_stream::IO
     while true
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
             # This was inferred to a pure constant - we have no code to show,
             # but make something up that looks plausible.
             if display_CI
-                println(term.out_stream::IO)
-                println(term.out_stream::IO, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
-                println(term.out_stream::IO, "│  return ", Const(interp.opt[mi].rettype_const))
-                println(term.out_stream::IO)
+                println(iostream)
+                println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype), :invoke)))")
+                println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
+                println(iostream)
             end
             callsites = Callsite[]
         else
@@ -338,7 +339,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
-                printstyled(IOContext(term.out_stream::IO, :limit=>true), mi.def, '\n'; bold=true)
+                printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
                 if debuginfo == DInfo.compact
                     str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
@@ -355,9 +356,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     if rmatch !== nothing
                         str = str[begin:prevind(str, first(rmatch))]
                     end
-                    print(term.out_stream::IO, str)
+                    print(iostream, str)
                 else
-                    lambda_io = IOContext(term.out_stream::IO, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
+                    lambda_io = IOContext(iostream, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
                     cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                   iswarn, hide_type_stable,
                                   remarks=_remarks, inline_cost, type_annotations,
@@ -368,7 +369,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             display_CI = true
         end
 
-        menu = CthulhuMenu(callsites, optimize, iswarn&get(term.out_stream::IO, :color, false)::Bool; menu_options...)
+        menu = CthulhuMenu(callsites, optimize, iswarn&get(iostream, :color, false)::Bool; menu_options...)
         usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, inline_cost, type_annotations, CONFIG.enable_highlighter)
         cid = request(term, usg, menu)
         toggle = menu.toggle
@@ -496,12 +497,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             else
                 view_cmd = get(CODEVIEWS, toggle, nothing)
                 @assert !isnothing(view_cmd) "invalid option $toggle"
-                println(term.out_stream)
-                view_cmd(term.out_stream::IO, mi, optimize, debuginfo, interp, CONFIG)
+                println(iostream)
+                view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
                 display_CI = false
             end
         end
-        println(term.out_stream::IO)
+        println(iostream)
     end
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
