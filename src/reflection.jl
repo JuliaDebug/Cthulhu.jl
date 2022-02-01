@@ -6,7 +6,8 @@ using Base.Meta
 import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo,
-    sptypes_from_meth_instance, argtypes_to_type
+    sptypes_from_meth_instance, argtypes_to_type,
+    decode_effects
 import Base: may_invoke_generator
 
 function code_for_method(method, metharg, methsp, world, preexisting=false)
@@ -71,7 +72,8 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
             if c.head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 at = argextype(c.args[2], CI, sptypes, slottypes)
-                callsite = Callsite(id, MICallInfo(c.args[1], rt), c.head)
+                effects = haskey(interp.unopt, c.args[1]) ? interp.unopt[c.args[1]].effects : Effects()
+                callsite = Callsite(id, MICallInfo(c.args[1], rt, effects), c.head)
             elseif c.head === :foreigncall
                 # special handling of jl_new_task
                 length(c.args) > 0 || continue
@@ -115,7 +117,7 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
-            mici = MICallInfo(mi, rt)
+            mici = MICallInfo(mi, rt, haskey(interp.unopt, mi) ? interp.unopt[mi].effects : Effects())
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
     elseif isa(info, MethodResultPure)
@@ -136,7 +138,7 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
                 infos[i]
             else
                 linfo = result.linfo
-                mici = MICallInfo(linfo, rt)
+                mici = MICallInfo(linfo, rt, result.ipo_effects)
                 ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
             end
         end

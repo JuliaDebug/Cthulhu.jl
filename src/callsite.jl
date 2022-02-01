@@ -6,16 +6,18 @@ abstract type CallInfo end
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
-    function MICallInfo(mi::MethodInstance, @nospecialize(rt))
+    effects
+    function MICallInfo(mi::MethodInstance, @nospecialize(rt), effects)
         if isa(rt, LimitedAccuracy)
-            return LimitedCallInfo(new(mi, ignorelimited(rt)))
+            return LimitedCallInfo(new(mi, ignorelimited(rt), effects))
         else
-            return new(mi, rt)
+            return new(mi, rt, effects)
         end
     end
 end
 get_mi(ci::MICallInfo) = ci.mi
 get_rt(ci::CallInfo) = ci.rt
+get_effects(ci::MICallInfo) = ci.effects
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -34,6 +36,7 @@ end
 struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
+get_effects(uci::UncachedCallInfo) = Effects()
 
 struct PureCallInfo <: CallInfo
     argtypes::Vector{Any}
@@ -73,6 +76,10 @@ end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 
+function get_effects(mci::MultiCallInfo)
+    mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos)
+end
+
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
 end
@@ -81,8 +88,8 @@ get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::MICallInfo
-    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt)) =
-        new(MICallInfo(mi, rt))
+    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt), effects::Effects) =
+        new(MICallInfo(mi, rt, effects))
 end
 get_mi(ci::InvokeCallInfo) = get_mi(ci.ci)
 get_rt(ci::InvokeCallInfo) = get_rt(ci.ci)
@@ -108,6 +115,7 @@ struct ConstPropCallInfo <: CallInfo
 end
 get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 get_rt(cpci::ConstPropCallInfo) = get_rt(cpci.mi)
+get_effects(cpci::ConstPropCallInfo) = cpci.result.ipo_effects
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -122,6 +130,7 @@ struct Callsite
     head::Symbol
 end
 get_mi(c::Callsite) = get_mi(c.info)
+get_effects(c::Callsite) = get_effects(c.info)
 
 # Callsite printing
 mutable struct TextWidthLimiter <: IO
@@ -286,6 +295,11 @@ function Base.show(io::IO, c::Callsite)
     iswarn = get(io, :iswarn, false)::Bool
     info = c.info
     rt = get_rt(info)
+    with_effects = get(io, :with_effects, false)
+    if with_effects
+        show(io, get_effects(c))
+        print(io, ' ')
+    end
     if iswarn && is_type_unstable(rt)
         printstyled(io, '%'; color=:red)
     else

@@ -136,7 +136,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         print(io, "│ ─ ")
-        println(iolim, Callsite(-1, MICallInfo(mi, rettype), :invoke))
+        println(iolim, Callsite(-1, MICallInfo(mi, rettype, Effects()), :invoke))
     end
 
     # preprinter configuration
