@@ -13,13 +13,7 @@ import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_me
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
-# branch on https://github.com/JuliaLang/julia/pull/42125
-# TODO remove me once v1.7 is released
-@static if isdefined(Base, Symbol("@constprop"))
-    import Base: @constprop
-else
-    macro constprop(_, ex); esc(ex); end
-end
+import Base: @constprop
 
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
