@@ -167,14 +167,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         Returns(nothing)
     end
     if !isnothing(remarks)
+        sort!(remarks)
         function postprinter(io::IO, @nospecialize(typ), used::Bool)
             _postprinter(io, typ, used)
             haskey(io, :idx) || return
             idx = io[:idx]::Int
-            for (pc, remark) in remarks
-                if pc == idx
-                    printstyled(io, ' ', remark; color=:light_black)
-                end
+            firstind = searchsortedfirst(remarks, idx=>"")
+            if firstind in eachindex(remarks) && remarks[firstind].first == idx
+                printstyled(io, ' ', remarks[firstind].second; color=:light_black)
             end
         end
     else
