@@ -173,8 +173,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             haskey(io, :idx) || return
             idx = io[:idx]::Int
             firstind = searchsortedfirst(remarks, idx=>"")
-            if firstind in eachindex(remarks) && remarks[firstind].first == idx
-                printstyled(io, ' ', remarks[firstind].second; color=:light_black)
+            for i in firstind:lastindex(remarks)
+                remarks[i].first == idx || break
+                printstyled(io, ' ', remarks[i].second; color=:light_black)
             end
         end
     else
