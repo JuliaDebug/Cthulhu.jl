@@ -23,15 +23,13 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
     sptypes = sptypes_from_meth_instance(mi)
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
-    isa(tt, Const) || return callsite
-    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
+    (@static IS_OVERHAULED ? isConst(tt) : isa(tt, Const)) || return callsite
+    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing, world)), callsite.head)
 end
-
-const ArgTypes = Vector{Any}
 
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
-                        slottypes::Vector{Any}, optimize::Bool=true)
+                        slottypes::Argtypes, optimize::Bool=true)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
 
@@ -48,7 +46,9 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 if !optimize
                     args = (ignorelhs(c)::Expr).args
                 end
-                argtypes = mapany(function (@nospecialize(arg),)
+                argtypes = @static IS_OVERHAULED ?
+                           LatticeElement[argextype(arg, CI, sptypes, slottypes) for arg in args] :
+                           mapany(function (@nospecialize(arg),)
                                       t = argextype(arg, CI, sptypes, slottypes)
                                       return widenconst(ignorelimited(t))
                                   end, args)
@@ -103,7 +103,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
     return callsites
 end
 
-function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
+function process_info(interp, @nospecialize(info), argtypes::Argtypes, @nospecialize(rt), optimize::Bool)
     is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
