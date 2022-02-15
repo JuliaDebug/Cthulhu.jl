@@ -13,6 +13,8 @@ import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_me
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
+const ArgTypes = Vector{Any}
+
 import Base: @constprop
 
 Base.@kwdef mutable struct CthulhuConfig
