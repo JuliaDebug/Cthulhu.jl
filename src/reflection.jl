@@ -27,8 +27,6 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
 end
 
-const ArgTypes = Vector{Any}
-
 function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true)
@@ -50,7 +48,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                 end
                 argtypes = mapany(function (@nospecialize(arg),)
                                       t = argextype(arg, CI, sptypes, slottypes)
-                                      return widenconst(ignorelimited(t))
+                                      return ignorelimited(t)
                                   end, args)
                 callinfos = process_info(interp, info, argtypes, rt, optimize)
                 isempty(callinfos) && continue
@@ -134,7 +132,11 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         return mapany(enumerate(info.results)) do (i, result)
             if isnothing(result)
                 infos[i]
+            elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
+                linfo = result.mi
+                ConstEvalCallInfo(MICallInfo(linfo, rt), argtypes)
             else
+                @assert isa(result, Compiler.InferenceResult)
                 linfo = result.linfo
                 mici = MICallInfo(linfo, rt)
                 ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
