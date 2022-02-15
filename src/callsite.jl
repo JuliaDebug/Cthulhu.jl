@@ -109,6 +109,13 @@ end
 get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 get_rt(cpci::ConstPropCallInfo) = get_rt(cpci.mi)
 
+struct ConstEvalCallInfo <: CallInfo
+    mi::CallInfo
+    argtypes::ArgTypes
+end
+get_mi(crci::ConstEvalCallInfo) = get_mi(crci.mi)
+get_rt(crci::ConstEvalCallInfo) = get_rt(crci.mi)
+
 # CUDA callsite
 struct CuCallInfo <: CallInfo
      cumi::MICallInfo
@@ -267,6 +274,13 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     __show_limited(limiter, name, tt, get_rt(ignorewrappers(ci.mi)::MICallInfo))
 end
 
+function show_callinfo(limiter, ci::ConstEvalCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = get_mi(ci).def.name
+    tt = ci.argtypes[2:end]
+    __show_limited(limiter, name, tt, get_rt(ci))
+end
+
 function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
     if isa(vmi, FailedCallInfo)
         ft = Base.tuple_type_head(vmi.sig)
@@ -328,6 +342,9 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " >")
     elseif isa(info, ConstPropCallInfo)
         print(limiter, " = < constprop > ")
+        show_callinfo(limiter, info)
+    elseif isa(info, ConstEvalCallInfo)
+        print(limiter, " = < consteval > ")
         show_callinfo(limiter, info)
     elseif isa(info, OCCallInfo)
         print(limiter, " = < opaque closure call > ")
