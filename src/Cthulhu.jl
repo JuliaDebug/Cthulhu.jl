@@ -283,7 +283,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    is_cached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
+    iscached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
@@ -310,7 +310,16 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = src.src
                         infos = opt.stmts.info
                         slottypes = opt.argtypes
-                    else # source might be unavailable at this point, when a result is fully constant-folded etc.
+                    elseif isa(opt, OptimizedSource)
+                        # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+                        # e.g. when we switch from constant-prop' unoptimized source
+                        src = Core.Compiler.copy(opt.ir)
+                        codeinf = opt.src
+                        infos = src.stmts.info
+                        slottypes = src.argtypes
+                    else
+                        # the source might be unavailable at this point,
+                        # when a result is fully constant-folded etc.
                         (; src, rt, infos, slottypes, codeinf) = lookup(interp, mi, optimize)
                     end
                 else
@@ -437,7 +446,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
-            if !is_cached(mi, optimize)
+            if !iscached(mi, optimize)
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
