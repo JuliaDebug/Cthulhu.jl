@@ -5,9 +5,10 @@ using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
 struct InferredSource
     src::CodeInfo
     stmt_info::Vector{Any}
-    rt
-    InferredSource(src::CodeInfo, stmt_info::Vector{Any}, @nospecialize(rt)) =
-        new(src, stmt_info, rt)
+    effects::Effects
+    rt::Any
+    InferredSource(src::CodeInfo, stmt_info::Vector{Any}, effects, @nospecialize(rt)) =
+        new(src, stmt_info, effects, rt)
 end
 
 struct OptimizedSource
@@ -76,6 +77,7 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
         copy(state.src),
         copy(state.stmt_info),
+        isdefined(Core.Compiler, :Effects) ? state.ipo_effects : nothing,
         state.result.result)
     return r
 end
