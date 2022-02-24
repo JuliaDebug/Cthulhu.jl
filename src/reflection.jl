@@ -33,19 +33,22 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                         slottypes::Vector{Any}, optimize::Bool=true)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
+    stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
+    nstmts = length(stmts)
 
-    for (id, c) in enumerate(isa(CI, IRCode) ? CI.stmts.inst : CI.code)
+    for id = 1:nstmts
+        stmt = stmts[id]
+        isa(stmt, Expr) || continue
         callsite = nothing
-        isa(c, Expr) || continue
-        if stmt_info !== nothing && is_call_expr(c, optimize)
+        if stmt_info !== nothing && is_call_expr(stmt, optimize)
             info = stmt_info[id]
             if info !== nothing
                 rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
-                args = c.args
+                local args = stmt.args
                 if !optimize
-                    args = (ignorelhs(c)::Expr).args
+                    args = (ignorelhs(stmt)::Expr).args
                 end
                 argtypes = mapany(function (@nospecialize(arg),)
                                       t = argextype(arg, CI, sptypes, slottypes)
@@ -59,30 +62,31 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
                     else
                         callinfo = MultiCallInfo(argtypes_to_type(argtypes), rt, callinfos)
                     end
-                    Callsite(id, callinfo, c.head)
+                    Callsite(id, callinfo, stmt.head)
                 end
             end
         end
 
-        if callsite === nothing && c isa Expr
-            c = ignorelhs(c)
-            (c isa Expr) || continue
-            if c.head === :invoke
+        if callsite === nothing
+            local stmt = ignorelhs(stmt)
+            (stmt isa Expr) || continue
+            (; head, args) = stmt
+            if head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
-                at = argextype(c.args[2], CI, sptypes, slottypes)
-                effects = get_effects(interp.unopt, c.args[1])
-                # effects = haskey(interp.unopt, c.args[1]) ? interp.unopt[c.args[1]].effects : Effects()
-                callsite = Callsite(id, MICallInfo(c.args[1], rt, effects), c.head)
-            elseif c.head === :foreigncall
+                mi = args[1]::MethodInstance
+                effects = get_effects(interp.unopt, mi)
+                callsite = Callsite(id, MICallInfo(mi, rt, effects), head)
+            elseif head === :foreigncall
                 # special handling of jl_new_task
-                length(c.args) > 0 || continue
-                if c.args[1] isa QuoteNode
-                    cfunc = c.args[1].value
+                length(args) > 0 || continue
+                arg1 = args[1]
+                if arg1 isa QuoteNode
+                    cfunc = arg1.value
                     if cfunc === :jl_new_task
-                        func = c.args[6]
+                        func = args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_world_counter(interp))), c.head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_world_counter(interp))), head)
                     end
                 end
             end

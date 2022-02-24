@@ -15,7 +15,14 @@ end
 function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     sprint() do io
-        show(IOContext(io, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize, :iswarn=>iswarn, :color=>iswarn||with_effects, :with_effects=>with_effects), callsite)
+        show(IOContext(io,
+            :limit        => true,
+            :displaysize  => reduced_displaysize,
+            :optimize     => optimize,
+            :iswarn       => iswarn,
+            :color        => iswarn | with_effects,
+            :with_effects => with_effects),
+            callsite)
     end
 end
 
