@@ -377,7 +377,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
                               remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
-                        stringify() do io # eliminate trailing indentation (see first item in bullet list in PR #189)
+                        ioctx = IOContext(iostream, :color=>true, :displaysize=>displaysize(iostream)) # displaysize doesn't propagate otherwise
+                        stringify(ioctx) do io
                             lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
                             cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                           iswarn, hide_type_stable,
@@ -385,6 +386,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                                           interp)
                         end
                     end
+                    # eliminate trailing indentation (see first item in bullet list in PR #189)
                     rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
                     if rmatch !== nothing
                         str = str[begin:prevind(str, first(rmatch))]
