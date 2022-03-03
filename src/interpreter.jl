@@ -37,15 +37,14 @@ CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter()) =
     )
 
 import Core.Compiler: InferenceParams, OptimizationParams, get_world_counter,
-    get_inference_cache, code_cache, method_table,
-    WorldView, lock_mi_inference, unlock_mi_inference, InferenceState
+    get_inference_cache, code_cache, lock_mi_inference, unlock_mi_inference
+import Core.Compiler: InferenceState, WorldView
 using Base: @invoke
 
 Compiler.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 Compiler.OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
 Compiler.get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
 Compiler.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
-Compiler.method_table(interp::CthulhuInterpreter, sv::InferenceState) = method_table(interp.native, sv)
 
 # No need to do any locking since we're not putting our results into the runtime cache
 Compiler.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
