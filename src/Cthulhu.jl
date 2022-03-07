@@ -610,7 +610,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
             if !isroot(node)
                 # Help user find the sites calling the parent
                 miparent = instance(node.parent.data.nd)
-                ulocs = find_caller_of(interp, miparent, mi)
+                ulocs = find_caller_of(interp, miparent, mi; allcandidates=true, optimize_choices = (false, true))
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
@@ -618,7 +618,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1
-                        choice2 = TerminalMenus.request(term, "\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                        choice2 = TerminalMenus.request(term, "\nChoose possible caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
                             loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))

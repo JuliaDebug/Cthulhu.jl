@@ -383,18 +383,57 @@ end
 _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
-is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
-is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
-is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped(info), mi)
-is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
-is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.vmi, mi)
-is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
-function is_callsite(info::MultiCallInfo, mi::MethodInstance)
+is_callsite(call::MethodInstance, callee::MethodInstance) = call === callee
+is_callsite(::Nothing, callee::MethodInstance) = false
+is_callsite(cs::Callsite, callee::MethodInstance) = is_callsite(cs.info, callee)
+function is_callsite(info::CallInfo, callee::MethodInstance)
+    call = get_mi(info)
+    return is_callsite(call, callee)
+end
+function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
-        is_callsite(csi, mi) && return true
+        is_callsite(csi, callee) && return true
     end
     return false
 end
-is_callsite(::CallInfo, mi::MethodInstance) = false
+
+function maybe_callsite(call::MethodInstance, callee::MethodInstance)
+    function generalized_va_subtype(@nospecialize(Tshort), @nospecialize(Tlong))
+        nshort, nlong = length(Tshort.parameters), length(Tlong.parameters)
+        T = unwrapva(Tshort.parameters[end])
+        T <: unwrapva(Tlong.parameters[end]) || return false
+        for i = 1:nshort-1
+            Tshort.parameters[i] <: Tlong.parameters[i] || return false
+        end
+        for i = nshort:nlong-1
+            T <: Tlong.parameters[i] || return false
+        end
+        return T <: unwrapva(Tlong.parameters[end])
+    end
+
+    Tcall, Tcallee = call.specTypes, callee.specTypes
+    Tcall <: Tcallee && return true
+    # Make sure we handle Tcall = Tuple{Vararg{String}}, Tcallee = Tuple{String,Vararg{String}}
+    if Base.isvatuple(Tcall) && Base.isvatuple(Tcallee)
+        Tcall, Tcallee = Base.unwrap_unionall(Tcall), Base.unwrap_unionall(Tcallee)
+        nargcall, nargcallee = length(Tcall.parameters), length(Tcallee.parameters)
+        nargcall == nargcallee && return false
+        return nargcall < nargcallee ? generalized_va_subtype(Tcall, Tcallee) : generalized_va_subtype(Tcallee, Tcall)
+    end
+    return false
+end
+maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
+function maybe_callsite(info::CallInfo, callee::MethodInstance)
+    call = get_mi(info)
+    call === nothing && @show info
+    return maybe_callsite(call, callee)
+end
+function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
+    for csi in info.callinfos
+        maybe_callsite(csi, callee) && return true
+    end
+    return false
+end
+maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
+
+unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg
