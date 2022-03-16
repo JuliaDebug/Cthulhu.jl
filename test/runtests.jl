@@ -813,11 +813,11 @@ import Base.Experimental: @MethodTable, @overlay
 
 @newinterp MTOverlayInterp
 @MethodTable(OverlayedMT)
-@static if VERSION >= v"1.9.0-DEV.120"
+@static if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
-else # @static if VERSION >= v"1.9.0-DEV.120"
+else # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
 CC.method_table(interp::MTOverlayInterp, sv::CC.InferenceState) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
-end # @static if VERSION >= v"1.9.0-DEV.120"
+end # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
 @overlay OverlayedMT sin(x::Float64) = 1
 
 let
