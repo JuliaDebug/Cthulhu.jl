@@ -349,7 +349,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 else
                     unopt = get(interp.unopt, override, missing)
                     if unopt === missing
-                        unopt = get(interp.unopt, override.linfo, missing)
+                        unopt = interp.unopt[override.linfo]
                     end
                     codeinf = src = copy(unopt.src)
                     rt = unopt.rt
