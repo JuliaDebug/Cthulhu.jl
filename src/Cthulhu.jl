@@ -296,6 +296,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
     remarks::Bool=false, with_effects::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
+
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -346,10 +347,14 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
                     end
                 else
-                    codeinf = src = copy(interp.unopt[override].src)
-                    rt = interp.unopt[override].rt
-                    infos = interp.unopt[override].stmt_info
-                    effects = get_effects(interp.unopt[override])
+                    unopt = get(interp.unopt, override, missing)
+                    if unopt === missing
+                        unopt = interp.unopt[override.linfo]
+                    end
+                    codeinf = src = copy(unopt.src)
+                    rt = unopt.rt
+                    infos = unopt.stmt_info
+                    effects = get_effects(unopt)
                     slottypes = src.slottypes
                     if isnothing(slottypes)
                         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
