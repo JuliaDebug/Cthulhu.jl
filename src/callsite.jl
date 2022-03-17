@@ -45,6 +45,8 @@ struct PureCallInfo <: CallInfo
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
+# @pure implies total
+get_effects(ci::PureCallInfo) = EFFECTS_ENABLED ? Core.Compiler.EFFECTS_TOTAL : Effects()
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -125,6 +127,15 @@ end
 get_mi(ceci::ConstEvalCallInfo) = get_mi(ceci.mi)
 get_rt(ceci::ConstEvalCallInfo) = get_rt(ceci.mi)
 get_effects(ceci::ConstEvalCallInfo) = get_effects(ceci.mi)
+
+struct SemiConcreteCallInfo <: CallInfo
+    mi::CallInfo
+    argtypes::ArgTypes
+    ir::IRCode
+end
+get_mi(scci::SemiConcreteCallInfo) = get_mi(scci.mi)
+get_rt(scci::SemiConcreteCallInfo) = get_rt(scci.mi)
+get_effects(scci::SemiConcreteCallInfo) = get_effects(scci.mi)
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -292,6 +303,13 @@ function show_callinfo(limiter, ci::ConstEvalCallInfo)
     __show_limited(limiter, name, tt, get_rt(ci))
 end
 
+function show_callinfo(limiter, ci::SemiConcreteCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = get_mi(ci).def.name
+    tt = ci.argtypes[2:end]
+    __show_limited(limiter, name, tt, get_rt(ci))
+end
+
 function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
     if isa(vmi, FailedCallInfo)
         ft = Base.tuple_type_head(vmi.sig)
@@ -362,6 +380,9 @@ function Base.show(io::IO, c::Callsite)
     elseif isa(info, ConstEvalCallInfo)
         print(limiter, " = < consteval > ")
         show_callinfo(limiter, info)
+    elseif isa(info, SemiConcreteCallInfo)
+        print(limiter, " = < semi-consteval > ")
+        show_callinfo(limiter, info)
     elseif isa(info, OCCallInfo)
         print(limiter, " = < opaque closure call > ")
         show_callinfo(limiter, info.ci)
@@ -387,6 +408,7 @@ is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
 is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
 is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped(info), mi)
 is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
+is_callsite(info::SemiConcreteCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
 is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
 is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.vmi, mi)

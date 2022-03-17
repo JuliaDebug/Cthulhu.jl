@@ -93,6 +93,18 @@ function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::
     return inferred_result
 end
 
+function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
+    valid_worlds::WorldRange, @nospecialize(inferred_result), ::Effects)
+    if isa(inferred_result, OptimizationState)
+        opt = inferred_result
+        ir = opt.ir
+        if ir !== nothing
+            return OptimizedSource(ir, opt.src, opt.src.inlineable)
+        end
+    end
+    return inferred_result
+end
+
 # branch on https://github.com/JuliaLang/julia/pull/41328
 @static if isdefined(Compiler, :is_stmt_inline)
 function Compiler.inlining_policy(
@@ -119,6 +131,11 @@ function Compiler.inlining_policy(interp::CthulhuInterpreter)
     end
 end
 end # @static if isdefined(Compiler, :is_stmt_inline)
+
+function Compiler.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
+     isa(code.inferred, Nothing) && return nothing
+     return Compiler.copy((code.inferred::OptimizedSource).ir)
+end
 
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     src = caller.src
