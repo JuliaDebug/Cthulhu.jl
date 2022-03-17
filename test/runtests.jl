@@ -615,6 +615,23 @@ end
     info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Float64, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
 
+    M = Module()
+    @eval M begin
+        f(x::String...) = join(x, ' ')
+        f(x::Int...) = sum(x)
+        g(c) = f(c...); const gline = @__LINE__
+    end
+    @test M.g(Any["cat", "dog"]) == "cat dog"
+
+    mif = Cthulhu.get_specialization(M.f, Tuple{String, Vararg{String}})
+    mig = Cthulhu.get_specialization(M.g, Tuple{Vector{Any}})
+    @test isempty(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig))
+    candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allow_unspecialized=true))
+    @test candidate[1] == nameof(M.g)
+    @test candidate[2] == Symbol(@__FILE__)
+    @test candidate[3] == 0 # depth
+    @test lines == [M.gline]
+
     # Detection in optimized (post-inlining) code
     @noinline nicallee(x) = 2x
     midcaller(x) = nicallee(x), @__LINE__
