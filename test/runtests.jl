@@ -626,7 +626,7 @@ end
     mif = Cthulhu.get_specialization(M.f, Tuple{String, Vararg{String}})
     mig = Cthulhu.get_specialization(M.g, Tuple{Vector{Any}})
     @test isempty(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig))
-    candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allcandidates=true))
+    candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allow_unspecialized=true))
     @test candidate[1] == nameof(M.g)
     @test candidate[2] == Symbol(@__FILE__)
     @test candidate[3] == 0 # depth

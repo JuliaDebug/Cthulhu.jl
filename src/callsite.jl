@@ -383,13 +383,15 @@ end
 _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
+# is_callsite returns true if `call` dispatches to `callee`
+# See also `maybe_callsite` below
 is_callsite(call::MethodInstance, callee::MethodInstance) = call === callee
-is_callsite(::Nothing, callee::MethodInstance) = false
+is_callsite(::Nothing, callee::MethodInstance) = false   # for when `get_mi` returns `nothing`
+
+# is_callsite for higher-level inputs
 is_callsite(cs::Callsite, callee::MethodInstance) = is_callsite(cs.info, callee)
-function is_callsite(info::CallInfo, callee::MethodInstance)
-    call = get_mi(info)
-    return is_callsite(call, callee)
-end
+is_callsite(info::CallInfo, callee::MethodInstance) = is_callsite(get_mi(info), callee)
+# special CallInfo cases:
 function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
         is_callsite(csi, callee) && return true
@@ -397,7 +399,10 @@ function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     return false
 end
 
+# maybe_callsite returns true if `call` *might* dispatch to `callee`
+# See also `is_callsite` above
 function maybe_callsite(call::MethodInstance, callee::MethodInstance)
+    # handle comparison among Varargs
     function generalized_va_subtype(@nospecialize(Tshort), @nospecialize(Tlong))
         nshort, nlong = length(Tshort.parameters), length(Tlong.parameters)
         T = unwrapva(Tshort.parameters[end])
@@ -422,12 +427,11 @@ function maybe_callsite(call::MethodInstance, callee::MethodInstance)
     end
     return false
 end
+
+# maybe_callsite for higher-level inputs
 maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
-function maybe_callsite(info::CallInfo, callee::MethodInstance)
-    call = get_mi(info)
-    call === nothing && @show info
-    return maybe_callsite(call, callee)
-end
+maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
+# Special CallInfo cases:
 function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
         maybe_callsite(csi, callee) && return true
