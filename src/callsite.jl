@@ -98,8 +98,10 @@ get_effects(ici::InvokeCallInfo) = get_effects(ici.ci)
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
     ci::MICallInfo
+    function OCCallInfo(mi::MethodInstance, @nospecialize(rt))
+        new(MICallInfo(mi, rt, Effects()))
+    end
 end
-OCCallInfo(mi::MethodInstance, rt) = OCCallInfo(MICallInfo(mi, rt))
 get_mi(occi::OCCallInfo) = get_mi(occi.ci)
 get_rt(occi::OCCallInfo) = get_rt(occi.ci)
 

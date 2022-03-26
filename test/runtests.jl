@@ -296,6 +296,27 @@ end
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 end
 
+@testset "OCCallInfo" begin
+    callsites = find_callsites_by_ftt((Int,Int,); optimize=false) do a, b
+        oc = Base.Experimental.@opaque b -> sin(a) + cos(b)
+        oc(b)
+    end
+    @test length(callsites) == 1
+    callinfo = only(callsites).info
+    @test callinfo isa Cthulhu.OCCallInfo
+    @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
+        sin(a) + cos(b)
+    end |> only === Float64
+
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo.ci)
+    s = "opaque closure(::$Int)::$Float64"
+    @test String(take!(io)) == s
+    io = IOBuffer()
+    print(io, only(callsites))
+    @test occursin("< opaque closure call > $s", String(take!(io)))
+end
+
 # tasks
 ftask() = @sync @async show(io, "Hello")
 let callsites = find_callsites_by_ftt(ftask, Tuple{})
