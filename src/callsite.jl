@@ -104,6 +104,7 @@ struct OCCallInfo <: CallInfo
 end
 get_mi(occi::OCCallInfo) = get_mi(occi.ci)
 get_rt(occi::OCCallInfo) = get_rt(occi.ci)
+get_effects(::OCCallInfo) = Effects()
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
@@ -111,6 +112,7 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
+get_effects(::ReturnTypeCallInfo) = Effects()
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
