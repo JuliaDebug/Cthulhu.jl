@@ -26,6 +26,7 @@ ignorewrappers(ci::CallInfo) = ci
 ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
 get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
 get_rt(ci::WrappedCallInfo) = get_rt(ignorewrappers(ci))
+get_effects(ci::WrappedCallInfo) = get_effects(ignorewrappers(ci))
 
 # only appears when inspecting pre-optimization states
 struct LimitedCallInfo <: WrappedCallInfo
@@ -36,7 +37,6 @@ end
 struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
-get_effects(uci::UncachedCallInfo) = Effects()
 
 struct PureCallInfo <: CallInfo
     argtypes::Vector{Any}
@@ -45,6 +45,7 @@ struct PureCallInfo <: CallInfo
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
+get_effects(::PureCallInfo) = EFFECTS_TOTAL
 
 # Failed
 struct FailedCallInfo <: CallInfo

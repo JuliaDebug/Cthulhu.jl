@@ -17,9 +17,11 @@ const ArgTypes = Vector{Any}
 
 @static if !isdefined(Core.Compiler, :Effects)
     const Effects = Nothing
+    const EFFECTS_TOTAL = Nothing
     const EFFECTS_ENABLED = false
 else
     const Effects = Core.Compiler.Effects
+    const EFFECTS_TOTAL = Core.Compiler.EFFECTS_TOTAL
     const EFFECTS_ENABLED = true
 end
 
