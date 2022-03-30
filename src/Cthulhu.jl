@@ -342,7 +342,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = opt.src
                         infos = src.stmts.info
                         slottypes = src.argtypes
-                        effects = get_effects(codeinf)
+                        effects = opt.effects
                     else
                         # the source might be unavailable at this point,
                         # when a result is fully constant-folded etc.

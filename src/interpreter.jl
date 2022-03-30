@@ -15,6 +15,15 @@ struct OptimizedSource
     ir::IRCode
     src::CodeInfo
     isinlineable::Bool
+    effects::Effects
+end
+
+maybe_create_optsource(@nospecialize(a), ::Effects) = a
+
+function maybe_create_optsource(st::OptimizationState, effects::Effects)
+    ir = st.ir
+    ir === nothing && return st
+    return OptimizedSource(ir, st.src, st.src.inlineable, effects)
 end
 
 const Remarks = Vector{Pair{Int, String}}
@@ -76,25 +85,19 @@ function Compiler.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, ms
 end
 
 function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
-    r = @invoke Compiler.finish(state::InferenceState, interp::AbstractInterpreter)
-    interp.unopt[Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo] = InferredSource(
+    res = @invoke Compiler.finish(state::InferenceState, interp::AbstractInterpreter)
+    key = Core.Compiler.any(state.result.overridden_by_const) ? state.result : state.linfo
+    interp.unopt[key] = InferredSource(
         copy(state.src),
         copy(state.stmt_info),
         isdefined(Core.Compiler, :Effects) ? state.ipo_effects : nothing,
         state.result.result)
-    return r
+    return res
 end
 
 function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
         valid_worlds::WorldRange, @nospecialize(inferred_result), ipo_effects::Effects = Effects())
-    if isa(inferred_result, OptimizationState)
-        opt = inferred_result
-        ir = opt.ir
-        if ir !== nothing
-            return OptimizedSource(ir, opt.src, opt.src.inlineable)
-        end
-    end
-    return inferred_result
+    return maybe_create_optsource(inferred_result, ipo_effects)
 end
 
 # branch on https://github.com/JuliaLang/julia/pull/41328
@@ -125,12 +128,6 @@ end
 end # @static if isdefined(Compiler, :is_stmt_inline)
 
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
-    src = caller.src
-    if isa(src, OptimizationState)
-        opt = src
-        ir = opt.ir
-        if ir !== nothing
-            caller.src = OptimizedSource(ir, opt.src, opt.src.inlineable)
-        end
-    end
+    effects = EFFECTS_ENABLED ? caller.ipo_effects : nothing
+    caller.src = maybe_create_optsource(caller.src, effects)
 end
