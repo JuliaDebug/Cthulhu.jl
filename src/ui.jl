@@ -12,15 +12,22 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     config::TerminalMenus.Config
 end
 
-function show_as_line(el, optimize::Bool, iswarn::Bool)
+function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     sprint() do io
-        show(IOContext(io, :limit=>true, :displaysize=>reduced_displaysize, :optimize=>optimize, :iswarn=>iswarn, :color=>iswarn), el)
+        show(IOContext(io,
+            :limit        => true,
+            :displaysize  => reduced_displaysize,
+            :optimize     => optimize,
+            :iswarn       => iswarn,
+            :color        => iswarn | with_effects,
+            :with_effects => with_effects),
+            callsite)
     end
 end
 
-function CthulhuMenu(callsites, optimize::Bool, iswarn::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
-    options = vcat(map(site->show_as_line(site, optimize, iswarn), callsites), ["↩"])
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
+    options = vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -40,36 +47,42 @@ end
 TerminalMenus.options(m::CthulhuMenu) = m.options
 TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
-function stringify(@nospecialize(f), io::IO=IOBuffer())
-    f(IOContext(io, :color=>true))
-    return String(take!(io))
+stringify(@nospecialize(f), io::IO = devnull) = stringify(f, IOContext(io, :color=>true))
+function stringify(@nospecialize(f), context::IOContext)
+    buf = IOBuffer()
+    io = IOContext(buf, context)
+    f(io)
+    return String(take!(buf))
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, inline_cost, highlight)
-    colorize(iotmp, use_color::Bool, c::Char) = stringify(iotmp) do io
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight)
+    colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
 
-    io, iotmp = IOBuffer(), IOBuffer()
+    io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
 
     println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
     println(ioctx, "Toggles: [",
-        colorize(iotmp, optimize, 'o'), "]ptimize, [",
-        colorize(iotmp, iswarn, 'w'), "]arn, [",
-        colorize(iotmp, hide_type_stable, 'h'), "]ide type-stable statements, [",
-        stringify(iotmp) do io
+        colorize(optimize, 'o'), "]ptimize, [",
+        colorize(iswarn, 'w'), "]arn, [",
+        colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
+        stringify() do io
             printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
         end, "]ebuginfo, [",
-        colorize(iotmp, inline_cost, 'i'), "]nlining costs, [",
-        colorize(iotmp, highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
+        colorize(remarks, 'r'), "]emarks, [",
+        colorize(with_effects, 'e'), "]ffects, [",
+        colorize(inline_cost, 'i'), "]nlining costs, [",
+        colorize(type_annotations, 't'), "]ype annotations, [",
+        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
     println(ioctx, "Show: [",
-        colorize(iotmp, view_cmd === cthulhu_source, 'S'), "]ource code, [",
-        colorize(iotmp, view_cmd === cthulhu_ast, 'A'), "]ST, [",
-        colorize(iotmp, view_cmd === cthulhu_typed, 'T'), "]yped code, [",
-        colorize(iotmp, view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
-        colorize(iotmp, view_cmd === cthulhu_native, 'N'), "]ative code")
+        colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
+        colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
+        colorize(view_cmd === cthulhu_typed, 'T'), "]yped code, [",
+        colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
+        colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
     """
     Actions: [E]dit source code, [R]evise and redisplay
@@ -91,8 +104,17 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('d')
         m.toggle = :debuginfo
         return true
+    elseif key == UInt32('r')
+        m.toggle = :remarks
+        return true
+    elseif key == UInt32('e')
+        m.toggle = :with_effects
+        return true
     elseif key == UInt32('i')
         m.toggle = :inline_cost
+        return true
+    elseif key == UInt32('t')
+        m.toggle = :type_annotations
         return true
     elseif key == UInt32('s')
         m.toggle = :highlighter
@@ -118,10 +140,10 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('b')
         m.toggle = :bookmark
         return true
-    elseif key == UInt32('r') || key == UInt32('R')
+    elseif key == UInt32('R')
         m.toggle = :revise
         return true
-    elseif key == UInt32('e') || key == UInt32('E')
+    elseif key == UInt32('E')
         m.toggle = :edit
         return true
     end

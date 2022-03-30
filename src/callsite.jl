@@ -1,21 +1,23 @@
 using Unicode
 
-abstract type CallInfo; end
+abstract type CallInfo end
 
 # Call could be resolved to a singular MI
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
-    function MICallInfo(mi::MethodInstance, @nospecialize(rt))
+    effects
+    function MICallInfo(mi::MethodInstance, @nospecialize(rt), effects)
         if isa(rt, LimitedAccuracy)
-            return LimitedCallInfo(new(mi, ignorelimited(rt)))
+            return LimitedCallInfo(new(mi, ignorelimited(rt), effects))
         else
-            return new(mi, rt)
+            return new(mi, rt, effects)
         end
     end
 end
 get_mi(ci::MICallInfo) = ci.mi
 get_rt(ci::CallInfo) = ci.rt
+get_effects(ci::MICallInfo) = EFFECTS_ENABLED ? ci.effects : Effects()
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -24,6 +26,7 @@ ignorewrappers(ci::CallInfo) = ci
 ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
 get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
 get_rt(ci::WrappedCallInfo) = get_rt(ignorewrappers(ci))
+get_effects(ci::WrappedCallInfo) = get_effects(ignorewrappers(ci))
 
 # only appears when inspecting pre-optimization states
 struct LimitedCallInfo <: WrappedCallInfo
@@ -42,6 +45,7 @@ struct PureCallInfo <: CallInfo
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
+get_effects(::PureCallInfo) = EFFECTS_TOTAL
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -73,6 +77,10 @@ end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 
+function get_effects(mci::MultiCallInfo)
+    EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
+end
+
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
 end
@@ -81,26 +89,31 @@ get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::MICallInfo
-    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt)) =
-        new(MICallInfo(mi, rt))
+    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt), effects::Effects) =
+        new(MICallInfo(mi, rt, effects))
 end
-get_mi(ci::InvokeCallInfo) = get_mi(ci.ci)
-get_rt(ci::InvokeCallInfo) = get_rt(ci.ci)
+get_mi(ici::InvokeCallInfo) = get_mi(ici.ci)
+get_rt(ici::InvokeCallInfo) = get_rt(ici.ci)
+get_effects(ici::InvokeCallInfo) = get_effects(ici.ci)
 
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
     ci::MICallInfo
+    function OCCallInfo(mi::MethodInstance, @nospecialize(rt))
+        new(MICallInfo(mi, rt, Effects()))
+    end
 end
-OCCallInfo(mi::MethodInstance, rt) = OCCallInfo(MICallInfo(mi, rt))
-get_mi(tci::OCCallInfo) = get_mi(tci.ci)
-get_rt(tci::OCCallInfo) = get_rt(tci.ci)
+get_mi(occi::OCCallInfo) = get_mi(occi.ci)
+get_rt(occi::OCCallInfo) = get_rt(occi.ci)
+get_effects(::OCCallInfo) = Effects()
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
-    called_mi::CallInfo
+    vmi::CallInfo # virtualized method call
 end
-get_mi(rtci::ReturnTypeCallInfo) = get_mi(rtci.called_mi)
-get_rt(rtci::ReturnTypeCallInfo) = get_rt(rtci.called_mi)
+get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
+get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
+get_effects(::ReturnTypeCallInfo) = Effects()
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -108,6 +121,15 @@ struct ConstPropCallInfo <: CallInfo
 end
 get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 get_rt(cpci::ConstPropCallInfo) = get_rt(cpci.mi)
+get_effects(cpci::ConstPropCallInfo) = get_effects(cpci.result)
+
+struct ConstEvalCallInfo <: CallInfo
+    mi::CallInfo
+    argtypes::ArgTypes
+end
+get_mi(ceci::ConstEvalCallInfo) = get_mi(ceci.mi)
+get_rt(ceci::ConstEvalCallInfo) = get_rt(ceci.mi)
+get_effects(ceci::ConstEvalCallInfo) = get_effects(ceci.mi)
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -122,9 +144,10 @@ struct Callsite
     head::Symbol
 end
 get_mi(c::Callsite) = get_mi(c.info)
+get_effects(c::Callsite) = get_effects(c.info)
 
 # Callsite printing
-mutable struct TextWidthLimiter
+mutable struct TextWidthLimiter <: IO
     io::IO
     width::Int
     limit::Int
@@ -176,7 +199,12 @@ function Base.take!(io::TextWidthLimiter)
 end
 
 function headstring(@nospecialize(T))
-    T = widenconst(Base.unwrapva(T))
+    if isvarargtype(T)
+        T = unwrapva(T)
+    elseif isa(T, TypeVar)
+        return string(T.name)
+    end
+    T = widenconst(T)
     if T isa Union || T === Union{}
         return string(T)::String
     elseif T isa UnionAll
@@ -186,9 +214,8 @@ function headstring(@nospecialize(T))
     end
 end
 
-
 function __show_limited(limiter, name, tt, @nospecialize(rt))
-    vastring(@nospecialize(T)) = (Base.isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
+    vastring(@nospecialize(T)) = (isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
     if !has_space(limiter, name)
         print(limiter, '…')
@@ -196,18 +223,21 @@ function __show_limited(limiter, name, tt, @nospecialize(rt))
     end
     print(limiter, string(name))
     pstrings = String[vastring(T) for T in tt]
-    headstrings = String[headstring(T) for T in tt]
+    headstrings = String[
+        T isa DataType && isempty(T.parameters) ? headstring(T) : string(headstring(T), "{…}")
+        for T in tt
+    ]
     print(limiter, "(")
     if length(pstrings) != 0
         # See if we have space to print all the parameters fully
         if has_space(limiter, sum(textwidth, pstrings) + 3*length(pstrings))
-            print(limiter, join(map(T->string("::", T), pstrings), ","))
+            join(limiter, (string("::", T) for T in pstrings), ",")
         # Alright, see if we at least have enough space for each head
-        elseif has_space(limiter, sum(textwidth, headstrings) + 6*length(pstrings))
-            print(limiter, join(map(T->string("::", T, "{…}"), headstrings), ","))
+        elseif has_space(limiter, sum(textwidth, headstrings) + 3*length(pstrings))
+            join(limiter, (string("::", T) for T in headstrings), ",")
         # Fine, what about just indicating the number of arguments
         elseif has_space(limiter, 2*(length(tt)))
-            print(limiter, join(map(T->"…", pstrings), ","))
+            join(limiter, ("…" for _ in pstrings), ",")
         else
             print(limiter, "…")
         end
@@ -228,27 +258,28 @@ function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     name = (mi.def::Method).name
-    rt = mici.rt
+    rt = get_rt(mici)
     __show_limited(limiter, name, tt, rt)
 end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = (ci.sig::DataType).parameters
-    f = types[1]
-    if f isa Union
-        name = string(f)
+    ft, tt = types[1], types[2:end]
+    f = Compiler.singleton_type(ft)
+    if f !== nothing
+        name = "→ $f"
+    elseif ft isa Union
+        name = "→ (::Union{$(join(String[String(nameof(T)) for T in Base.uniontypes(ft)], ", "))})"
     else
-        name = nameof(f)
+        name = "→ (::$(nameof(ft)))"
     end
-    tt = types[2:end]
-    rt = ci.rt
-    __show_limited(limiter, name, tt, rt)
+    __show_limited(limiter, name::String, tt, get_rt(ci))
 end
 
 function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
     ft, tt... = argtypes
-    f = Compiler.argtype_to_function(ft)
-    name = isnothing(f) ? "unknown" : nameof(f)
+    f = Compiler.singleton_type(ft)
+    name = isnothing(f) ? "unknown" : string(f)
     __show_limited(limiter, name, tt, rt)
 end
 
@@ -256,7 +287,26 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
     tt = ci.result.argtypes[2:end]
-    __show_limited(limiter, name, tt, (ignorewrappers(ci.mi)::MICallInfo).rt)
+    __show_limited(limiter, name, tt, get_rt(ignorewrappers(ci.mi)::MICallInfo))
+end
+
+function show_callinfo(limiter, ci::ConstEvalCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = get_mi(ci).def.name
+    tt = ci.argtypes[2:end]
+    __show_limited(limiter, name, tt, get_rt(ci))
+end
+
+function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
+    if isa(vmi, FailedCallInfo)
+        ft = Base.tuple_type_head(vmi.sig)
+        f = Compiler.singleton_type(ft)
+        name = isnothing(f) ? "unknown" : string(f)
+        tt = Base.tuple_type_tail(vmi.sig).parameters
+        __show_limited(limiter, name, tt, vmi.rt)
+    else
+        show_callinfo(limiter, vmi)
+    end
 end
 
 function Base.show(io::IO, c::Callsite)
@@ -266,6 +316,11 @@ function Base.show(io::IO, c::Callsite)
     iswarn = get(io, :iswarn, false)::Bool
     info = c.info
     rt = get_rt(info)
+    with_effects = get(io, :with_effects, false)
+    if with_effects
+        show(io, get_effects(c))
+        print(io, ' ')
+    end
     if iswarn && is_type_unstable(rt)
         printstyled(io, '%'; color=:red)
     else
@@ -300,7 +355,7 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " >")
     elseif isa(info, ReturnTypeCallInfo)
         print(limiter, " = return_type < ")
-        show_callinfo(limiter, info.called_mi)
+        show_callinfo(limiter, info)
         print(limiter, " >")
     elseif isa(info, CuCallInfo)
         print(limiter, " = cucall < ")
@@ -308,6 +363,9 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " >")
     elseif isa(info, ConstPropCallInfo)
         print(limiter, " = < constprop > ")
+        show_callinfo(limiter, info)
+    elseif isa(info, ConstEvalCallInfo)
+        print(limiter, " = < consteval > ")
         show_callinfo(limiter, info)
     elseif isa(info, OCCallInfo)
         print(limiter, " = < opaque closure call > ")
@@ -330,18 +388,61 @@ end
 _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
-is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
-is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
-is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped(info), mi)
-is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
-is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.called_mi, mi)
-is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
-function is_callsite(info::MultiCallInfo, mi::MethodInstance)
+# is_callsite returns true if `call` dispatches to `callee`
+# See also `maybe_callsite` below
+is_callsite(call::MethodInstance, callee::MethodInstance) = call === callee
+is_callsite(::Nothing, callee::MethodInstance) = false   # for when `get_mi` returns `nothing`
+
+# is_callsite for higher-level inputs
+is_callsite(cs::Callsite, callee::MethodInstance) = is_callsite(cs.info, callee)
+is_callsite(info::CallInfo, callee::MethodInstance) = is_callsite(get_mi(info), callee)
+# special CallInfo cases:
+function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
-        is_callsite(csi, mi) && return true
+        is_callsite(csi, callee) && return true
     end
     return false
 end
-is_callsite(::CallInfo, mi::MethodInstance) = false
+
+# maybe_callsite returns true if `call` *might* dispatch to `callee`
+# See also `is_callsite` above
+function maybe_callsite(call::MethodInstance, callee::MethodInstance)
+    # handle comparison among Varargs
+    function generalized_va_subtype(@nospecialize(Tshort), @nospecialize(Tlong))
+        nshort, nlong = length(Tshort.parameters), length(Tlong.parameters)
+        T = unwrapva(Tshort.parameters[end])
+        T <: unwrapva(Tlong.parameters[end]) || return false
+        for i = 1:nshort-1
+            Tshort.parameters[i] <: Tlong.parameters[i] || return false
+        end
+        for i = nshort:nlong-1
+            T <: Tlong.parameters[i] || return false
+        end
+        return T <: unwrapva(Tlong.parameters[end])
+    end
+
+    Tcall, Tcallee = call.specTypes, callee.specTypes
+    Tcall <: Tcallee && return true
+    # Make sure we handle Tcall = Tuple{Vararg{String}}, Tcallee = Tuple{String,Vararg{String}}
+    if Base.isvatuple(Tcall) && Base.isvatuple(Tcallee)
+        Tcall, Tcallee = Base.unwrap_unionall(Tcall), Base.unwrap_unionall(Tcallee)
+        nargcall, nargcallee = length(Tcall.parameters), length(Tcallee.parameters)
+        nargcall == nargcallee && return false
+        return nargcall < nargcallee ? generalized_va_subtype(Tcall, Tcallee) : generalized_va_subtype(Tcallee, Tcall)
+    end
+    return false
+end
+
+# maybe_callsite for higher-level inputs
+maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
+maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
+# Special CallInfo cases:
+function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
+    for csi in info.callinfos
+        maybe_callsite(csi, callee) && return true
+    end
+    return false
+end
+maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
+
+unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg

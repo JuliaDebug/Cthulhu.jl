@@ -6,27 +6,13 @@ using Random
 using StaticArrays
 using Revise
 
+const CC = Core.Compiler
+import Core: MethodInstance, CodeInstance
+import .CC: WorldRange, WorldView
+
 @test isempty(detect_ambiguities(Cthulhu))
 
-function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
-    (interp, mi) = Cthulhu.mkinterp(f, TT)
-    (ci, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_codeinf=true)
-    if ci !== nothing
-        ci = Cthulhu.preprocess_ci!(ci, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
-    end
-    interp, ci, infos, mi, rt, slottypes
-end
-
-function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
-    interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
-    ci === nothing && return Cthulhu.Callsite[]
-    callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
-    return callsites
-end
-
-macro find_callsites_by_ftt(ex0...)
-    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
-end
+include("utils.jl")
 
 function testf_simple()
     T = rand() > 0.5 ? Int64 : Float64
@@ -117,29 +103,32 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-if Base.JLOptions().check_bounds ∈ (0, 2)
-    @testset "DCE & boundscheck" begin
-        Base.@propagate_inbounds function f(x)
-            @boundscheck error()
-        end
-        g(x) = @inbounds f(x)
-        h(x) = f(x)
-
-        (_,CI, _, _, _, _) = process(g, Tuple{Vector{Float64}})
-        @test all(CI.stmts.inst) do stmt
-            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)) || Base.Meta.isexpr(stmt, :code_coverage_effect, 0)
-        end
-
-        (_,CI, _, _, _, _) = process(h, Tuple{Vector{Float64}})
-        i = 1
-        while CI.stmts.inst[i] === nothing || Base.Meta.isexpr(CI.stmts.inst[i], :code_coverage_effect, 0)
-            i += 1
-        end
-        @test length(CI.stmts) - i + 1 == 2
-        stmt = CI.stmts.inst[end]
-        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
-    end
-end
+# # TODO run this testset in a separate process
+# # julia --check-bounds=auto --code-coverage=none
+# @testset "DCE & boundscheck" begin
+#     M = Module()
+#     @eval M begin
+#         Base.@propagate_inbounds function f(x)
+#             @boundscheck error()
+#         end
+#         g(x) = @inbounds f(x)
+#         h(x) = f(x)
+#     end
+#
+#     let
+#         (_,CI, _, _, _, _) = process(M.g, Tuple{Vector{Float64}})
+#         @test all(CI.stmts.inst) do stmt
+#             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+#         end
+#     end
+#
+#     let
+#         (_,CI, _, _, _, _) = process(M.h, Tuple{Vector{Float64}})
+#         @test count(!isnothing, CI.stmts.inst) == 2
+#         stmt = CI.stmts.inst[end]
+#         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+#     end
+# end
 
 # Something with many methods, but enough to be under the match limit
 g_matches(a::Int, b::Int) = a+b
@@ -151,7 +140,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test callinfo isa Cthulhu.MultiCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
-    @test occursin(r"#g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
+    @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
 end
 
 @testset "wrapped callinfo" begin
@@ -177,89 +166,155 @@ end
     end
 end
 
-@testset "union-split constant-prop'ed callsites" begin
-    # constant prop' on all the splits
-    let callsites = (@eval Module() begin
-            struct F32
-                val::Float32
-                _v::Int
-            end
-            struct F64
-                val::Float64
-                _v::Int
-            end
+@testset "ConstPropCallInfo" begin
+    @testset "union-split constant-prop'ed callsites" begin
+        # constant prop' on all the splits
+        let callsites = (@eval Module() begin
+                struct F32
+                    val::Float32
+                    _v::Int
+                end
+                struct F64
+                    val::Float64
+                    _v::Int
+                end
 
-            $find_callsites_by_ftt((Union{F32,F64},); optimize = false) do f
-                f.val
+                $find_callsites_by_ftt((Union{F32,F64},); optimize = false) do f
+                    f.val
+                end
+            end)
+            @test length(callsites) == 1
+            callinfo = callsites[1].info
+            @test isa(callinfo, Cthulhu.MultiCallInfo)
+            callinfos = callinfo.callinfos
+            @test length(callinfos) == 2
+            @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
+            io = IOBuffer()
+            Cthulhu.show_callinfo(io, callinfos[1])
+            @test startswith(String(take!(io)), "getproperty")
+            io = IOBuffer()
+            print(io, callsites[1])
+            @test occursin("= call → getproperty", String(take!(io)))
+        end
+
+        # const and non-const splits
+        let callsites = find_callsites_by_ftt((Bool,Vector{Any},); optimize=false) do cond, t
+                if cond
+                    t = (1, nothing)
+                end
+                t[1]
             end
-        end)
-        @test length(callsites) == 1
-        callinfo = callsites[1].info
-        @test isa(callinfo, Cthulhu.MultiCallInfo)
-        callinfos = callinfo.callinfos
-        @test length(callinfos) == 2
-        @test all(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos)
-        io = IOBuffer()
-        Cthulhu.show_callinfo(io, callinfos[1])
-        @test startswith(String(take!(io)), "getproperty")
-        io = IOBuffer()
-        print(io, callsites[1])
-        @test occursin("= call #getproperty", String(take!(io)))
+            @test length(callsites) == 1                                        # getindex(::Union{Vector{Any}, Const(tuple(1,nothing))}, ::Const(1))
+            callinfo = callsites[1].info
+            @test isa(callinfo, Cthulhu.MultiCallInfo)
+            callinfos = callinfo.callinfos
+            @test length(callinfos) == 2
+            @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1        # getindex(::Vector{Any}, ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
+        end
+
+        let callsites = (@eval Module() begin
+                struct F32
+                    val::Float32
+                    _v::Int
+                end
+
+                $find_callsites_by_ftt((F32,); optimize = false) do f
+                    f.val
+                end
+            end)
+            io = IOBuffer()
+            print(io, callsites[1])
+            @test occursin("= < constprop > getproperty(", String(take!(io)))
+        end
     end
 
-    # successful and unsuccessful constant prop'
-    let callsites = (@eval Module() begin
-            struct F32
-                val::Float32
-                _v::Int
-            end
-            struct FZero end
-            Base.getproperty(::FZero, ::Symbol) = 0.0 # constant prop' won't happen here
+    @static isdefined(Core.Compiler, :ConstResult) && @testset "ConstResult" begin
+        # constant prop' on all the splits
+        let callsites = (@eval Module() begin
+                Base.@assume_effects :terminates_locally function issue41694(x)
+                    res = 1
+                    1 < x < 20 || throw("bad")
+                    while x > 1
+                        res *= x
+                        x -= 1
+                    end
+                    return res
+                end
 
-            $find_callsites_by_ftt((Union{F32,FZero},); optimize = false) do f
-                f.val
-            end
-        end)
-        @test length(callsites) == 1
-        callinfo = callsites[1].info
-        @test isa(callinfo, Cthulhu.MultiCallInfo)
-        callinfos = callinfo.callinfos
-        @test length(callinfos) == 2
-        @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1
-        @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1
+                $find_callsites_by_ftt(; optimize = false) do
+                    issue41694(12)
+                end
+            end)
+            callinfo = only(callsites).info
+            @test isa(callinfo, Cthulhu.ConstEvalCallInfo)
+            @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
+            io = IOBuffer()
+            print(io, only(callsites))
+            @test occursin("= < consteval > issue41694(::Core.Const(12))", String(take!(io)))
+        end
     end
-
-    callsites = (@eval Module() begin
-            struct F32
-                val::Float32
-                _v::Int
-            end
-
-            $find_callsites_by_ftt((F32,); optimize = false) do f
-                f.val
-            end
-        end)
-    io = IOBuffer()
-    print(io, callsites[1])
-    @test occursin("= < constprop > getproperty(", String(take!(io)))
 end
 
-# Failed return_type
-only_ints(::Integer) = 1
-return_type_failure(::T) where T = Base._return_type(only_ints, Tuple{T})
-let callsites = find_callsites_by_ftt(return_type_failure, Tuple{Float64}, optimize=false)
-    @test length(callsites) == 1
-    callinfo = callsites[1].info
-    @test callinfo isa Cthulhu.ReturnTypeCallInfo
-    callinfo = callinfo.called_mi
-    @test callinfo isa Cthulhu.MultiCallInfo
+struct SingletonPureCallable{N} end
+
+@testset "PureCallInfo" begin
+    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[typeof(sin), Float64], Float64))
+    @test s == "sin(::Float64)::Float64"
+
+    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[SingletonPureCallable{1}, Float64], Float64))
+    @test s == "SingletonPureCallable{1}()(::Float64)::Float64"
+end
+
+@testset "ReturnTypeCallInfo" begin
+    only_ints(::Integer) = 1
+
+    callsites = find_callsites_by_ftt(; optimize=false) do
+            t1 = Base._return_type(only_ints, Tuple{Int})     # successful `return_type`
+            t2 = Base._return_type(only_ints, Tuple{Float64}) # failed `return_type`
+            t1, t2
+        end
+    @test length(callsites) == 2
+    callinfo1 = callsites[1].info
+    @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
+    @test callinfo1.vmi isa Cthulhu.MICallInfo
     io = IOBuffer()
-    Cthulhu.show_callinfo(io, callinfo)
-    @test String(take!(io)) == "#return_type(::typeof(only_ints),::Type{Tuple{Float64}})::Core.Const(Union{})"
+    Cthulhu.show_callinfo(io, callinfo1)
+    @test String(take!(io)) == "only_ints(::$Int)::$Int"
     io = IOBuffer()
     print(io, callsites[1])
-    @test occursin("return_type < #return_type", String(take!(io)))
-    @test length(callinfo.callinfos) == 0
+    @test occursin("return_type < only_ints(::$Int)::$Int >", String(take!(io)))
+
+    callinfo2 = callsites[2].info
+    @test callinfo2 isa Cthulhu.ReturnTypeCallInfo
+    @test callinfo2.vmi isa Cthulhu.FailedCallInfo
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo2)
+    @test String(take!(io)) == "only_ints(::Float64)::Union{}"
+    io = IOBuffer()
+    print(io, callsites[2])
+    @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
+end
+
+@testset "OCCallInfo" begin
+    callsites = find_callsites_by_ftt((Int,Int,); optimize=false) do a, b
+        oc = Base.Experimental.@opaque b -> sin(a) + cos(b)
+        oc(b)
+    end
+    @test length(callsites) == 1
+    callinfo = only(callsites).info
+    @test callinfo isa Cthulhu.OCCallInfo
+    @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
+        sin(a) + cos(b)
+    end |> only === Float64
+
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo.ci)
+    s = "opaque closure(::$Int)::$Float64"
+    @test String(take!(io)) == s
+    io = IOBuffer()
+    print(io, only(callsites))
+    @test occursin("< opaque closure call > $s", String(take!(io)))
 end
 
 # tasks
@@ -283,28 +338,28 @@ end
     io = IOBuffer()
     let
         callsites = @eval m begin
-            $find_callsites_by_ftt(; optimize=false) do
-                Base.@invoke f(0::Integer)
+            $find_callsites_by_ftt((Int,); optimize=false) do n
+                Base.@invoke f(n::Integer)
             end
         end
-        @test any(callsites) do callsite
-            info = callsite.info
-            isa(info, Cthulhu.InvokeCallInfo) && print(io, callsite)
-            isa(info, Cthulhu.InvokeCallInfo) && info.ci.rt === Core.Compiler.Const(:Integer)
-        end
+        callsite = only(callsites)
+        info = callsite.info
+        @test isa(info, Cthulhu.InvokeCallInfo)
+        print(io, callsite)
+        @test info.ci.rt === Core.Compiler.Const(:Integer)
     end
     @test occursin("= invoke < f(::Int", String(take!(io)))
 
     let
         callsites = @eval m begin
-            $find_callsites_by_ftt(; optimize=false) do
-                Base.@invoke f(0::Int)
+            $find_callsites_by_ftt((Int,); optimize=false) do n
+                Base.@invoke f(n::Int)
             end
         end
-        @test any(callsites) do callsite
-            info = callsite.info
-            isa(info, Cthulhu.InvokeCallInfo) && info.ci.rt === Core.Compiler.Const(:Int)
-        end
+        callsite = only(callsites)
+        info = callsite.info
+        @test isa(info, Cthulhu.InvokeCallInfo)
+        @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 end
 
@@ -355,6 +410,7 @@ end
     @test Cthulhu.headstring(Union{}) == "Union{}"
     @test Cthulhu.headstring(Vector{Int}) == "Array"
     @test Cthulhu.headstring(Vector{T} where T) == "Array"
+    @test Cthulhu.headstring(TypeVar(:F)) == "F"
 
     function checklim(f, n, strchar::Union{AbstractString,AbstractChar})
         io = IOBuffer()
@@ -475,8 +531,8 @@ end
         end
     end
     function doprint(f)
-        interp, mi = Cthulhu.mkinterp(f, ())
-        src, rt = Cthulhu.lookup(interp, mi, true)
+        interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f, ())
+        (; src, rt) = Cthulhu.lookup(interp, mi, true)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, :none, src, rt, mi; iswarn=false)
         return String(take!(io))
@@ -489,8 +545,23 @@ end
 
 @testset "Issue #132" begin
     f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
-    interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
+    interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f132, (Vector{Int}, Int))
     @test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+end
+
+@testset "@interp" begin
+    finterp1(x) = 2
+    (interp, mi) = Cthulhu.@interp finterp1(5)
+    @test isa(mi, Core.MethodInstance)
+
+    finterp2(x, y) = string(x, y)
+    (interp, mi) = Cthulhu.@interp finterp2("hi", " there")
+    @test isa(mi, Core.MethodInstance)
+
+    finterp3(x, y, z) = (x + y) / z
+    tt = Tuple{typeof(finterp3), Int64, Int64, Float64}
+    (interp, mi) = Cthulhu.mkinterp(tt)
+    @test isa(mi, Core.MethodInstance)
 end
 
 ## Functions for "backedges & treelist"
@@ -546,11 +617,12 @@ end
 
 @testset "ascend" begin
     # This tests only the non-interactive "look up the caller" portion
+    local a::Int, b::Float64 = 3, 3.0 # avoid `callee(a)`/`callee(b)` to be constant-folded
     callee(x) = 2x
     function caller(x)
         val = 0.0
-        val += callee(3); line1 = @__LINE__
-        val += callee(3.0); line2 = @__LINE__
+        val += callee(a); line1 = @__LINE__
+        val += callee(b); line2 = @__LINE__
         val += callee(x); line3 = @__LINE__
         val = sum([val])     # FIXME: without this line, `lookup` fails because codeinst.inferred === nothing
         return val, line1, line2, line3
@@ -558,11 +630,28 @@ end
     _, line1, line2, line3 = caller(7)
     micaller = Cthulhu.get_specialization(caller, Tuple{Int})
     micallee_Int = Cthulhu.get_specialization(callee, Tuple{Int})
-    micallee_Float4 = Cthulhu.get_specialization(callee, Tuple{Float64})
-    info, lines = only(Cthulhu.find_caller_of(micallee_Int, micaller))
+    micallee_Float64 = Cthulhu.get_specialization(callee, Tuple{Float64})
+    info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Int, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line1, line3]
-    info, lines = only(Cthulhu.find_caller_of(micallee_Float4, micaller))
+    info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Float64, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
+
+    M = Module()
+    @eval M begin
+        f(x::String...) = join(x, ' ')
+        f(x::Int...) = sum(x)
+        g(c) = f(c...); const gline = @__LINE__
+    end
+    @test M.g(Any["cat", "dog"]) == "cat dog"
+
+    mif = Cthulhu.get_specialization(M.f, Tuple{String, Vararg{String}})
+    mig = Cthulhu.get_specialization(M.g, Tuple{Vector{Any}})
+    @test isempty(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig))
+    candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allow_unspecialized=true))
+    @test candidate[1] == nameof(M.g)
+    @test candidate[2] == Symbol(@__FILE__)
+    @test candidate[3] == 0 # depth
+    @test lines == [M.gline]
 
     # Detection in optimized (post-inlining) code
     @noinline nicallee(x) = 2x
@@ -575,7 +664,7 @@ end
     _, line1, line2 = outercaller(7)
     micaller = Cthulhu.get_specialization(outercaller, Tuple{Int})
     micallee = Cthulhu.get_specialization(nicallee, Tuple{Int})
-    callerinfo = Cthulhu.find_caller_of(micallee, micaller)
+    callerinfo = Cthulhu.find_caller_of(NativeInterpreter(), micallee, micaller)
     @test length(callerinfo) == 2
     info, lines = callerinfo[1]
     @test info == (:outercaller, Symbol(@__FILE__), 0)
@@ -618,7 +707,7 @@ let config = Cthulhu.CthulhuConfig(
     highlighter = `I_am_hoping_this_command_does_not_exist`,
     enable_highlighter = true,
 )
-    for lexer in ["llvm", "asm"]
+    for lexer in ["julia"]
         @test begin
             @test_logs (:warn, r"Highlighter command .* does not exist.") begin
                 sprint() do io
@@ -662,7 +751,7 @@ end
 include("codeview.jl")
 
 @testset "Bookmarks" begin
-    (interp, mi) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
+    (interp, mi) = Cthulhu.mkinterp(NativeInterpreter(), sqrt, Tuple{Float64})
     b = Cthulhu.Bookmark(mi, interp)
 
     @testset "code_typed(bookmark)" begin
@@ -697,3 +786,82 @@ include("codeview.jl")
 end
 
 include("terminal.jl")
+
+using Cthulhu: MultiCallInfo, show_callinfo, CallInfo, TextWidthLimiter
+
+@testset "printing of MultiCallInfo" begin
+    # PR 226
+    m = Module()
+    @eval m begin
+        struct Foo
+            x
+        end
+        struct Bar end
+    end
+    ci = MultiCallInfo(Tuple{m.Foo, Float64}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
+    ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
+    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 2}}, Float64, CallInfo[])
+    @test sprint(show_callinfo, ci) ==
+        "→ +(::Bool,::Rational{BigInt},::Rational{BigInt})::Float64"
+    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 4}}, Float64, CallInfo[])
+    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
+        "→ +(::Bool,::Rational{…},::Rational{…},::Rational{…},::Rational{…})::Float64"
+    ci = MultiCallInfo(Tuple{m.Foo, Vararg{Float64, 30}}, Float64, CallInfo[])
+    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
+        "→ (::Foo)(…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…)::…"
+end
+
+# external AbstractInterpreter integration
+# ========================================
+
+# define new `AbstractInterpreter` that satisfies the minimum interface requirements
+# while managing its cache independently
+macro newinterp(name)
+    cachename = gensym(string(name, "Cache"))
+    name = esc(name)
+    quote
+        struct $cachename
+            dict::IdDict{MethodInstance,CodeInstance}
+        end
+        struct $name <: CC.AbstractInterpreter
+            interp::CC.NativeInterpreter
+            cache::$cachename
+            $name(world = Base.get_world_counter();
+                interp = CC.NativeInterpreter(world),
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}())
+                ) = new(interp, cache)
+        end
+        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
+        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
+        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
+        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
+        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
+        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
+        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
+        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
+        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+    end
+end
+
+# `OverlayMethodTable`
+# --------------------
+import Base.Experimental: @MethodTable, @overlay
+
+@newinterp MTOverlayInterp
+@MethodTable(OverlayedMT)
+@static if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+else # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+CC.method_table(interp::MTOverlayInterp, sv::CC.InferenceState) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+end # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+@overlay OverlayedMT sin(x::Float64) = 1
+
+let
+    interp, mi = Cthulhu.mkinterp((Int,); interp=MTOverlayInterp()) do x
+        sin(x)
+    end
+    inferred = interp.unopt[mi]
+    @test inferred.rt === Core.Const(1)
+end

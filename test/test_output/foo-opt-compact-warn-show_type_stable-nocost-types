@@ -1,0 +1,34 @@
+Body[91m[1m::Any[22m[39m
+[90m[72G│╻ Box[1G[39m[90m2 [39m[0m1 ── %1  = Core.Box[36m::Core.Const(Core.Box)[39m
+[90m[72G││[1G[39m[90m  [39m[0m│    %2  = %new(%1)[91m[1m::Core.Box[22m[39m
+[90m[72G│╻ +[1G[39m[90m  [39m[0m│    %3  = Base.add_int(_2, _3)[36m::Int64[39m
+[90m[72G│ [1G[39m[90m  [39m[0m│          Core.setfield!(%2, :contents, %3)
+[90m[72G│ [1G[39m[90m3 [39m[0m│    %5  = Core.isdefined(%2, :contents)[36m::Bool[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #3 if not %5
+[90m[72G│ [1G[39m[90m  [39m[0m2 ──       goto #4
+[90m[72G│ [1G[39m[90m  [39m[0m3 ──       $(Expr(:throw_undef_if_not, :z, false))
+[90m[72G│ [1G[39m[90m  [39m[0m4 ┄─ %9  = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m  [39m[0m│    %10 = (%9 < 4)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #9 if not %10
+[90m[72G│ [1G[39m[90m4 [39m[0m5 ── %12 = Core.isdefined(%2, :contents)[36m::Bool[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #7 if not %12
+[90m[72G│ [1G[39m[90m  [39m[0m6 ──       goto #8
+[90m[72G│ [1G[39m[90m  [39m[0m7 ──       $(Expr(:throw_undef_if_not, :z, false))
+[90m[72G│ [1G[39m[90m  [39m[0m8 ┄─ %16 = Core.getfield(%2, :contents)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m  [39m[0m│    %17 = (%16 + 1)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       Core.setfield!(%2, :contents, %17)
+[90m[72G│ [1G[39m[90m6 [39m[0m9 ┄─ %19 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
+[90m[72G│ [1G[39m[90m  [39m[0m│    %20 = invoke %19(_2::Int64)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m7 [39m[0m│    %21 = (isa)(_2, Missing)[36m::Bool[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #11 if not %21
+[90m[72G│ [1G[39m[90m  [39m[0m10 ─       goto #14
+[90m[72G│ [1G[39m[90m  [39m[0m11 ─ %24 = (isa)(_2, Int64)[36m::Bool[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #13 if not %24
+[90m[72G│╻ +[1G[39m[90m  [39m[0m12 ─ %26 = Base.add_int(_2, _3)[36m::Int64[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       goto #14
+[90m[72G│ [1G[39m[90m  [39m[0m13 ─       Core.throw(ErrorException("fatal error in type inference (type bound)"))
+[90m[72G│ [1G[39m[90m  [39m[0m└───       unreachable
+[90m[72G│ [1G[39m[90m  [39m[0m14 ┄ %30 = φ (#10 => $(QuoteNode(missing)), #12 => %26)[33m[1m::Union{Missing, Int64}[22m[39m
+[90m[72G│ [1G[39m[90m8 [39m[0m│    %31 = (%20 + %30)[91m[1m::Any[22m[39m
+[90m[72G│ [1G[39m[90m  [39m[0m└───       return %31
+[90m[72G  [1G[39m[90m  [39m
