@@ -161,15 +161,15 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         preprinter = lineprinter(src)
     end
     # postprinter configuration
-    _postprinter = if type_annotations
+    __postprinter = if type_annotations
         iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
     else
         Returns(nothing)
     end
     if !isnothing(remarks)
         sort!(remarks)
-        function postprinter(io::IO, @nospecialize(typ), used::Bool)
-            _postprinter(io, typ, used)
+        function _postprinter(io::IO, @nospecialize(typ), used::Bool)
+            __postprinter(io, typ, used)
             haskey(io, :idx) || return
             idx = io[:idx]::Int
             firstind = searchsortedfirst(remarks, idx=>"")
@@ -179,27 +179,27 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
         end
     else
-        postprinter = _postprinter
+        _postprinter = __postprinter
     end
     if frame !== nothing
-        let _postprinter = postprinter
-            ssavals = frame.framedata.ssavalues
-            code = frame.framecode.src.code
-            function postprinter(io, typ, used)
-                _postprinter(io, typ, used)
-                haskey(io, :idx) || return
-                idx = io[:idx]::Int
-                ex = code[idx]
-                if Meta.isexpr(ex, :(=))
-                    print(io, " = ")
-                    printstyled(io, repr(JuliaInterpreter.@lookup(frame, ex.args[1])); color=:magenta)
-                elseif isassigned(ssavals, idx)
-                    print(io, " = ")
-                    printstyled(io, repr(ssavals[idx]); color=:blue)
-                end
-                nothing
+        ssavals = frame.framedata.ssavalues
+        code = frame.framecode.src.code
+        function postprinter(io, typ, used)
+            _postprinter(io, typ, used)
+            haskey(io, :idx) || return
+            idx = io[:idx]::Int
+            ex = code[idx]
+            if Meta.isexpr(ex, :(=))
+                print(io, " = ")
+                printstyled(io, repr(JuliaInterpreter.@lookup(frame, ex.args[1])); color=:magenta)
+            elseif isassigned(ssavals, idx)
+                print(io, " = ")
+                printstyled(io, repr(ssavals[idx]); color=:blue)
             end
+            nothing
         end
+    else
+        postprinter = _postprinter
     end
 
     should_print_stmt = hide_type_stable ? is_type_unstable : Returns(true)
