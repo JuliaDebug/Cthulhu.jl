@@ -127,6 +127,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
             show_variables(io, src, slotnames)
         end
+    else
+        frame = nothing
     end
 
     if iswarn

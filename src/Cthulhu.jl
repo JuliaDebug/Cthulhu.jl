@@ -71,6 +71,30 @@ include("backedges.jl")
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend
 
+function _gen_descend_call(__module__, f, ex0)
+    i = findfirst(ex -> Meta.isexpr(ex, :(=)) && ex.args[1] === :eval, ex0[1:end-1])
+    if i !== nothing
+        @gensym frameargs
+        ex0 = Base.setindex(ex0, :(frameargs = $frameargs), i)
+        ex = InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
+        if Meta.isexpr(ex, :call)
+            quote
+                $(esc(frameargs)) = Any[$(ex0[end].args...)]
+                $ex
+            end
+        else
+            @assert Meta.isexpr(ex, :block)
+            call = ex.args[end]
+            @assert Meta.isexpr(call, :call)
+            insert!(ex.args, length(ex.args), quote
+                $(esc(frameargs)) = Any[arg1, kwargs, arg1, args...]
+            end)
+            ex
+        end
+    else
+        InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
+    end
+end
 """
     @descend_code_typed
 
@@ -78,7 +102,7 @@ Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_typed` on the resulting expression.
 """
 macro descend_code_typed(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
+    _gen_descend_call(__module__, :descend_code_typed, ex0)
 end
 
 """
@@ -97,7 +121,7 @@ Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_warntype` on the resulting expression.
 """
 macro descend_code_warntype(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_warntype, ex0)
+    _gen_descend_call(__module__, :descend_code_warntype, ex0)
 end
 
 """
@@ -310,6 +334,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
+    if optimize && frameargs !== nothing
+        @warn "can only show results of concrete interpretation alongside unoptimized IR"
+    end
 
     iscached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
 
@@ -380,7 +407,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if frameargs !== nothing
                 framecode = JuliaInterpreter.FrameCode(mi.def, codeinf)
                 frame = JuliaInterpreter.prepare_frame(framecode, frameargs, mi.sparam_vals)
-                @show JuliaInterpreter.finish_and_return!(frame)
+                ret = JuliaInterpreter.finish_and_return!(frame)
+                printstyled(iostream, nameof(frameargs[1])::Symbol, " returned ", ret, "\n\n"; color=:blue)
             end
 
             if display_CI
@@ -448,7 +476,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 
                 _args = _lookup_call(frame, codeinf, callsite)
                 cid = if _args !== nothing
-                    _mi = get_specialization(@show Tuple{mapany(Core.Typeof, _args)...})
+                    _mi = get_specialization(Tuple{mapany(Core.Typeof, _args)...})
                     findfirst(ci -> get_mi(ci) == _mi, info.callinfos)
                 else
                     nothing
@@ -513,6 +541,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if !iscached(mi, optimize)
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
+            end
+            if optimize && frameargs !== nothing
+                @warn "can only show results of concrete interpretation alongside unoptimized IR"
             end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
