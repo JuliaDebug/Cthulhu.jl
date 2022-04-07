@@ -159,7 +159,11 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
             end
         end
     elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt, Effects())]
+        mi = Core.Compiler.specialize_method(info.match)
+        res = info.result
+        effects = isnothing(res) ? Effects() : get_effects(info.result)
+        ici = InvokeCallInfo(mi, rt, effects)
+        return Any[ici]
     elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
         return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
@@ -264,7 +268,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance)
+function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance; allow_unspecialized::Bool=false)
     interp′ = CthulhuInterpreter(interp)
     do_typeinf!(interp′, caller)
     locs = Tuple{Core.LineInfoNode,Int}[]
@@ -272,7 +276,8 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
         (; src, rt, infos, slottypes) = lookup(interp′, caller, optimize)
         src = preprocess_ci!(src, caller, optimize, CONFIG)
         callsites = find_callsites(interp′, src, infos, caller, slottypes, optimize)
-        callsites = filter(cs->is_callsite(cs, callee), callsites)
+        callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
+                                          filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
     end
     # Consolidate by method, but preserve the order

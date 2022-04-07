@@ -26,6 +26,7 @@ ignorewrappers(ci::CallInfo) = ci
 ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
 get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
 get_rt(ci::WrappedCallInfo) = get_rt(ignorewrappers(ci))
+get_effects(ci::WrappedCallInfo) = get_effects(ignorewrappers(ci))
 
 # only appears when inspecting pre-optimization states
 struct LimitedCallInfo <: WrappedCallInfo
@@ -36,7 +37,6 @@ end
 struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
-get_effects(uci::UncachedCallInfo) = Effects()
 
 struct PureCallInfo <: CallInfo
     argtypes::Vector{Any}
@@ -45,8 +45,7 @@ struct PureCallInfo <: CallInfo
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
-# @pure implies total
-get_effects(ci::PureCallInfo) = EFFECTS_ENABLED ? Core.Compiler.EFFECTS_TOTAL : Effects()
+get_effects(::PureCallInfo) = EFFECTS_TOTAL
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -55,6 +54,7 @@ struct FailedCallInfo <: CallInfo
 end
 get_mi(ci::FailedCallInfo) = fail(ci)
 get_rt(ci::FailedCallInfo) = fail(ci)
+get_effects(ci::FailedCallInfo) = Effects()
 function fail(ci::FailedCallInfo)
     @error "MethodInstance extraction failed" ci.sig ci.rt
     return nothing
@@ -65,7 +65,10 @@ struct GeneratedCallInfo <: CallInfo
     sig
     rt
 end
-function get_mi(genci::GeneratedCallInfo)
+get_mi(genci::GeneratedCallInfo) = fail(genci)
+get_rt(genci::GeneratedCallInfo) = fail(genci)
+get_effects(genci::GeneratedCallInfo) = Effects()
+function fail(genci::GeneratedCallInfo)
     @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
     return nothing
 end
@@ -87,6 +90,7 @@ struct TaskCallInfo <: CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
+get_effects(tci::TaskCallInfo) = get_effects(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::MICallInfo
@@ -100,10 +104,13 @@ get_effects(ici::InvokeCallInfo) = get_effects(ici.ci)
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
     ci::MICallInfo
+    function OCCallInfo(mi::MethodInstance, @nospecialize(rt))
+        new(MICallInfo(mi, rt, Effects()))
+    end
 end
-OCCallInfo(mi::MethodInstance, rt) = OCCallInfo(MICallInfo(mi, rt))
 get_mi(occi::OCCallInfo) = get_mi(occi.ci)
 get_rt(occi::OCCallInfo) = get_rt(occi.ci)
+get_effects(::OCCallInfo) = Effects()
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
@@ -111,6 +118,7 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
+get_effects(::ReturnTypeCallInfo) = Effects()
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -143,6 +151,7 @@ struct CuCallInfo <: CallInfo
 end
 get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 get_rt(gci::CuCallInfo) = get_rt(gci.cumi)
+get_effects(gci::CuCallInfo) = get_effects(gci.cumi)
 
 struct Callsite
     id::Int # ssa-id
@@ -404,19 +413,61 @@ end
 _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 _wrapped_callinfo(limiter, ::UncachedCallInfo) = print(limiter, "uncached")
 
-is_callsite(cs::Callsite, mi::MethodInstance) = is_callsite(cs.info, mi)
-is_callsite(info::MICallInfo, mi::MethodInstance) = get_mi(info) === mi
-is_callsite(info::WrappedCallInfo, mi::MethodInstance) = is_callsite(get_wrapped(info), mi)
-is_callsite(info::ConstPropCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
-is_callsite(info::SemiConcreteCallInfo, mi::MethodInstance) = is_callsite(info.mi, mi)
-is_callsite(info::TaskCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::InvokeCallInfo, mi::MethodInstance) = is_callsite(info.ci, mi)
-is_callsite(info::ReturnTypeCallInfo, mi::MethodInstance) = is_callsite(info.vmi, mi)
-is_callsite(info::CuCallInfo, mi::MethodInstance) = is_callsite(info.cumi, mi)
-function is_callsite(info::MultiCallInfo, mi::MethodInstance)
+# is_callsite returns true if `call` dispatches to `callee`
+# See also `maybe_callsite` below
+is_callsite(call::MethodInstance, callee::MethodInstance) = call === callee
+is_callsite(::Nothing, callee::MethodInstance) = false   # for when `get_mi` returns `nothing`
+
+# is_callsite for higher-level inputs
+is_callsite(cs::Callsite, callee::MethodInstance) = is_callsite(cs.info, callee)
+is_callsite(info::CallInfo, callee::MethodInstance) = is_callsite(get_mi(info), callee)
+# special CallInfo cases:
+function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
-        is_callsite(csi, mi) && return true
+        is_callsite(csi, callee) && return true
     end
     return false
 end
-is_callsite(::CallInfo, mi::MethodInstance) = false
+
+# maybe_callsite returns true if `call` *might* dispatch to `callee`
+# See also `is_callsite` above
+function maybe_callsite(call::MethodInstance, callee::MethodInstance)
+    # handle comparison among Varargs
+    function generalized_va_subtype(@nospecialize(Tshort), @nospecialize(Tlong))
+        nshort, nlong = length(Tshort.parameters), length(Tlong.parameters)
+        T = unwrapva(Tshort.parameters[end])
+        T <: unwrapva(Tlong.parameters[end]) || return false
+        for i = 1:nshort-1
+            Tshort.parameters[i] <: Tlong.parameters[i] || return false
+        end
+        for i = nshort:nlong-1
+            T <: Tlong.parameters[i] || return false
+        end
+        return T <: unwrapva(Tlong.parameters[end])
+    end
+
+    Tcall, Tcallee = call.specTypes, callee.specTypes
+    Tcall <: Tcallee && return true
+    # Make sure we handle Tcall = Tuple{Vararg{String}}, Tcallee = Tuple{String,Vararg{String}}
+    if Base.isvatuple(Tcall) && Base.isvatuple(Tcallee)
+        Tcall, Tcallee = Base.unwrap_unionall(Tcall), Base.unwrap_unionall(Tcallee)
+        nargcall, nargcallee = length(Tcall.parameters), length(Tcallee.parameters)
+        nargcall == nargcallee && return false
+        return nargcall < nargcallee ? generalized_va_subtype(Tcall, Tcallee) : generalized_va_subtype(Tcallee, Tcall)
+    end
+    return false
+end
+
+# maybe_callsite for higher-level inputs
+maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
+maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
+# Special CallInfo cases:
+function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
+    for csi in info.callinfos
+        maybe_callsite(csi, callee) && return true
+    end
+    return false
+end
+maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
+
+unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg

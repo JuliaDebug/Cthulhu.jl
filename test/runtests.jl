@@ -6,6 +6,10 @@ using Random
 using StaticArrays
 using Revise
 
+const CC = Core.Compiler
+import Core: MethodInstance, CodeInstance
+import .CC: WorldRange, WorldView
+
 @test isempty(detect_ambiguities(Cthulhu))
 
 include("utils.jl")
@@ -42,8 +46,14 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
     @test callsites[1].info isa Cthulhu.ConstPropCallInfo
 
-    # Broken stuff in Julia
-    @test_broken find_callsites_by_ftt(Core.Compiler._limit_type_size, Tuple{Any, Type{Any}, Core.SimpleVector, Int, Int})  # ssair/ir.jl bug
+    if Cthulhu.EFFECTS_ENABLED
+        effects = Cthulhu.get_effects(callsites[1].info)
+        @test !Core.Compiler.is_concrete_eval_eligible(effects)
+        @test !Core.Compiler.is_consistent(effects)
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_nothrow(effects)
+        @test Core.Compiler.is_terminates(effects)
+    end
 end
 
 @testset "Expr heads" begin
@@ -134,6 +144,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
+    Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_concrete_eval_eligible
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
@@ -154,6 +165,13 @@ end
         @test length(callsites) == 1
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
+        if Cthulhu.EFFECTS_ENABLED
+            effects = Cthulhu.get_effects(ci)
+            @test !Core.Compiler.is_consistent(effects)
+            @test Core.Compiler.is_effect_free(effects)
+            @test !Core.Compiler.is_nothrow(effects)
+            @test !Core.Compiler.is_terminates(effects)
+        end
         @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
         io = IOBuffer()
         show(io, first(callsites))
@@ -245,6 +263,7 @@ end
             callinfo = only(callsites).info
             @test isa(callinfo, Cthulhu.ConstEvalCallInfo)
             @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
+            @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_concrete_eval_eligible
             io = IOBuffer()
             print(io, only(callsites))
             @test occursin("= < consteval > issue41694(::Core.Const(12))", String(take!(io)))
@@ -255,11 +274,18 @@ end
 struct SingletonPureCallable{N} end
 
 @testset "PureCallInfo" begin
-    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[typeof(sin), Float64], Float64))
+    c1 = Cthulhu.PureCallInfo(Any[typeof(sin), Float64], Float64)
+    s = sprint(Cthulhu.show_callinfo, c1)
     @test s == "sin(::Float64)::Float64"
 
-    s = sprint(Cthulhu.show_callinfo, Cthulhu.PureCallInfo(Any[SingletonPureCallable{1}, Float64], Float64))
+    c2 =  Cthulhu.PureCallInfo(Any[SingletonPureCallable{1}, Float64], Float64)
+    s = sprint(Cthulhu.show_callinfo, c2)
     @test s == "SingletonPureCallable{1}()(::Float64)::Float64"
+
+    if Cthulhu.EFFECTS_ENABLED
+        @test Cthulhu.get_effects(c1) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(c2) |> Core.Compiler.is_total
+    end
 end
 
 @testset "ReturnTypeCallInfo" begin
@@ -290,6 +316,36 @@ end
     io = IOBuffer()
     print(io, callsites[2])
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
+
+    if Cthulhu.EFFECTS_ENABLED
+        @test Cthulhu.get_effects(callinfo1.vmi) |> Core.Compiler.is_total
+        @test_broken Cthulhu.get_effects(callinfo2.vmi) |> Core.Compiler.is_concrete_eval_eligible # don't have effects from FailedCallInfo yet
+    end
+end
+
+@testset "OCCallInfo" begin
+    callsites = find_callsites_by_ftt((Int,Int,); optimize=false) do a, b
+        oc = Base.Experimental.@opaque b -> sin(a) + cos(b)
+        oc(b)
+    end
+    @test length(callsites) == 1
+    callinfo = only(callsites).info
+    @test callinfo isa Cthulhu.OCCallInfo
+    if Cthulhu.EFFECTS_ENABLED
+        @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
+        # TODO not sure what these effects are (and neither is Base.infer_effects yet)
+    end
+    @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
+        sin(a) + cos(b)
+    end |> only === Float64
+
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo.ci)
+    s = "opaque closure(::$Int)::$Float64"
+    @test String(take!(io)) == s
+    io = IOBuffer()
+    print(io, only(callsites))
+    @test occursin("< opaque closure call > $s", String(take!(io)))
 end
 
 # tasks
@@ -320,6 +376,7 @@ end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
+        Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         print(io, callsite)
         @test info.ci.rt === Core.Compiler.Const(:Integer)
     end
@@ -334,6 +391,7 @@ end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
+        Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 end
@@ -611,6 +669,23 @@ end
     info, lines = only(Cthulhu.find_caller_of(NativeInterpreter(), micallee_Float64, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
 
+    M = Module()
+    @eval M begin
+        f(x::String...) = join(x, ' ')
+        f(x::Int...) = sum(x)
+        g(c) = f(c...); const gline = @__LINE__
+    end
+    @test M.g(Any["cat", "dog"]) == "cat dog"
+
+    mif = Cthulhu.get_specialization(M.f, Tuple{String, Vararg{String}})
+    mig = Cthulhu.get_specialization(M.g, Tuple{Vector{Any}})
+    @test isempty(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig))
+    candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allow_unspecialized=true))
+    @test candidate[1] == nameof(M.g)
+    @test candidate[2] == Symbol(@__FILE__)
+    @test candidate[3] == 0 # depth
+    @test lines == [M.gline]
+
     # Detection in optimized (post-inlining) code
     @noinline nicallee(x) = 2x
     midcaller(x) = nicallee(x), @__LINE__
@@ -769,4 +844,57 @@ using Cthulhu: MultiCallInfo, show_callinfo, CallInfo, TextWidthLimiter
     ci = MultiCallInfo(Tuple{m.Foo, Vararg{Float64, 30}}, Float64, CallInfo[])
     @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
         "→ (::Foo)(…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…)::…"
+end
+
+# external AbstractInterpreter integration
+# ========================================
+
+# define new `AbstractInterpreter` that satisfies the minimum interface requirements
+# while managing its cache independently
+macro newinterp(name)
+    cachename = gensym(string(name, "Cache"))
+    name = esc(name)
+    quote
+        struct $cachename
+            dict::IdDict{MethodInstance,CodeInstance}
+        end
+        struct $name <: CC.AbstractInterpreter
+            interp::CC.NativeInterpreter
+            cache::$cachename
+            $name(world = Base.get_world_counter();
+                interp = CC.NativeInterpreter(world),
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}())
+                ) = new(interp, cache)
+        end
+        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
+        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
+        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
+        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
+        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
+        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
+        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
+        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
+        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+    end
+end
+
+# `OverlayMethodTable`
+# --------------------
+import Base.Experimental: @MethodTable, @overlay
+
+@newinterp MTOverlayInterp
+@MethodTable(OverlayedMT)
+@static if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+else # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+CC.method_table(interp::MTOverlayInterp, sv::CC.InferenceState) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+end # if v"1.8-beta2" <= VERSION < v"1.9-" || VERSION >= v"1.9.0-DEV.120"
+@overlay OverlayedMT sin(x::Float64) = 1
+
+let
+    interp, mi = Cthulhu.mkinterp((Int,); interp=MTOverlayInterp()) do x
+        sin(x)
+    end
+    inferred = interp.unopt[mi]
+    @test inferred.rt === Core.Const(1)
 end

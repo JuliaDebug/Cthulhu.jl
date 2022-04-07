@@ -17,9 +17,11 @@ const ArgTypes = Vector{Any}
 
 @static if !isdefined(Core.Compiler, :Effects)
     const Effects = Nothing
+    const EFFECTS_TOTAL = nothing
     const EFFECTS_ENABLED = false
 else
     const Effects = Core.Compiler.Effects
+    const EFFECTS_TOTAL = Core.Compiler.EFFECTS_TOTAL
     const EFFECTS_ENABLED = true
 end
 
@@ -241,6 +243,7 @@ if EFFECTS_ENABLED
     get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
         haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
     get_effects(result::InferenceResult) = result.ipo_effects
+    get_effects(result::Compiler.ConstResult) = result.effects
 else
     get_effects(_...) = nothing
 end
@@ -296,6 +299,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     optimize::Bool=true, interruptexc::Bool=true,
     iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
     remarks::Bool=false, with_effects::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
+
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
     end
@@ -346,17 +350,21 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = opt.src
                         infos = src.stmts.info
                         slottypes = src.argtypes
-                        effects = get_effects(codeinf)
+                        effects = opt.effects
                     else
                         # the source might be unavailable at this point,
                         # when a result is fully constant-folded etc.
                         (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
                     end
                 else
-                    codeinf = src = copy(interp.unopt[override].src)
-                    rt = interp.unopt[override].rt
-                    infos = interp.unopt[override].stmt_info
-                    effects = get_effects(interp.unopt[override])
+                    unopt = get(interp.unopt, override, missing)
+                    if unopt === missing
+                        unopt = interp.unopt[override.linfo]
+                    end
+                    codeinf = src = copy(unopt.src)
+                    rt = unopt.rt
+                    infos = unopt.stmt_info
+                    effects = get_effects(unopt)
                     slottypes = src.slottypes
                     if isnothing(slottypes)
                         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
@@ -623,7 +631,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
             if !isroot(node)
                 # Help user find the sites calling the parent
                 miparent = instance(node.parent.data.nd)
-                ulocs = find_caller_of(interp, miparent, mi)
+                ulocs = find_caller_of(interp, miparent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     push!(strlocs, "Browse typed code")
@@ -631,7 +639,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1
-                        choice2 = TerminalMenus.request(term, "\nChoose caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                        choice2 = TerminalMenus.request(term, "\nChoose possible caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
                             loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))
