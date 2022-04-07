@@ -54,6 +54,7 @@ struct FailedCallInfo <: CallInfo
 end
 get_mi(ci::FailedCallInfo) = fail(ci)
 get_rt(ci::FailedCallInfo) = fail(ci)
+get_effects(ci::FailedCallInfo) = Effects()
 function fail(ci::FailedCallInfo)
     @error "MethodInstance extraction failed" ci.sig ci.rt
     return nothing
@@ -64,7 +65,10 @@ struct GeneratedCallInfo <: CallInfo
     sig
     rt
 end
-function get_mi(genci::GeneratedCallInfo)
+get_mi(genci::GeneratedCallInfo) = fail(genci)
+get_rt(genci::GeneratedCallInfo) = fail(genci)
+get_effects(genci::GeneratedCallInfo) = Effects()
+function fail(genci::GeneratedCallInfo)
     @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
     return nothing
 end
@@ -86,6 +90,7 @@ struct TaskCallInfo <: CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
+get_effects(tci::TaskCallInfo) = get_effects(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::MICallInfo
@@ -137,6 +142,7 @@ struct CuCallInfo <: CallInfo
 end
 get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 get_rt(gci::CuCallInfo) = get_rt(gci.cumi)
+get_effects(gci::CuCallInfo) = get_effects(gci.cumi)
 
 struct Callsite
     id::Int # ssa-id

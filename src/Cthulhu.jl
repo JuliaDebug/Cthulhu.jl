@@ -17,7 +17,7 @@ const ArgTypes = Vector{Any}
 
 @static if !isdefined(Core.Compiler, :Effects)
     const Effects = Nothing
-    const EFFECTS_TOTAL = Nothing
+    const EFFECTS_TOTAL = nothing
     const EFFECTS_ENABLED = false
 else
     const Effects = Core.Compiler.Effects
@@ -243,6 +243,7 @@ if EFFECTS_ENABLED
     get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
         haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
     get_effects(result::InferenceResult) = result.ipo_effects
+    get_effects(result::Compiler.ConstResult) = result.effects
 else
     get_effects(_...) = nothing
 end

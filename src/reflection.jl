@@ -154,7 +154,11 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
             end
         end
     elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt, Effects())]
+        mi = Core.Compiler.specialize_method(info.match)
+        res = info.result
+        effects = isnothing(res) ? Effects() : get_effects(info.result)
+        ici = InvokeCallInfo(mi, rt, effects)
+        return Any[ici]
     elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
         return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
