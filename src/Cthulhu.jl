@@ -404,11 +404,13 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 @assert length(src.code) == length(infos)
             end
             callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
-            if frameargs !== nothing
+            if frameargs isa Vector{Any}
                 framecode = JuliaInterpreter.FrameCode(mi.def, codeinf)
-                frame = JuliaInterpreter.prepare_frame(framecode, frameargs, mi.sparam_vals)
+                frame = JuliaInterpreter.prepare_frame(@show(framecode), @show(frameargs), @show(mi.sparam_vals))
                 ret = JuliaInterpreter.finish_and_return!(frame)
                 printstyled(iostream, nameof(frameargs[1])::Symbol, " returned ", ret, "\n\n"; color=:blue)
+            elseif frameargs isa Some{Any}
+                printstyled(iostream, "builtin returned ", something(frameargs), "\n\n"; color=:blue)
             end
 
             if display_CI
@@ -620,7 +622,9 @@ function _lookup_call(frame, codeinf, callsite)
         return
     end
     JuliaInterpreter.replace_coretypes_list!(next_args; rev=false)
-    return Any[JuliaInterpreter.@lookup(frame, i) for i in next_args]
+    ret = JuliaInterpreter.maybe_evaluate_builtin(frame, Expr(:call, next_args...), true)
+    Meta.isexpr(ret, :call) || return ret
+    return Any[JuliaInterpreter.@lookup(frame, ret.args[1]), JuliaInterpreter.getargs(ret.args, frame)...]
 end
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
