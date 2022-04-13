@@ -79,7 +79,7 @@ function _gen_descend_call(__module__, f, ex0)
         ex = InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
         if Meta.isexpr(ex, :call)
             quote
-                $(esc(frameargs)) = Any[$(ex0[end].args...)]
+                $(esc(frameargs)) = Any[$(esc.(ex0[end].args)...)]
                 $ex
             end
         else
