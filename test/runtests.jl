@@ -261,12 +261,12 @@ end
                 end
             end)
             callinfo = only(callsites).info
-            @test isa(callinfo, Cthulhu.ConstEvalCallInfo)
+            @test isa(callinfo, Cthulhu.ConcreteCallInfo)
             @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
             @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_concrete_eval_eligible
             io = IOBuffer()
             print(io, only(callsites))
-            @test occursin("= < consteval > issue41694(::Core.Const(12))", String(take!(io)))
+            @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
         end
     end
 end

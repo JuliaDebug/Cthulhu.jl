@@ -140,11 +140,21 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         return mapany(enumerate(info.results)) do (i, result)
             if isnothing(result)
                 infos[i]
+            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConcreteResult)
+                linfo = result.mi
+                effects = get_effects(result)
+                mici = MICallInfo(linfo, rt, effects)
+                ConcreteCallInfo(mici, argtypes)
+            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConstPropResult)
+                linfo = result.result.linfo
+                effects = get_effects(result)
+                mici = MICallInfo(linfo, rt, effects)
+                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result.result)
             elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
                 linfo = result.mi
-                effects = get_effects(interp.unopt, linfo)
+                effects = get_effects(result)
                 mici = MICallInfo(linfo, rt, effects)
-                ConstEvalCallInfo(mici, argtypes)
+                ConcreteCallInfo(mici, argtypes)
             else
                 @assert isa(result, Compiler.InferenceResult)
                 linfo = result.linfo

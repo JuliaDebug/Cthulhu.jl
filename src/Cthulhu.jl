@@ -236,14 +236,19 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-if EFFECTS_ENABLED
+@static if EFFECTS_ENABLED
     get_effects(codeinst::CodeInstance) = Core.Compiler.decode_effects(codeinst.ipo_purity_bits)
     get_effects(codeinst::CodeInfo) = Core.Compiler.decode_effects(codeinst.purity)
     get_effects(src::InferredSource) = src.effects
     get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
         haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
     get_effects(result::InferenceResult) = result.ipo_effects
-    get_effects(result::Compiler.ConstResult) = result.effects
+    @static if VERSION ≥ v"1.9.0-DEV.409"
+        get_effects(result::Compiler.ConstPropResult) = get_effects(result.result)
+        get_effects(result::Compiler.ConcreteResult) = result.effects
+    else
+        get_effects(result::Compiler.ConstResult) = result.effects
+    end
 else
     get_effects(_...) = nothing
 end
