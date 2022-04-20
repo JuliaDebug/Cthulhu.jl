@@ -495,6 +495,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
+            if remarks && optimize
+                @warn "disable optimization to see the inference remarks"
+            end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
         elseif toggle === :remarks
