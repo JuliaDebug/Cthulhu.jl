@@ -23,7 +23,8 @@ maybe_create_optsource(@nospecialize(a), ::Effects) = a
 function maybe_create_optsource(st::OptimizationState, effects::Effects)
     ir = st.ir
     ir === nothing && return st
-    return OptimizedSource(ir, st.src, st.src.inlineable, effects)
+    inlineable = hasfield(Core.CodeInfo, :inlining_cost) ? Core.Compiler.inlineable(st.src) : st.src.inlineable
+    return OptimizedSource(ir, st.src, inlineable, effects)
 end
 
 const Remarks = Vector{Pair{Int, String}}
