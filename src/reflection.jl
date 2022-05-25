@@ -174,6 +174,9 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
+    elseif (@static isdefined(Compiler, :FinalizerInfo) && true) && isa(info, Compiler.FinalizerInfo)
+        # TODO: Add ability to descend into finalizers at creation site
+        return []
     elseif isa(info, Compiler.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]
         callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize)
