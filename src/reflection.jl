@@ -112,11 +112,18 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
     is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
+    if isa(info, MethodResultPure)
+        if isa(info.info, Compiler.ReturnTypeCallInfo)
+            # xref: https://github.com/JuliaLang/julia/pull/45299#discussion_r871939049
+            info = info.info # cascade to the special handling below
+        else
+            return Any[PureCallInfo(argtypes, rt)]
+        end
+    end
     if isa(info, MethodMatchInfo)
         if info.results === missing
             return []
         end
-
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
@@ -124,8 +131,6 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
             mici = MICallInfo(mi, rt, effects)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
-    elseif isa(info, MethodResultPure)
-        return Any[PureCallInfo(argtypes, rt)]
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.matches; init=[])::Vector{Any}
     elseif isa(info, UnionSplitApplyCallInfo)

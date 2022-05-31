@@ -226,7 +226,7 @@ function codeinst_rt(code::CodeInstance)
             return Core.PartialStruct(rettype, rettype_const)
         elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
             return rettype_const
-        elseif isa(rettype_const, Core.InterConditional) && !(Core.InterConditional <: rettype)
+        elseif isa(rettype_const, Core.Compiler.InterConditional) && !(Core.Compiler.InterConditional <: rettype)
             return rettype_const
         else
             return Const(rettype_const)
