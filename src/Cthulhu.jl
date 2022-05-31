@@ -105,7 +105,7 @@ Shortcut for [`@descend_code_typed`](@ref).
 const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, argtypes=Tuple{}; kwargs...)
+    descend_code_typed(f, argtypes=Tuple{...}; kwargs...)
     descend_code_typed(tt::Type{<:Tuple}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
     descend_code_typed(mi::MethodInstance; kwargs...)
@@ -137,7 +137,7 @@ descend_code_typed(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, argtypes=Tuple{}; kwargs...)
+    descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
     descend_code_warntype(tt::Type{<:Tuple}; kwargs...)
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
     descend_code_warntype(mi::MethodInstance; kwargs...)
@@ -168,7 +168,20 @@ julia> descend_code_warntype() do
 descend_code_warntype(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = Tuple{}); kwargs...)
+@static if isdefined(Base, :default_tt)
+import Base: default_tt
+else
+function default_tt(@nospecialize(f))
+    ms = methods(f)
+    if length(ms) == 1
+        return Base.tuple_type_tail(only(ms).sig)
+    else
+        return Tuple
+    end
+end
+end
+
+function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = default_tt(f)); kwargs...)
     ft = Core.Typeof(f)
     if isa(argtypes, Type)
         u = unwrap_unionall(argtypes)
