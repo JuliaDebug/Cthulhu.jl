@@ -6,8 +6,7 @@ using Base.Meta
 import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo,
-    sptypes_from_meth_instance, argtypes_to_type,
-    decode_effects
+    sptypes_from_meth_instance, argtypes_to_type
 import Base: may_invoke_generator
 
 function code_for_method(method, metharg, methsp, world, preexisting=false)
