@@ -1,4 +1,28 @@
-function save_config!(config::CthulhuConfig, force=true)
+
+"""
+```julia
+save_config!(config::CthulhuConfig=CONFIG, force=true)
+```
+If Preferences.jl is loaded, save a Cthulhu.jl configuration `config`
+(by default, `Cthulhu.CONFIG`) to your `LocalPreferences.toml` file.
+
+The saved preferences will be automatically loaded next time you `using Cthulhu`
+if Preferences.jl is loaded.
+
+## Examples
+```julia
+julia> using Cthulhu, Preferences
+
+julia> Cthulhu.CONFIG.enable_highlighter = true
+true
+
+julia> Cthulhu.CONFIG.debuginfo = :none     # Customize some defaults
+:none
+
+julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be read next time you `using Cthulhu, Preferences`
+```
+"""
+function save_config!(config::CthulhuConfig=CONFIG, force=true)
     # Call Preferences.set_preferences!() without introducing a dependency on Preferences
     id = Base.PkgId(UUID("21216c6a-2e73-6563-6e65-726566657250"), "Preferences")
     mod = get(Base.loaded_modules, id, nothing)
