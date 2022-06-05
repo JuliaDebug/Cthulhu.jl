@@ -23,7 +23,7 @@ julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next ti
 """
 function save_config!(config::CthulhuConfig=CONFIG, force=true)
     cthulhu_id = UUID("f68482b8-f384-11e8-15f7-abe071a5a75f")
-    set_preferences!(cthulhu_id,
+    @set_preferences!(
         "enable_highlighter" => config.enable_highlighter,
         "highlighter" => config.highlighter.exec,
         "asm_syntax" => String(config.asm_syntax),
