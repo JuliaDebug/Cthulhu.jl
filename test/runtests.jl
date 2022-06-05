@@ -898,3 +898,21 @@ let
     inferred = interp.unopt[mi]
     @test inferred.rt === Core.Const(1)
 end
+
+## --- Test loading and saving of preferences
+
+@testset "preferences" begin
+    # Test that load and save are able to set state
+    Cthulhu.CONFIG.enable_highlighter = true
+    Cthulhu.CONFIG.debuginfo = :none
+    Cthulhu.save_config!(Cthulhu.CONFIG)
+
+    Cthulhu.CONFIG.enable_highlighter = false
+    Cthulhu.CONFIG.debuginfo = :compact
+    @test Cthulhu.CONFIG.debuginfo == :compact
+    @test !Cthulhu.CONFIG.enable_highlighter
+
+    Cthulhu.read_config!(Cthulhu.CONFIG)
+    @test Cthulhu.CONFIG.debuginfo == :none
+    @test Cthulhu.CONFIG.enable_highlighter
+end
