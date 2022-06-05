@@ -328,15 +328,15 @@ end
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
-    override::Union{Nothing,InferenceResult}=nothing,    
+    override::Union{Nothing,InferenceResult}=nothing,
     debuginfo::Union{Symbol,DebugInfo}=CONFIG.debuginfo,    # default is compact debuginfo
     optimize::Bool=CONFIG.optimize,                         # default is true
     interruptexc::Bool=true,
     iswarn::Bool=CONFIG.iswarn,                             # default is false
     hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=CONFIG.remarks,                           # default is false
+    remarks::Bool=CONFIG.remarks&!CONFIG.optimize,          # default is false
     with_effects::Bool=CONFIG.with_effects,                 # default is false
-    inline_cost::Bool=CONFIG.inline_cost,                   # default is false
+    inline_cost::Bool=CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool=CONFIG.type_annotations          # default is true
     )
 
