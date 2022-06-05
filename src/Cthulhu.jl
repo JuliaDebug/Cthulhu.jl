@@ -67,6 +67,7 @@ end
 """
 const CONFIG = CthulhuConfig()
 
+using Preferences
 include("preferences.jl")
 read_config!(CONFIG)
 
