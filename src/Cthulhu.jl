@@ -67,6 +67,9 @@ end
 """
 const CONFIG = CthulhuConfig()
 
+include("preferences.jl")
+read_config!(CONFIG)
+
 module DInfo
     @enum DebugInfo none compact source
 end
