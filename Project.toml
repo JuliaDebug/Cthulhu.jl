@@ -1,12 +1,13 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
-version = "2.5.5"
+version = "2.6.0"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 FoldingTrees = "1eca21be-9b9b-4ed8-839a-6d8ae26b1781"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
@@ -14,6 +15,7 @@ Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 [compat]
 CodeTracking = "0.5, 1"
 FoldingTrees = "1"
+Preferences = "1"
 julia = "1.7"
 
 [extras]

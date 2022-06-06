@@ -33,6 +33,13 @@ Base.@kwdef mutable struct CthulhuConfig
     asm_syntax::Symbol = :att
     dead_code_elimination::Bool = true
     pretty_ast::Bool = false
+    debuginfo::Symbol = :compact
+    optimize::Bool = true
+    iswarn::Bool = false
+    remarks::Bool = false
+    with_effects::Bool = false
+    inline_cost::Bool = false
+    type_annotations::Bool = true
 end
 
 """
@@ -48,9 +55,21 @@ end
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
   encounter errors. Please report such bugs with a MWE to Julia or Cthulhu.
-- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to false.
+- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
+- `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
+  Options:. `:none`, `:compact`, `:source`
+- `optimize::Bool`: Initial state of "optimize" toggle. Defaults to `true`.
+- `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
+- `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
+- `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
+- `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
+- `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 """
 const CONFIG = CthulhuConfig()
+
+using Preferences
+include("preferences.jl")
+read_config!(CONFIG)
 
 module DInfo
     @enum DebugInfo none compact source
@@ -313,10 +332,17 @@ end
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
-    override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
-    optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=false, with_effects::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true)
+    override::Union{Nothing,InferenceResult}=nothing,
+    debuginfo::Union{Symbol,DebugInfo}=CONFIG.debuginfo,    # default is compact debuginfo
+    optimize::Bool=CONFIG.optimize,                         # default is true
+    interruptexc::Bool=true,
+    iswarn::Bool=CONFIG.iswarn,                             # default is false
+    hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
+    remarks::Bool=CONFIG.remarks&!CONFIG.optimize,          # default is false
+    with_effects::Bool=CONFIG.with_effects,                 # default is false
+    inline_cost::Bool=CONFIG.inline_cost&CONFIG.optimize,   # default is false
+    type_annotations::Bool=CONFIG.type_annotations          # default is true
+    )
 
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
