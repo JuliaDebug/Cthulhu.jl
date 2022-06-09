@@ -48,7 +48,7 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
 
     if Cthulhu.EFFECTS_ENABLED
         effects = Cthulhu.get_effects(callsites[1].info)
-        @test !Core.Compiler.is_concrete_eval_eligible(effects)
+        @test !Core.Compiler.is_foldable(effects)
         @test !Core.Compiler.is_consistent(effects)
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_nothrow(effects)
@@ -144,7 +144,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
-    Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_concrete_eval_eligible
+    Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
@@ -263,7 +263,7 @@ end
             callinfo = only(callsites).info
             @test isa(callinfo, Cthulhu.ConcreteCallInfo)
             @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
-            @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_concrete_eval_eligible
+            @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
             io = IOBuffer()
             print(io, only(callsites))
             @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
@@ -319,7 +319,7 @@ end
 
     if Cthulhu.EFFECTS_ENABLED
         @test Cthulhu.get_effects(callinfo1.vmi) |> Core.Compiler.is_total
-        @test_broken Cthulhu.get_effects(callinfo2.vmi) |> Core.Compiler.is_concrete_eval_eligible # don't have effects from FailedCallInfo yet
+        @test_broken Cthulhu.get_effects(callinfo2.vmi) |> Core.Compiler.is_foldable # don't have effects from FailedCallInfo yet
     end
 end
 
