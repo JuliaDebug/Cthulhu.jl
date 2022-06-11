@@ -95,10 +95,23 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     return res
 end
 
+# branch on https://github.com/JuliaLang/julia/pull/43994
+const AFTER_43994 = isdefined(Compiler, :transform_optresult_for_cache)
+
+@static if AFTER_43994
+function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
+        valid_worlds::WorldRange, result::InferenceResult)
+    inferred_result = result.src
+    return isa(inferred_result, OptimizedSource) ? inferred_result :
+           isa(inferred_result, Compiler.ConstAPI) ? inferred_result :
+           nothing
+end
+else # @static if AFTER_43994
 function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
         valid_worlds::WorldRange, @nospecialize(inferred_result), ipo_effects::Effects = Effects())
     return maybe_create_optsource(inferred_result, ipo_effects)
 end
+end # @static if AFTER_43994
 
 # branch on https://github.com/JuliaLang/julia/pull/41328
 @static if isdefined(Compiler, :is_stmt_inline)
@@ -127,7 +140,15 @@ function Compiler.inlining_policy(interp::CthulhuInterpreter)
 end
 end # @static if isdefined(Compiler, :is_stmt_inline)
 
+@static if AFTER_43994
+function Compiler.transform_optresult_for_cache(interp::CthulhuInterpreter,
+    opt::OptimizationState, ir::IRCode, @nospecialize(newresult))
+    isa(newresult, Compiler.ConstAPI) && return newresult
+    return OptimizedSource(ir, opt.src, opt.src.inlineable)
+end
+else # @static if AFTER_43994
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     effects = EFFECTS_ENABLED ? caller.ipo_effects : nothing
     caller.src = maybe_create_optsource(caller.src, effects)
 end
+end # @static if AFTER_43994
