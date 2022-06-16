@@ -46,7 +46,7 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
     @test callsites[1].info isa Cthulhu.ConstPropCallInfo
 
-    if Cthulhu.EFFECTS_ENABLED
+    @static if Cthulhu.EFFECTS_ENABLED
         effects = Cthulhu.get_effects(callsites[1].info)
         @test !Core.Compiler.is_foldable(effects)
         @test !Core.Compiler.is_consistent(effects)
@@ -144,7 +144,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
-    Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+    @static Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
@@ -165,7 +165,7 @@ end
         @test length(callsites) == 1
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
-        if Cthulhu.EFFECTS_ENABLED
+        @static if Cthulhu.EFFECTS_ENABLED
             effects = Cthulhu.get_effects(ci)
             @test !Core.Compiler.is_consistent(effects)
             @test Core.Compiler.is_effect_free(effects)
@@ -282,7 +282,7 @@ struct SingletonPureCallable{N} end
     s = sprint(Cthulhu.show_callinfo, c2)
     @test s == "SingletonPureCallable{1}()(::Float64)::Float64"
 
-    if Cthulhu.EFFECTS_ENABLED
+    @static if Cthulhu.EFFECTS_ENABLED
         @test Cthulhu.get_effects(c1) |> Core.Compiler.is_total
         @test Cthulhu.get_effects(c2) |> Core.Compiler.is_total
     end
@@ -317,9 +317,9 @@ end
     print(io, callsites[2])
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
-    if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(callinfo1.vmi) |> Core.Compiler.is_total
-        @test_broken Cthulhu.get_effects(callinfo2.vmi) |> Core.Compiler.is_foldable # don't have effects from FailedCallInfo yet
+    @static if Cthulhu.EFFECTS_ENABLED
+        @test Cthulhu.get_effects(callinfo1) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(callinfo2) |> Core.Compiler.is_total
     end
 end
 
@@ -331,7 +331,7 @@ end
     @test length(callsites) == 1
     callinfo = only(callsites).info
     @test callinfo isa Cthulhu.OCCallInfo
-    if Cthulhu.EFFECTS_ENABLED
+    @static if Cthulhu.EFFECTS_ENABLED
         @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
         # TODO not sure what these effects are (and neither is Base.infer_effects yet)
     end
@@ -376,7 +376,7 @@ end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         print(io, callsite)
         @test info.ci.rt === Core.Compiler.Const(:Integer)
     end
@@ -391,7 +391,7 @@ end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 end
