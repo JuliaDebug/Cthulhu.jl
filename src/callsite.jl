@@ -17,7 +17,7 @@ struct MICallInfo <: CallInfo
 end
 get_mi(ci::MICallInfo) = ci.mi
 get_rt(ci::CallInfo) = ci.rt
-get_effects(ci::MICallInfo) = EFFECTS_ENABLED ? ci.effects : Effects()
+get_effects(ci::MICallInfo) = @static EFFECTS_ENABLED ? ci.effects : Effects()
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -80,10 +80,8 @@ struct MultiCallInfo <: CallInfo
 end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-
-function get_effects(mci::MultiCallInfo)
-    EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
-end
+get_effects(mci::MultiCallInfo) =
+    @static EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
@@ -118,7 +116,7 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
-get_effects(::ReturnTypeCallInfo) = Effects()
+get_effects(::ReturnTypeCallInfo) = @static EFFECTS_ENABLED ? EFFECTS_TOTAL : Effects()
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
