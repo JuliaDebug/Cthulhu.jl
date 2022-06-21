@@ -11,6 +11,9 @@ using Core: MethodInstance
 const Compiler = Core.Compiler
 import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_method
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
+
+using JuliaInterpreter
+
 const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
@@ -87,6 +90,30 @@ include("backedges.jl")
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend
 
+function _gen_descend_call(__module__, f, ex0)
+    i = findfirst(ex -> Meta.isexpr(ex, :(=)) && ex.args[1] === :eval, ex0[1:end-1])
+    if i !== nothing
+        @gensym frameargs
+        ex0 = Base.setindex(ex0, :(frameargs = $frameargs), i)
+        ex = InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
+        if Meta.isexpr(ex, :call)
+            quote
+                $(esc(frameargs)) = Any[$(esc.(ex0[end].args)...)]
+                $ex
+            end
+        else
+            @assert Meta.isexpr(ex, :block)
+            call = ex.args[end]
+            @assert Meta.isexpr(call, :call)
+            insert!(ex.args, length(ex.args), quote
+                $(esc(frameargs)) = Any[arg1, kwargs, arg1, args...]
+            end)
+            ex
+        end
+    else
+        InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
+    end
+end
 """
     @descend_code_typed
 
@@ -94,7 +121,7 @@ Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_typed` on the resulting expression.
 """
 macro descend_code_typed(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
+    _gen_descend_call(__module__, :descend_code_typed, ex0)
 end
 
 """
@@ -113,7 +140,7 @@ Evaluates the arguments to the function or macro call, determines their
 types, and calls `code_warntype` on the resulting expression.
 """
 macro descend_code_warntype(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_warntype, ex0)
+    _gen_descend_call(__module__, :descend_code_warntype, ex0)
 end
 
 """
@@ -341,7 +368,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     remarks::Bool=CONFIG.remarks&!CONFIG.optimize,          # default is false
     with_effects::Bool=CONFIG.with_effects,                 # default is false
     inline_cost::Bool=CONFIG.inline_cost&CONFIG.optimize,   # default is false
-    type_annotations::Bool=CONFIG.type_annotations          # default is true
+    type_annotations::Bool=CONFIG.type_annotations,         # default is true
+    frameargs=nothing,
     )
 
     if isnothing(hide_type_stable)
@@ -351,12 +379,17 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     if isa(debuginfo, Symbol)
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
+    if optimize && frameargs !== nothing
+        @warn "can only show results of concrete interpretation alongside unoptimized IR"
+    end
 
     iscached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
     view_cmd = cthulhu_typed
+    frame = nothing
+    pc = 0
     iostream = term.out_stream::IO
     while true
         if override === nothing && optimize && interp.opt[mi].inferred === nothing
@@ -417,6 +450,21 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 @assert length(src.code) == length(infos)
             end
             callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
+            if frameargs isa Vector{Any}
+                if frame === nothing || frame.framecode.src == codeinf
+                    framecode = JuliaInterpreter.FrameCode(mi.def, codeinf)
+                    frame = JuliaInterpreter.prepare_frame(framecode, frameargs, mi.sparam_vals)
+                    pc = JuliaInterpreter.next_until!(frame) do frame
+                        ex = JuliaInterpreter.pc_expr(frame)
+                        ex isa Expr && ex.head in (:call, :(=))
+                    end
+                    #frame = JuliaInterpreter.prepare_frame(@show(framecode), @show(frameargs), @show(mi.sparam_vals))
+                    #ret = JuliaInterpreter.finish_and_return!(frame)
+                    #printstyled(iostream, nameof(frameargs[1])::Symbol, " returned ", ret, "\n\n"; color=:blue)
+                end
+            elseif frameargs isa Some{Any}
+                printstyled(iostream, "builtin returned ", something(frameargs), "\n\n"; color=:blue)
+            end
 
             if display_CI
                 _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
@@ -428,14 +476,15 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 if debuginfo == DInfo.compact
                     str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                               iswarn=iswarn, hide_type_stable=hide_type_stable,
-                              remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
+                              remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations,
+                              frame=frame
                         ioctx = IOContext(iostream, :color=>true, :displaysize=>displaysize(iostream)) # displaysize doesn't propagate otherwise
                         stringify(ioctx) do io
                             lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
                             cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                           iswarn, hide_type_stable,
                                           remarks, inline_cost, type_annotations,
-                                          interp)
+                                          interp, frame, pc)
                         end
                     end
                     # eliminate trailing indentation (see first item in bullet list in PR #189)
@@ -449,7 +498,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
                                   iswarn, hide_type_stable,
                                   remarks=_remarks, inline_cost, type_annotations,
-                                  interp)
+                                  interp, frame, pc)
                 end
                 view_cmd = cthulhu_typed
             end
@@ -479,13 +528,24 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, with_effects, optimize, false; sub_menu=true, menu_options...)
-                cid = request(term, "", menu)
-                if cid == length(sub_callsites) + 1
-                    continue
+
+                _args = _lookup_call(frame, codeinf, callsite)
+                cid = if _args !== nothing
+                    _mi = get_specialization(Tuple{mapany(Core.Typeof, _args)...})
+                    findfirst(ci -> get_mi(ci) == _mi, info.callinfos)
+                else
+                    nothing
                 end
-                if cid == -1
-                    interruptexc ? throw(InterruptException()) : break
+
+                if cid === nothing
+                    menu = CthulhuMenu(sub_callsites, with_effects, optimize, false; sub_menu=true, menu_options...)
+                    cid = request(term, "", menu)
+                    if cid == length(sub_callsites) + 1
+                        continue
+                    end
+                    if cid == -1
+                        interruptexc ? throw(InterruptException()) : break
+                    end
                 end
 
                 callsite = sub_callsites[cid]
@@ -516,11 +576,14 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 continue
             end
 
+            next_args = _lookup_call(frame, codeinf, callsite)
+
             _descend(term, interp, next_mi;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, with_effects, inline_cost, type_annotations)
+                     remarks, with_effects, inline_cost, type_annotations,
+                     frameargs=next_args)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -534,8 +597,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
-            if remarks && optimize
-                @warn "disable optimization to see the inference remarks"
+            if optimize
+                if remarks
+                    @warn "disable optimization to see the inference remarks"
+                elseif frameargs !== nothing
+                    @warn "can only show results of concrete interpretation alongside unoptimized IR"
+                end
             end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
@@ -581,6 +648,17 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         elseif toggle === :edit
             edit(whereis(mi.def::Method)...)
             display_CI = false
+        elseif toggle === :step
+            if frame !== nothing
+                pc = JuliaInterpreter.next_until!(frame) do frame
+                    ex = JuliaInterpreter.pc_expr(frame)
+                    ex isa Expr && ex.head in (:call, :(=))
+                end
+                if pc === nothing
+                    ret = JuliaInterpreter.get_return(frame)
+                    printstyled(iostream, nameof(frameargs[1])::Symbol, " returned ", ret, "\n\n"; color=:blue)
+                end
+            end
         else
             #Handle Standard alternative view, e.g. :native, :llvm
             if toggle === :typed
@@ -599,6 +677,28 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
 end
 _descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
     _descend(default_terminal(), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
+
+function _lookup_call(frame, codeinf, callsite)
+    frame === nothing && return
+    ex = codeinf.code[callsite.id]
+
+    if Meta.isexpr(ex, :call)
+        next_args = deepcopy(ex.args)
+    elseif Meta.isexpr(ex, :invoke)
+        next_args = deepcopy(ex.args[2:end])
+    else
+        return
+    end
+    JuliaInterpreter.replace_coretypes_list!(next_args; rev=false)
+    ret = JuliaInterpreter.maybe_evaluate_builtin(frame, Expr(:call, next_args...), true)
+    Meta.isexpr(ret, :call) || return ret
+    return try
+        Any[JuliaInterpreter.@lookup(frame, ret.args[1]), JuliaInterpreter.getargs(ret.args, frame)...]
+    catch e
+        e isa UndefVarError || rethrow()
+        nothing
+    end
+end
 
 function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)

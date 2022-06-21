@@ -108,7 +108,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
     remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
-    type_annotations::Bool=true, interp::CthulhuInterpreter=CthulhuInterpreter())
+    type_annotations::Bool=true, interp::CthulhuInterpreter=CthulhuInterpreter(),
+    frame=nothing, pc=0)
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -126,6 +127,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
             show_variables(io, src, slotnames)
         end
+    else
+        frame = nothing
     end
 
     if iswarn
@@ -160,7 +163,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         preprinter = lineprinter(src)
     end
     # postprinter configuration
-    _postprinter = if type_annotations
+    __postprinter = if type_annotations
         iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
     else
         Returns(nothing)
@@ -168,8 +171,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     if !isnothing(remarks) && isa(src, Core.CodeInfo)
         sort!(remarks)
         unique!(remarks) # abstract interpretation may have visited a same statement multiple times
-        function postprinter(io::IO, @nospecialize(typ), used::Bool)
-            _postprinter(io, typ, used)
+        function _postprinter(io::IO, @nospecialize(typ), used::Bool)
+            __postprinter(io, typ, used)
             haskey(io, :idx) || return
             idx = io[:idx]::Int
             firstind = searchsortedfirst(remarks, idx=>"")
@@ -177,6 +180,32 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 remarks[i].first == idx || break
                 printstyled(io, ' ', remarks[i].second; color=:light_black)
             end
+        end
+    else
+        _postprinter = __postprinter
+    end
+    if frame !== nothing
+        ssavals = frame.framedata.ssavalues
+        code = frame.framecode.src.code
+        function postprinter(io, typ, used)
+            _postprinter(io, typ, used)
+            haskey(io, :idx) || return
+            idx = io[:idx]::Int
+            ex = code[idx]
+            if Meta.isexpr(ex, :(=))
+                var = ex.args[1]
+                if JuliaInterpreter.check_isdefined(frame, var)
+                    print(io, " = ")
+                    printstyled(io, repr(JuliaInterpreter.@lookup(frame, var)); color=:magenta)
+                end
+            elseif isassigned(ssavals, idx)
+                print(io, " = ")
+                printstyled(io, repr(ssavals[idx]); color=:blue)
+            end
+            if pc == idx
+                printstyled(io, " ←"; color=:light_cyan, bold=true)
+            end
+            nothing
         end
     else
         postprinter = _postprinter

@@ -146,6 +146,9 @@ function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     elseif key == UInt32('E')
         m.toggle = :edit
         return true
+    elseif key == UInt32('n')
+        m.toggle = :step
+        return true
     end
     return false
 end
