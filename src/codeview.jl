@@ -109,7 +109,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     iswarn::Bool=false, hide_type_stable::Bool=false,
     remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
     type_annotations::Bool=true, interp::CthulhuInterpreter=CthulhuInterpreter(),
-    frame=nothing)
+    frame=nothing, pc=0)
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -193,11 +193,17 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             idx = io[:idx]::Int
             ex = code[idx]
             if Meta.isexpr(ex, :(=))
-                print(io, " = ")
-                printstyled(io, repr(JuliaInterpreter.@lookup(frame, ex.args[1])); color=:magenta)
+                var = ex.args[1]
+                if JuliaInterpreter.check_isdefined(frame, var)
+                    print(io, " = ")
+                    printstyled(io, repr(JuliaInterpreter.@lookup(frame, var)); color=:magenta)
+                end
             elseif isassigned(ssavals, idx)
                 print(io, " = ")
                 printstyled(io, repr(ssavals[idx]); color=:blue)
+            end
+            if pc == idx
+                printstyled(io, " ←"; color=:light_cyan, bold=true)
             end
             nothing
         end
