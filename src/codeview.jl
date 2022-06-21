@@ -168,8 +168,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     else
         Returns(nothing)
     end
-    if !isnothing(remarks)
+    if !isnothing(remarks) && isa(src, Core.CodeInfo)
         sort!(remarks)
+        unique!(remarks) # abstract interpretation may have visited a same statement multiple times
         function _postprinter(io::IO, @nospecialize(typ), used::Bool)
             __postprinter(io, typ, used)
             haskey(io, :idx) || return

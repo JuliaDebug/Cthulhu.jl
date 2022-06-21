@@ -6,8 +6,7 @@ using Base.Meta
 import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo,
-    sptypes_from_meth_instance, argtypes_to_type,
-    decode_effects
+    sptypes_from_meth_instance, argtypes_to_type
 import Base: may_invoke_generator
 
 function code_for_method(method, metharg, methsp, world, preexisting=false)
@@ -112,11 +111,18 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
     is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
+    if isa(info, MethodResultPure)
+        if isa(info.info, Compiler.ReturnTypeCallInfo)
+            # xref: https://github.com/JuliaLang/julia/pull/45299#discussion_r871939049
+            info = info.info # cascade to the special handling below
+        else
+            return Any[PureCallInfo(argtypes, rt)]
+        end
+    end
     if isa(info, MethodMatchInfo)
         if info.results === missing
             return []
         end
-
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
@@ -124,8 +130,6 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
             mici = MICallInfo(mi, rt, effects)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
-    elseif isa(info, MethodResultPure)
-        return Any[PureCallInfo(argtypes, rt)]
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.matches; init=[])::Vector{Any}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -140,11 +144,21 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         return mapany(enumerate(info.results)) do (i, result)
             if isnothing(result)
                 infos[i]
+            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConcreteResult)
+                linfo = result.mi
+                effects = get_effects(result)
+                mici = MICallInfo(linfo, rt, effects)
+                ConcreteCallInfo(mici, argtypes)
+            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConstPropResult)
+                linfo = result.result.linfo
+                effects = get_effects(result)
+                mici = MICallInfo(linfo, rt, effects)
+                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result.result)
             elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
                 linfo = result.mi
-                effects = get_effects(interp.unopt, linfo)
+                effects = get_effects(result)
                 mici = MICallInfo(linfo, rt, effects)
-                ConstEvalCallInfo(mici, argtypes)
+                ConcreteCallInfo(mici, argtypes)
             else
                 @assert isa(result, Compiler.InferenceResult)
                 linfo = result.linfo
@@ -154,11 +168,18 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
             end
         end
     elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-        return Any[InvokeCallInfo(Core.Compiler.specialize_method(info.match), rt, Effects())]
+        mi = Core.Compiler.specialize_method(info.match)
+        res = info.result
+        effects = isnothing(res) ? Effects() : get_effects(info.result)
+        ici = InvokeCallInfo(mi, rt, effects)
+        return Any[ici]
     elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
         return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
+        return []
+    elseif (@static isdefined(Compiler, :FinalizerInfo) && true) && isa(info, Compiler.FinalizerInfo)
+        # TODO: Add ability to descend into finalizers at creation site
         return []
     elseif isa(info, Compiler.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]

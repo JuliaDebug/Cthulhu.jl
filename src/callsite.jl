@@ -17,7 +17,7 @@ struct MICallInfo <: CallInfo
 end
 get_mi(ci::MICallInfo) = ci.mi
 get_rt(ci::CallInfo) = ci.rt
-get_effects(ci::MICallInfo) = EFFECTS_ENABLED ? ci.effects : Effects()
+get_effects(ci::MICallInfo) = @static EFFECTS_ENABLED ? ci.effects : Effects()
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -54,6 +54,7 @@ struct FailedCallInfo <: CallInfo
 end
 get_mi(ci::FailedCallInfo) = fail(ci)
 get_rt(ci::FailedCallInfo) = fail(ci)
+get_effects(ci::FailedCallInfo) = Effects()
 function fail(ci::FailedCallInfo)
     @error "MethodInstance extraction failed" ci.sig ci.rt
     return nothing
@@ -64,7 +65,10 @@ struct GeneratedCallInfo <: CallInfo
     sig
     rt
 end
-function get_mi(genci::GeneratedCallInfo)
+get_mi(genci::GeneratedCallInfo) = fail(genci)
+get_rt(genci::GeneratedCallInfo) = fail(genci)
+get_effects(genci::GeneratedCallInfo) = Effects()
+function fail(genci::GeneratedCallInfo)
     @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
     return nothing
 end
@@ -76,16 +80,15 @@ struct MultiCallInfo <: CallInfo
 end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-
-function get_effects(mci::MultiCallInfo)
-    EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
-end
+get_effects(mci::MultiCallInfo) =
+    @static EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
 end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
+get_effects(tci::TaskCallInfo) = get_effects(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::MICallInfo
@@ -113,7 +116,7 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
-get_effects(::ReturnTypeCallInfo) = Effects()
+get_effects(::ReturnTypeCallInfo) = @static EFFECTS_ENABLED ? EFFECTS_TOTAL : Effects()
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -123,13 +126,13 @@ get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 get_rt(cpci::ConstPropCallInfo) = get_rt(cpci.mi)
 get_effects(cpci::ConstPropCallInfo) = get_effects(cpci.result)
 
-struct ConstEvalCallInfo <: CallInfo
+struct ConcreteCallInfo <: CallInfo
     mi::CallInfo
     argtypes::ArgTypes
 end
-get_mi(ceci::ConstEvalCallInfo) = get_mi(ceci.mi)
-get_rt(ceci::ConstEvalCallInfo) = get_rt(ceci.mi)
-get_effects(ceci::ConstEvalCallInfo) = get_effects(ceci.mi)
+get_mi(ceci::ConcreteCallInfo) = get_mi(ceci.mi)
+get_rt(ceci::ConcreteCallInfo) = get_rt(ceci.mi)
+get_effects(ceci::ConcreteCallInfo) = get_effects(ceci.mi)
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -137,6 +140,7 @@ struct CuCallInfo <: CallInfo
 end
 get_mi(gci::CuCallInfo) = get_mi(gci.cumi)
 get_rt(gci::CuCallInfo) = get_rt(gci.cumi)
+get_effects(gci::CuCallInfo) = get_effects(gci.cumi)
 
 struct Callsite
     id::Int # ssa-id
@@ -290,7 +294,7 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     __show_limited(limiter, name, tt, get_rt(ignorewrappers(ci.mi)::MICallInfo))
 end
 
-function show_callinfo(limiter, ci::ConstEvalCallInfo)
+function show_callinfo(limiter, ci::ConcreteCallInfo)
     # XXX: The first argument could be const-overriden too
     name = get_mi(ci).def.name
     tt = ci.argtypes[2:end]
@@ -364,8 +368,8 @@ function Base.show(io::IO, c::Callsite)
     elseif isa(info, ConstPropCallInfo)
         print(limiter, " = < constprop > ")
         show_callinfo(limiter, info)
-    elseif isa(info, ConstEvalCallInfo)
-        print(limiter, " = < consteval > ")
+    elseif isa(info, ConcreteCallInfo)
+        print(limiter, " = < concrete eval > ")
         show_callinfo(limiter, info)
     elseif isa(info, OCCallInfo)
         print(limiter, " = < opaque closure call > ")

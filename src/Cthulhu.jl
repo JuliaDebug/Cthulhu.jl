@@ -20,7 +20,7 @@ const ArgTypes = Vector{Any}
 
 @static if !isdefined(Core.Compiler, :Effects)
     const Effects = Nothing
-    const EFFECTS_TOTAL = Nothing
+    const EFFECTS_TOTAL = nothing
     const EFFECTS_ENABLED = false
 else
     const Effects = Core.Compiler.Effects
@@ -36,6 +36,13 @@ Base.@kwdef mutable struct CthulhuConfig
     asm_syntax::Symbol = :att
     dead_code_elimination::Bool = true
     pretty_ast::Bool = false
+    debuginfo::Symbol = :compact
+    optimize::Bool = true
+    iswarn::Bool = false
+    remarks::Bool = false
+    with_effects::Bool = false
+    inline_cost::Bool = false
+    type_annotations::Bool = true
 end
 
 """
@@ -51,9 +58,21 @@ end
 - `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
   encounter errors. Please report such bugs with a MWE to Julia or Cthulhu.
-- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to false.
+- `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
+- `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
+  Options:. `:none`, `:compact`, `:source`
+- `optimize::Bool`: Initial state of "optimize" toggle. Defaults to `true`.
+- `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
+- `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
+- `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
+- `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
+- `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 """
 const CONFIG = CthulhuConfig()
+
+using Preferences
+include("preferences.jl")
+read_config!(CONFIG)
 
 module DInfo
     @enum DebugInfo none compact source
@@ -132,7 +151,7 @@ Shortcut for [`@descend_code_typed`](@ref).
 const var"@descend" = var"@descend_code_typed"
 
 """
-    descend_code_typed(f, argtypes=Tuple{}; kwargs...)
+    descend_code_typed(f, argtypes=Tuple{...}; kwargs...)
     descend_code_typed(tt::Type{<:Tuple}; kwargs...)
     descend_code_typed(Cthulhu.BOOKMARKS[i]; kwargs...)
     descend_code_typed(mi::MethodInstance; kwargs...)
@@ -164,7 +183,7 @@ descend_code_typed(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=false, kwargs...)
 
 """
-    descend_code_warntype(f, argtypes=Tuple{}; kwargs...)
+    descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
     descend_code_warntype(tt::Type{<:Tuple}; kwargs...)
     descend_code_warntype(Cthulhu.BOOKMARKS[i])
     descend_code_warntype(mi::MethodInstance; kwargs...)
@@ -195,7 +214,20 @@ julia> descend_code_warntype() do
 descend_code_warntype(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = Tuple{}); kwargs...)
+@static if isdefined(Base, :default_tt)
+import Base: default_tt
+else
+function default_tt(@nospecialize(f))
+    ms = methods(f)
+    if length(ms) == 1
+        return Base.tuple_type_tail(only(ms).sig)
+    else
+        return Tuple
+    end
+end
+end
+
+function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = default_tt(f)); kwargs...)
     ft = Core.Typeof(f)
     if isa(argtypes, Type)
         u = unwrap_unionall(argtypes)
@@ -253,7 +285,7 @@ function codeinst_rt(code::CodeInstance)
             return Core.PartialStruct(rettype, rettype_const)
         elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
             return rettype_const
-        elseif isa(rettype_const, Core.InterConditional) && !(Core.InterConditional <: rettype)
+        elseif isa(rettype_const, Core.Compiler.InterConditional) && !(Core.Compiler.InterConditional <: rettype)
             return rettype_const
         else
             return Const(rettype_const)
@@ -263,13 +295,19 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-if EFFECTS_ENABLED
+@static if EFFECTS_ENABLED
     get_effects(codeinst::CodeInstance) = Core.Compiler.decode_effects(codeinst.ipo_purity_bits)
     get_effects(codeinst::CodeInfo) = Core.Compiler.decode_effects(codeinst.purity)
     get_effects(src::InferredSource) = src.effects
     get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
         haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
     get_effects(result::InferenceResult) = result.ipo_effects
+    @static if VERSION ≥ v"1.9.0-DEV.409"
+        get_effects(result::Compiler.ConstPropResult) = get_effects(result.result)
+        get_effects(result::Compiler.ConcreteResult) = result.effects
+    else
+        get_effects(result::Compiler.ConstResult) = result.effects
+    end
 else
     get_effects(_...) = nothing
 end
@@ -321,11 +359,18 @@ end
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
-    override::Union{Nothing,InferenceResult}=nothing, debuginfo::Union{Symbol,DebugInfo}=DInfo.compact, # default is compact debuginfo
-    optimize::Bool=true, interruptexc::Bool=true,
-    iswarn::Bool=false, hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=false, with_effects::Bool=false, inline_cost::Bool=false, type_annotations::Bool=true,
-    frameargs=nothing)
+    override::Union{Nothing,InferenceResult}=nothing,
+    debuginfo::Union{Symbol,DebugInfo}=CONFIG.debuginfo,    # default is compact debuginfo
+    optimize::Bool=CONFIG.optimize,                         # default is true
+    interruptexc::Bool=true,
+    iswarn::Bool=CONFIG.iswarn,                             # default is false
+    hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
+    remarks::Bool=CONFIG.remarks&!CONFIG.optimize,          # default is false
+    with_effects::Bool=CONFIG.with_effects,                 # default is false
+    inline_cost::Bool=CONFIG.inline_cost&CONFIG.optimize,   # default is false
+    type_annotations::Bool=CONFIG.type_annotations,         # default is true
+    frameargs=nothing,
+    )
 
     if isnothing(hide_type_stable)
         hide_type_stable = something(verbose, false)
@@ -374,7 +419,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                         codeinf = opt.src
                         infos = src.stmts.info
                         slottypes = src.argtypes
-                        effects = get_effects(codeinf)
+                        effects = opt.effects
                     else
                         # the source might be unavailable at this point,
                         # when a result is fully constant-folded etc.
@@ -544,8 +589,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 @warn "can't switch to post-optimization state, since this inference frame isn't cached"
                 optimize ⊻= true
             end
-            if optimize && frameargs !== nothing
-                @warn "can only show results of concrete interpretation alongside unoptimized IR"
+            if optimize
+                if remarks
+                    @warn "disable optimization to see the inference remarks"
+                elseif frameargs !== nothing
+                    @warn "can only show results of concrete interpretation alongside unoptimized IR"
+                end
             end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)

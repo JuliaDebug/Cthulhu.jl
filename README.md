@@ -126,7 +126,7 @@ You can toggle between these with `o` and `w`.
 Cthulhu has access only to "static" type information, the same information available to the Julia compiler and type inference.
 In some situations, this will lead to incomplete or misleading information about type instabilities.
 
-Take for example: 
+Take for example:
 ```julia
 using Infiltrator: @infiltrate
 using Cthulhu: @descend
@@ -200,7 +200,7 @@ Now invoke `foo` to get REPL in the scope just before `bar` gets called:
 julia> foo(4)
 Infiltrating foo(n::Int64) at ex.jl:10:
 
-infil> 
+infil>
 ```
 
 Enter `@descend bar(x, y, z)` and type `w`:
@@ -219,3 +219,15 @@ Variables
 
 You can see that, for `foo(4)`, the types within `bar` are fully inferred.
 
+## Customization
+
+The default configuration of toggles in the `@descend` menu can be customized
+with `Cthulhu.CONFIG` and persistently saved (via Preferences.jl) using
+`Cthulhu.save_config!()`:
+
+```julia
+julia> Cthulhu.CONFIG.enable_highlighter = true # Change default
+true
+
+julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next time you `using Cthulhu`
+```
