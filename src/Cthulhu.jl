@@ -287,43 +287,50 @@ end
 
 # `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
 @constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
-    if !optimize
-        codeinf = src = copy(interp.unopt[mi].src)
-        rt = interp.unopt[mi].rt
-        infos = interp.unopt[mi].stmt_info
-        effects = get_effects(interp.unopt[mi])
-        slottypes = src.slottypes
-        if isnothing(slottypes)
-            slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-        end
+    if optimize
+        return lookup_optimized(interp, mi, allow_no_src)
     else
-        codeinst = interp.opt[mi]
-        rt = codeinst_rt(codeinst)
-        opt = codeinst.inferred
-        if opt !== nothing
-            opt = opt::OptimizedSource
-            src = Core.Compiler.copy(opt.ir)
-            codeinf = opt.src
-            infos = src.stmts.info
-            slottypes = src.argtypes
-        elseif allow_no_src
-            # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
-            # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
-            codeinf = src = nothing
-            infos = []
-            slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
-        else
-            Core.eval(Main, quote
-                interp = $interp
-                mi = $mi
-                optimize = $optimize
-            end)
-            error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
-        end
-        effects = get_effects(codeinst)
+        return lookup_unoptimized(interp, mi)
     end
-    # NOTE return `codeinf::CodeInfo` in any case since it can provide additional information on slot names
-    (; src, rt, infos, slottypes, codeinf, effects)
+end
+
+function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_no_src::Bool=false)
+    codeinst = interp.opt[mi]
+    rt = codeinst_rt(codeinst)
+    opt = codeinst.inferred
+    if opt !== nothing
+        opt = opt::OptimizedSource
+        src = Core.Compiler.copy(opt.ir)
+        codeinf = opt.src
+        infos = src.stmts.info
+        slottypes = src.argtypes
+    elseif allow_no_src
+        # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
+        # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
+        codeinf = src = nothing
+        infos = []
+        slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
+    else
+        Core.eval(Main, quote
+            interp = $interp
+            mi = $mi
+        end)
+        error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
+    end
+    effects = get_effects(codeinst)
+    return (; src, rt, infos, slottypes, codeinf, effects)
+end
+
+function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
+    codeinf = src = copy(interp.unopt[mi].src)
+    rt = interp.unopt[mi].rt
+    infos = interp.unopt[mi].stmt_info
+    effects = get_effects(interp.unopt[mi])
+    slottypes = src.slottypes
+    if isnothing(slottypes)
+        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+    end
+    return (; src, rt, infos, slottypes, codeinf, effects)
 end
 
 ##
@@ -359,102 +366,105 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     view_cmd = cthulhu_typed
     iostream = term.out_stream::IO
     while true
-        if override === nothing && optimize && interp.opt[mi].inferred === nothing
-            # This was inferred to a pure constant - we have no code to show,
-            # but make something up that looks plausible.
-            if display_CI
-                println(iostream)
-                println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
-                println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
-                println(iostream)
+        if override !== nothing
+            if optimize
+                opt = override.src
+                rt = override.result
+                if isa(opt, Compiler.OptimizationState)
+                    src = Compiler.copy(src.ir::IRCode)
+                    codeinf = src.src
+                    infos = opt.stmts.info
+                    slottypes = opt.argtypes
+                    effects = get_effects(codeinf)
+                elseif isa(opt, OptimizedSource)
+                    # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+                    # e.g. when we switch from constant-prop' unoptimized source
+                    src = Core.Compiler.copy(opt.ir)
+                    codeinf = opt.src
+                    infos = src.stmts.info
+                    slottypes = src.argtypes
+                    effects = opt.effects
+                else
+                    # the source might be unavailable at this point,
+                    # when a result is fully constant-folded etc.
+                    (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
+                end
+            else
+                unopt = get(interp.unopt, override, missing)
+                if unopt === missing
+                    unopt = interp.unopt[override.linfo]
+                end
+                codeinf = src = copy(unopt.src)
+                rt = unopt.rt
+                infos = unopt.stmt_info
+                effects = get_effects(unopt)
+                slottypes = src.slottypes
+                if isnothing(slottypes)
+                    slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+                end
             end
-            callsites = Callsite[]
         else
-            if override !== nothing
-                if optimize
-                    opt = override.src
-                    rt = override.result
-                    if isa(opt, Compiler.OptimizationState)
-                        src = Compiler.copy(src.ir::IRCode)
-                        codeinf = src.src
-                        infos = opt.stmts.info
-                        slottypes = opt.argtypes
-                        effects = get_effects(codeinf)
-                    elseif isa(opt, OptimizedSource)
-                        # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
-                        # e.g. when we switch from constant-prop' unoptimized source
-                        src = Core.Compiler.copy(opt.ir)
-                        codeinf = opt.src
-                        infos = src.stmts.info
-                        slottypes = src.argtypes
-                        effects = opt.effects
-                    else
-                        # the source might be unavailable at this point,
-                        # when a result is fully constant-folded etc.
-                        (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
-                    end
-                else
-                    unopt = get(interp.unopt, override, missing)
-                    if unopt === missing
-                        unopt = interp.unopt[override.linfo]
-                    end
-                    codeinf = src = copy(unopt.src)
-                    rt = unopt.rt
-                    infos = unopt.stmt_info
-                    effects = get_effects(unopt)
-                    slottypes = src.slottypes
-                    if isnothing(slottypes)
-                        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-                    end
+            if optimize && interp.opt[mi].inferred === nothing
+                # This was inferred to a pure constant - we have no code to show,
+                # but make something up that looks plausible.
+                callsites = Callsite[]
+                if display_CI
+                    println(iostream)
+                    println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
+                    println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
+                    println(iostream)
                 end
-            else
-                (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
+                @goto show_menu
             end
-            src = preprocess_ci!(src, mi, optimize, CONFIG)
-            if optimize # optimization might have deleted some statements
-                infos = src.stmts.info
-            else
-                @assert length(src.code) == length(infos)
-            end
-            callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
+            (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
+        end
+        src = preprocess_ci!(src, mi, optimize, CONFIG)
+        if optimize # optimization might have deleted some statements
+            infos = src.stmts.info
+        else
+            @assert length(src.code) == length(infos)
+        end
+        callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
 
-            if display_CI
-                _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
-                if with_effects
-                    printstyled(IOContext(iostream, :limit=>true), '[', effects, ']', mi.def, '\n'; bold=true)
-                else
-                    printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
-                end
-                if debuginfo == DInfo.compact
-                    str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
-                              iswarn=iswarn, hide_type_stable=hide_type_stable,
-                              remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
-                        ioctx = IOContext(iostream, :color=>true, :displaysize=>displaysize(iostream)) # displaysize doesn't propagate otherwise
-                        stringify(ioctx) do io
-                            lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
-                            cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
-                                          iswarn, hide_type_stable,
-                                          remarks, inline_cost, type_annotations,
-                                          interp)
-                        end
-                    end
-                    # eliminate trailing indentation (see first item in bullet list in PR #189)
-                    rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
-                    if rmatch !== nothing
-                        str = str[begin:prevind(str, first(rmatch))]
-                    end
-                    print(iostream, str)
-                else
-                    lambda_io = IOContext(iostream, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
-                    cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
-                                  iswarn, hide_type_stable,
-                                  remarks=_remarks, inline_cost, type_annotations,
-                                  interp)
-                end
-                view_cmd = cthulhu_typed
+        if display_CI
+            _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
+            if with_effects
+                printstyled(IOContext(iostream, :limit=>true), '[', effects, ']', mi.def, '\n'; bold=true)
+            else
+                printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
             end
+            if debuginfo == DInfo.compact
+                str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
+                          iswarn=iswarn, hide_type_stable=hide_type_stable,
+                          remarks=_remarks, inline_cost=inline_cost, type_annotations=type_annotations
+                    ioctx = IOContext(iostream, :color=>true, :displaysize=>displaysize(iostream)) # displaysize doesn't propagate otherwise
+                    stringify(ioctx) do io
+                        lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
+                        cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
+                                      iswarn, hide_type_stable,
+                                      remarks, inline_cost, type_annotations,
+                                      interp)
+                    end
+                end
+                # eliminate trailing indentation (see first item in bullet list in PR #189)
+                rmatch = findfirst(r"\u001B\[90m\u001B\[(\d+)G( *)\u001B\[1G\u001B\[39m\u001B\[90m( *)\u001B\[39m$", str)
+                if rmatch !== nothing
+                    str = str[begin:prevind(str, first(rmatch))]
+                end
+                print(iostream, str)
+            else
+                lambda_io = IOContext(iostream, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
+                cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
+                              iswarn, hide_type_stable,
+                              remarks=_remarks, inline_cost, type_annotations,
+                              interp)
+            end
+            view_cmd = cthulhu_typed
+        else
             display_CI = true
         end
+
+        @label show_menu
 
         menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool; menu_options...)
         usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter)
