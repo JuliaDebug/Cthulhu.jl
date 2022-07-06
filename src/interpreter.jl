@@ -18,14 +18,6 @@ struct OptimizedSource
     effects::Effects
 end
 
-maybe_create_optsource(@nospecialize(a), ::Effects) = a
-
-function maybe_create_optsource(st::OptimizationState, effects::Effects)
-    ir = st.ir
-    ir === nothing && return st
-    return OptimizedSource(ir, st.src, st.src.inlineable, effects)
-end
-
 const Remarks = Vector{Pair{Int, String}}
 
 struct CthulhuInterpreter <: AbstractInterpreter
@@ -95,9 +87,25 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     return res
 end
 
-function Compiler.transform_result_for_cache(interp::CthulhuInterpreter, linfo::MethodInstance,
-        valid_worlds::WorldRange, @nospecialize(inferred_result), ipo_effects::Effects = Effects())
-    return maybe_create_optsource(inferred_result, ipo_effects)
+function maybe_create_optsource(@nospecialize(x), effects::Effects)
+    isa(x, OptimizationState) || return x
+    ir = x.ir
+    ir === nothing && return x
+    return OptimizedSource(ir, x.src, x.src.inlineable, effects)
+end
+
+@static if hasmethod(Compiler.transform_result_for_cache,
+    (AbstractInterpreter, MethodInstance, WorldRange, Any, Effects))
+    function Compiler.transform_result_for_cache(interp::CthulhuInterpreter,
+        linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result),
+        ipo_effects::Core.Compiler.Effects)
+        return maybe_create_optsource(inferred_result, ipo_effects)
+    end
+else
+    function Compiler.transform_result_for_cache(interp::CthulhuInterpreter,
+        linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result))
+        return maybe_create_optsource(inferred_result, Effects())
+    end
 end
 
 # branch on https://github.com/JuliaLang/julia/pull/41328
