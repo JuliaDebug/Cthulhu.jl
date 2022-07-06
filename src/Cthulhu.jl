@@ -339,16 +339,17 @@ end
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
-    override::Union{Nothing,InferenceResult}=nothing,
-    debuginfo::Union{Symbol,DebugInfo}=CONFIG.debuginfo,    # default is compact debuginfo
-    optimize::Bool=CONFIG.optimize,                         # default is true
-    interruptexc::Bool=true,
-    iswarn::Bool=CONFIG.iswarn,                             # default is false
-    hide_type_stable::Union{Nothing,Bool}=nothing, verbose::Union{Nothing,Bool}=nothing,
-    remarks::Bool=CONFIG.remarks&!CONFIG.optimize,          # default is false
-    with_effects::Bool=CONFIG.with_effects,                 # default is false
-    inline_cost::Bool=CONFIG.inline_cost&CONFIG.optimize,   # default is false
-    type_annotations::Bool=CONFIG.type_annotations          # default is true
+    override::Union{Nothing,InferenceResult} = nothing,
+    debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
+    optimize::Bool                           = CONFIG.optimize,                      # default is true
+    interruptexc::Bool                       = true,
+    iswarn::Bool                             = CONFIG.iswarn,                        # default is false
+    hide_type_stable::Union{Nothing,Bool}    = nothing,
+    verbose::Union{Nothing,Bool}             = nothing,
+    remarks::Bool                            = CONFIG.remarks&!CONFIG.optimize,      # default is false
+    with_effects::Bool                       = CONFIG.with_effects,                  # default is false
+    inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
+    type_annotations::Bool                   = CONFIG.type_annotations               # default is true
     )
 
     if isnothing(hide_type_stable)
@@ -499,7 +500,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
                 end
                 if isempty(sub_callsites)
-                    @warn "Expected multiple callsites, but found none. Please fill an issue with a reproducing example" info
+                    Core.eval(Main, quote
+                        interp = $interp
+                        mi = $mi
+                        info = $info
+                    end)
+                    @error "Expected multiple callsites, but found none. Please fill an issue with a reproducing example."
                     continue
                 end
                 menu = CthulhuMenu(sub_callsites, with_effects, optimize, false; sub_menu=true, menu_options...)
@@ -516,21 +522,20 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
 
             # forcibly enter and inspect the frame, although the native interpreter gave up
-            if info isa UncachedCallInfo || info isa TaskCallInfo
-                # XXX: this may use a different native interpreter
-                next_interp = CthulhuInterpreter()
-                next_mi = get_mi(info)::MethodInstance
-                do_typeinf!(next_interp, next_mi)
-                _descend(term, next_interp, next_mi;
-                         debuginfo,
-                         optimize, interruptexc,
-                         iswarn, hide_type_stable,
-                         remarks, with_effects, inline_cost, type_annotations)
+            if info isa UncachedCallInfo
+                @info """
+                Inference didn't cache this call information because of imprecise analysis due to recursion:
+                Cthulhu nevertheless is trying to descend into it for further inspection.
+                """
+                additional_descend(get_mi(info)::MethodInstance)
                 continue
-            end
-
-            if info isa GeneratedCallInfo || callsite.info isa FailedCallInfo
-                @error "Callsite %$(callsite.id) failed to be extracted" callsite
+            elseif info isa TaskCallInfo
+                @info """
+                Inference didn't analyze this call because it is a dynamic call:
+                Cthulhu nevertheless is trying to descend into it for further inspection.
+                """
+                additional_descend(get_mi(info)::MethodInstance)
+                continue
             end
 
             # recurse
@@ -554,36 +559,36 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         elseif toggle === :optimize
             optimize ⊻= true
             if !iscached(mi, optimize)
-                @warn "can't switch to post-optimization state, since this inference frame isn't cached"
+                @warn "Can't switch to post-optimization state, since this inference frame isn't cached."
                 optimize ⊻= true
             end
             if remarks && optimize
-                @warn "disable optimization to see the inference remarks"
+                @warn "Disable optimization to see the inference remarks."
             end
         elseif toggle === :debuginfo
             debuginfo = DebugInfo((Int(debuginfo) + 1) % 3)
         elseif toggle === :remarks
             remarks ⊻= true
             if remarks && optimize
-                @warn "disable optimization to see the inference remarks"
+                @warn "Disable optimization to see the inference remarks."
             end
         elseif toggle === :inline_cost
             inline_cost ⊻= true
             if inline_cost && !optimize
-                @warn "enable optimization to see the inlining costs"
+                @warn "Enable optimization to see the inlining costs."
             end
         elseif toggle === :type_annotations
             type_annotations ⊻= true
         elseif toggle === :highlighter
             CONFIG.enable_highlighter ⊻= true
             if CONFIG.enable_highlighter
-                @info "Using syntax highlighter $(CONFIG.highlighter)"
+                @info "Using syntax highlighter $(CONFIG.highlighter)."
             else
                 @info "Turned off syntax highlighter for Julia, LLVM and native code."
             end
             display_CI = false
         elseif toggle === :dump_params
-            @info "Dumping inference cache"
+            @info "Dumping inference cache."
             Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(get_inference_cache(interp))))
             Core.println()
             display_CI = false
