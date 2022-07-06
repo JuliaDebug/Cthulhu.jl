@@ -370,13 +370,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             if optimize
                 opt = override.src
                 rt = override.result
-                if isa(opt, Compiler.OptimizationState)
-                    src = Compiler.copy(src.ir::IRCode)
-                    codeinf = src.src
-                    infos = opt.stmts.info
-                    slottypes = opt.argtypes
-                    effects = get_effects(codeinf)
-                elseif isa(opt, OptimizedSource)
+                if isa(opt, OptimizedSource)
                     # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
                     # e.g. when we switch from constant-prop' unoptimized source
                     src = Core.Compiler.copy(opt.ir)
@@ -390,8 +384,8 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
                 end
             else
-                unopt = get(interp.unopt, override, missing)
-                if unopt === missing
+                unopt = get(interp.unopt, override, nothing)
+                if unopt === nothing
                     unopt = interp.unopt[override.linfo]
                 end
                 codeinf = src = copy(unopt.src)

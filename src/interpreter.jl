@@ -87,10 +87,9 @@ function Compiler.finish(state::InferenceState, interp::CthulhuInterpreter)
     return res
 end
 
-function maybe_create_optsource(@nospecialize(x), effects::Effects)
+function create_cthulhu_source(@nospecialize(x), effects::Effects)
     isa(x, OptimizationState) || return x
-    ir = x.ir
-    ir === nothing && return x
+    ir = x.ir::IRCode
     return OptimizedSource(ir, x.src, x.src.inlineable, effects)
 end
 
@@ -99,12 +98,12 @@ end
     function Compiler.transform_result_for_cache(interp::CthulhuInterpreter,
         linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result),
         ipo_effects::Core.Compiler.Effects)
-        return maybe_create_optsource(inferred_result, ipo_effects)
+        return create_cthulhu_source(inferred_result, ipo_effects)
     end
 else
     function Compiler.transform_result_for_cache(interp::CthulhuInterpreter,
         linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result))
-        return maybe_create_optsource(inferred_result, Effects())
+        return create_cthulhu_source(inferred_result, Effects())
     end
 end
 
@@ -137,5 +136,5 @@ end # @static if isdefined(Compiler, :is_stmt_inline)
 
 function Compiler.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     effects = EFFECTS_ENABLED ? caller.ipo_effects : nothing
-    caller.src = maybe_create_optsource(caller.src, effects)
+    caller.src = create_cthulhu_source(caller.src, effects)
 end
