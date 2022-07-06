@@ -365,6 +365,13 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     display_CI = true
     view_cmd = cthulhu_typed
     iostream = term.out_stream::IO
+    function additional_descend(new_mi::MethodInstance)
+        new_interp = CthulhuInterpreter(interp)
+        do_typeinf!(new_interp, new_mi)
+        _descend(term, new_interp, new_mi;
+                 debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
+                 with_effects, inline_cost, type_annotations)
+    end
     while true
         if override !== nothing
             if optimize
@@ -398,17 +405,29 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 end
             end
         else
-            if optimize && interp.opt[mi].inferred === nothing
-                # This was inferred to a pure constant - we have no code to show,
-                # but make something up that looks plausible.
-                callsites = Callsite[]
-                if display_CI
-                    println(iostream)
-                    println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
-                    println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
-                    println(iostream)
+            if optimize
+                codeinst = interp.opt[mi]
+                if codeinst.inferred === nothing
+                    if isdefined(codeinst, :rettype_const)
+                        # This was inferred to a pure constant - we have no code to show,
+                        # but make something up that looks plausible.
+                        callsites = Callsite[]
+                        if display_CI
+                            println(iostream)
+                            println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
+                            println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
+                            println(iostream)
+                        end
+                        @goto show_menu
+                    else
+                        @info """
+                        Inference discarded the source for this call because of recursion:
+                        Cthulhu nevertheless is trying to retrieve the source for further inspection.
+                        """
+                        additional_descend(mi)
+                        break
+                    end
                 end
-                @goto show_menu
             end
             (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
         end
