@@ -294,7 +294,7 @@ InteractiveUtils.code_llvm(
     io,
     b.mi,
     optimize,
-    debuginfo == :source,
+    debuginfo === :source,
     b.interp,
     config,
     dump_module,
@@ -308,4 +308,4 @@ InteractiveUtils.code_native(
     optimize = true,
     debuginfo = :source,
     config = CONFIG,
-) = cthulhu_native(io, b.mi, optimize, debuginfo == :source, b.interp, config)
+) = cthulhu_native(io, b.mi, optimize, debuginfo === :source, b.interp, config)

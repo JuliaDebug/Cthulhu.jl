@@ -407,8 +407,8 @@ let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos
         callinfos = first(callsites).info.callinfos
         @test !isempty(callinfos)
         mis = map(Cthulhu.get_mi, callinfos)
-        @test any(mi->mi.def.name == :cos, mis)
-        @test any(mi->mi.def.name == :sin, mis)
+        @test any(mi->mi.def.name === :cos, mis)
+        @test any(mi->mi.def.name === :sin, mis)
     else
         @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
     end
@@ -429,8 +429,8 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         callinfos = first(callsites).info.callinfos
         @test !isempty(callinfos)
         mis = map(Cthulhu.get_mi, callinfos)
-        @test any(mi->mi.def.name == :cos, mis)
-        @test any(mi->mi.def.name == :sin, mis)
+        @test any(mi->mi.def.name === :cos, mis)
+        @test any(mi->mi.def.name === :sin, mis)
     else
         @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
     end
@@ -681,8 +681,8 @@ end
     mig = Cthulhu.get_specialization(M.g, Tuple{Vector{Any}})
     @test isempty(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig))
     candidate, lines = only(Cthulhu.find_caller_of(Cthulhu.CthulhuInterpreter(), mif, mig; allow_unspecialized=true))
-    @test candidate[1] == nameof(M.g)
-    @test candidate[2] == Symbol(@__FILE__)
+    @test candidate[1] === nameof(M.g)
+    @test candidate[2] === Symbol(@__FILE__)
     @test candidate[3] == 0 # depth
     @test lines == [M.gline]
 
@@ -909,10 +909,10 @@ end
 
     Cthulhu.CONFIG.enable_highlighter = false
     Cthulhu.CONFIG.debuginfo = :compact
-    @test Cthulhu.CONFIG.debuginfo == :compact
+    @test Cthulhu.CONFIG.debuginfo === :compact
     @test !Cthulhu.CONFIG.enable_highlighter
 
     Cthulhu.read_config!(Cthulhu.CONFIG)
-    @test Cthulhu.CONFIG.debuginfo == :none
+    @test Cthulhu.CONFIG.debuginfo === :none
     @test Cthulhu.CONFIG.enable_highlighter
 end
