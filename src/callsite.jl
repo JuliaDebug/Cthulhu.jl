@@ -56,7 +56,7 @@ get_mi(ci::FailedCallInfo) = fail(ci)
 get_rt(ci::FailedCallInfo) = fail(ci)
 get_effects(ci::FailedCallInfo) = Effects()
 function fail(ci::FailedCallInfo)
-    @error "MethodInstance extraction failed" ci.sig ci.rt
+    @warn "MethodInstance extraction failed." ci.sig ci.rt
     return nothing
 end
 
@@ -69,7 +69,7 @@ get_mi(genci::GeneratedCallInfo) = fail(genci)
 get_rt(genci::GeneratedCallInfo) = fail(genci)
 get_effects(genci::GeneratedCallInfo) = Effects()
 function fail(genci::GeneratedCallInfo)
-    @error "Can't extract MethodInstance from call to generated functions" genci.sig genci.rt
+    @warn "Can't extract MethodInstance from call to generated functions." genci.sig genci.rt
     return nothing
 end
 
