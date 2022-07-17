@@ -313,6 +313,60 @@ function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
     end
 end
 
+function print_callsite_info(limiter::IO, info::WrappedCallInfo)
+    wrapped_callinfo(limiter, info)
+    show_callinfo(limiter, ignorewrappers(info))
+end
+
+function print_callsite_info(limiter::IO, info::PureCallInfo)
+    print(limiter, " = < pure > ")
+    show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
+    print(limiter, " = call ")
+    show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::TaskCallInfo)
+    print(limiter, " = task < ")
+    show_callinfo(limiter, info.ci)
+    print(limiter, " >")
+end
+
+function print_callsite_info(limiter::IO, info::InvokeCallInfo)
+    print(limiter, " = invoke < ")
+    show_callinfo(limiter, info.ci)
+    print(limiter, " >")
+end
+
+function print_callsite_info(limiter::IO, info::ReturnTypeCallInfo)
+    print(limiter, " = return_type < ")
+    show_callinfo(limiter, info)
+    print(limiter, " >")
+end
+
+function print_callsite_info(limiter::IO, info::CuCallInfo)
+    print(limiter, " = cucall < ")
+    show_callinfo(limiter, info.cumi)
+    print(limiter, " >")
+end
+
+function print_callsite_info(limiter::IO, info::ConstPropCallInfo)
+    print(limiter, " = < constprop > ")
+    show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::ConcreteCallInfo)
+    print(limiter, " = < concrete eval > ")
+    show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::OCCallInfo)
+    print(limiter, " = < opaque closure call > ")
+    show_callinfo(limiter, info.ci)
+end
+
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
     cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
@@ -336,44 +390,8 @@ function Base.show(io::IO, c::Callsite)
     if isa(info, MICallInfo)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, info)
-    elseif isa(info, WrappedCallInfo)
-        wrapped_callinfo(limiter, info)
-        show_callinfo(limiter, ignorewrappers(info))
-    elseif isa(info, PureCallInfo)
-        print(limiter, " = < pure > ")
-        show_callinfo(limiter, info)
-    elseif info isa MultiCallInfo
-        print(limiter, " = call ")
-        show_callinfo(limiter, info)
-    elseif info isa FailedCallInfo ||
-           info isa GeneratedCallInfo
-        print(limiter, " = call ")
-        show_callinfo(limiter, info)
-    elseif info isa TaskCallInfo
-        print(limiter, " = task < ")
-        show_callinfo(limiter, info.ci)
-        print(limiter, " >")
-    elseif info isa InvokeCallInfo
-        print(limiter, " = invoke < ")
-        show_callinfo(limiter, info.ci)
-        print(limiter, " >")
-    elseif isa(info, ReturnTypeCallInfo)
-        print(limiter, " = return_type < ")
-        show_callinfo(limiter, info)
-        print(limiter, " >")
-    elseif isa(info, CuCallInfo)
-        print(limiter, " = cucall < ")
-        show_callinfo(limiter, info.cumi)
-        print(limiter, " >")
-    elseif isa(info, ConstPropCallInfo)
-        print(limiter, " = < constprop > ")
-        show_callinfo(limiter, info)
-    elseif isa(info, ConcreteCallInfo)
-        print(limiter, " = < concrete eval > ")
-        show_callinfo(limiter, info)
-    elseif isa(info, OCCallInfo)
-        print(limiter, " = < opaque closure call > ")
-        show_callinfo(limiter, info.ci)
+    else
+        print_callsite_info(limiter, info)
     end
     return
 end
