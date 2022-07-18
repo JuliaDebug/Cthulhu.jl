@@ -3,19 +3,16 @@ struct CthulhuCursor <: AbstractCursor
     mi::MethodInstance
 end
 
-function update_mi(curs::CthulhuCursor, mi::MethodInstance)
-    CthulhuCursor(mi)
-end
+update_mi(curs::AbstractCursor, ::MethodInstance) = error("""
+missing `$AbstractCursor` API:
+`$(typeof(curs))` is required to implement the `$update_mi(::$(typeof(curs)), ::MethodInstance) -> $(typeof(curs))` interface.
+""")
+update_mi(curs::CthulhuCursor, mi::MethodInstance) = CthulhuCursor(mi)
 
 # This method is optional, but should be implemented if there is
 # a sensible default cursor for a MethodInstance
-AbstractCursor(interp::CthulhuInterpreter, mi::MethodInstance) =
+AbstractCursor(interp::AbstractInterpreter, mi::MethodInstance) =
     CthulhuCursor(mi)
-
-function get_optimized_code(interp::CthulhuInterpreter,
-                                curs::CthulhuCursor)
-    return interp.opt[curs.mi].inferred
-end
 
 get_mi(curs::CthulhuCursor) = curs.mi
 
