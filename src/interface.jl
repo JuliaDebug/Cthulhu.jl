@@ -3,6 +3,7 @@
 
 Required overloads:
 - `Cthulhu.lookup(interp::AbstractInterpreter, curs::AbstractCursor, optimize::Bool)`
+- `Cthulhu.lookup_constproped(interp::AbstractInterpreter, curs::AbstractCursor, override::InferenceResult, optimize::Bool)`
 - `Cthulhu.get_mi(curs::AbstractCursor) -> MethodInstance`
 - `Cthulhu.update_cursor(curs::AbstractCursor, mi::MethodInstance)`
 - `Cthulhu.navigate(curs::AbstractCursor, callsite::Callsite) -> AbstractCursor`
@@ -14,10 +15,17 @@ end
 
 lookup(interp::AbstractInterpreter, curs::AbstractCursor, optimize::Bool) = error("""
 missing `$AbstractCursor` API:
-`$(typeof(curs))` is required to implement the `$lookup(::$(typeof(interp)), ::$(typeof(curs)), optimize::Bool)` interface.
+`$(typeof(curs))` is required to implement the `$lookup(::$(typeof(interp)), ::$(typeof(curs)), ::Bool)` interface.
 """)
 lookup(interp::CthulhuInterpreter, curs::CthulhuCursor, optimize::Bool) =
     lookup(interp, get_mi(curs), optimize)
+
+lookup_constproped(interp::AbstractInterpreter, curs::AbstractCursor, override::InferenceResult, optimize::Bool) = error("""
+missing `$AbstractCursor` API:
+`$(typeof(curs))` is required to implement the `$lookup_constproped(::$(typeof(interp)), ::$(typeof(curs)), ::InferenceResult, ::Bool)` interface.
+""")
+lookup_constproped(interp::CthulhuInterpreter, ::CthulhuCursor, override::InferenceResult, optimize::Bool) =
+    lookup_constproped(interp, override, optimize)
 
 get_mi(curs::AbstractCursor) = error("""
 missing `$AbstractCursor` API:

@@ -325,6 +325,49 @@ function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
     return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
+function lookup_constproped(interp::CthulhuInterpreter, override::InferenceResult, optimize::Bool)
+    if optimize
+        return lookup_constproped_optimized(interp, override)
+    else
+        return lookup_constproped_unoptimized(interp, override)
+    end
+end
+
+function lookup_constproped_optimized(interp::CthulhuInterpreter, override::InferenceResult)
+    opt = override.src
+    if isa(opt, OptimizedSource)
+        # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+        # e.g. when we switch from constant-prop' unoptimized source
+        src = Core.Compiler.copy(opt.ir)
+        rt = override.result
+        infos = src.stmts.info
+        slottypes = src.argtypes
+        codeinf = opt.src
+        effects = opt.effects
+        return (; src, rt, infos, slottypes, effects, codeinf)
+    else
+        # the source might be unavailable at this point,
+        # when a result is fully constant-folded etc.
+        return lookup(interp, override.linfo, optimize)
+    end
+end
+
+function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::InferenceResult)
+    unopt = get(interp.unopt, override, nothing)
+    if unopt === nothing
+        unopt = interp.unopt[override.linfo]
+    end
+    codeinf = src = copy(unopt.src)
+    rt = unopt.rt
+    infos = unopt.stmt_info
+    effects = get_effects(unopt)
+    slottypes = src.slottypes
+    if isnothing(slottypes)
+        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+    end
+    return (; src, rt, infos, slottypes, effects, codeinf)
+end
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
@@ -367,36 +410,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
     end
     while true
         if override !== nothing
-            if optimize
-                opt = override.src
-                rt = override.result
-                if isa(opt, OptimizedSource)
-                    # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
-                    # e.g. when we switch from constant-prop' unoptimized source
-                    src = Core.Compiler.copy(opt.ir)
-                    codeinf = opt.src
-                    infos = src.stmts.info
-                    slottypes = src.argtypes
-                    effects = opt.effects
-                else
-                    # the source might be unavailable at this point,
-                    # when a result is fully constant-folded etc.
-                    (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, curs, optimize)
-                end
-            else
-                unopt = get(interp.unopt, override, nothing)
-                if unopt === nothing
-                    unopt = interp.unopt[override.linfo]
-                end
-                codeinf = src = copy(unopt.src)
-                rt = unopt.rt
-                infos = unopt.stmt_info
-                effects = get_effects(unopt)
-                slottypes = src.slottypes
-                if isnothing(slottypes)
-                    slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-                end
-            end
+            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, optimize)
         else
             if optimize
                 mi = get_mi(curs)
