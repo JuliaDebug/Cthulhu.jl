@@ -324,8 +324,6 @@ function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
     end
     return (; src, rt, infos, slottypes, codeinf, effects)
 end
-lookup(interp::CthulhuInterpreter, curs::CthulhuCursor, optimize::Bool; allow_no_src::Bool=false) =
-    lookup(interp, curs.mi, optimize; allow_no_src)
 
 _descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
     _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
@@ -386,7 +384,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
                 else
                     # the source might be unavailable at this point,
                     # when a result is fully constant-folded etc.
-                    (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
+                    (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, curs, optimize)
                 end
             else
                 unopt = get(interp.unopt, override, nothing)
@@ -430,14 +428,14 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
             end
             (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, curs, optimize)
         end
-        src = preprocess_ci!(src, get_mi(curs), optimize, CONFIG)
+        mi = get_mi(curs)
+        src = preprocess_ci!(src, mi, optimize, CONFIG)
         if optimize # optimization might have deleted some statements
             infos = src.stmts.info
         else
             @assert length(src.code) == length(infos)
         end
-        callsites = find_callsites(interp, src, infos, get_mi(curs), slottypes, optimize)
-        mi = get_mi(curs)
+        callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
 
         if display_CI
             _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
@@ -604,7 +602,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
                 revise()
                 mi = get_specialization(mi.specTypes)::MethodInstance
                 do_typeinf!(interp, mi)
-                curs = update_mi(curs, mi)
+                curs = update_cursor(curs, mi)
             else
                 @warn "Failed to load Revise."
             end
