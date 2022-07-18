@@ -310,7 +310,7 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
         error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
     end
     effects = get_effects(codeinst)
-    return (; src, rt, infos, slottypes, codeinf, effects)
+    return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
 function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
@@ -322,11 +322,8 @@ function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, infos, slottypes, codeinf, effects)
+    return (; src, rt, infos, slottypes, effects, codeinf)
 end
-
-_descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
 
 ##
 # _descend is the main driver function.
@@ -426,7 +423,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
                     end
                 end
             end
-            (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, curs, optimize)
+            (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize)
         end
         mi = get_mi(curs)
         src = preprocess_ci!(src, mi, optimize, CONFIG)
@@ -659,6 +656,9 @@ function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
 end
 
 mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
+
+_descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
+    _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
 
 function _descend(@nospecialize(args...);
                   interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
