@@ -628,7 +628,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
     end
 end
 _descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
-    _descend(default_terminal(), interp, mi; kwargs...)
+    _descend(terminal, interp, mi; kwargs...)
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
