@@ -410,7 +410,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
     end
     while true
         if override !== nothing
-            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, optimize)
+            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
         else
             if optimize
                 mi = get_mi(curs)
