@@ -27,7 +27,7 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
 end
 
-function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRCode},
+function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true)
     sptypes = sptypes_from_meth_instance(mi)
@@ -107,7 +107,7 @@ function find_callsites(interp::CthulhuInterpreter, CI::Union{Core.CodeInfo, IRC
     return callsites
 end
 
-function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
+function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
     is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
@@ -126,7 +126,7 @@ function process_info(interp, @nospecialize(info), argtypes::ArgTypes, @nospecia
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
-            effects = get_effects(interp.unopt, mi)
+            effects = get_effects(interp, mi, false)
             mici = MICallInfo(mi, rt, effects)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end

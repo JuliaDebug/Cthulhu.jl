@@ -1,4 +1,4 @@
-using Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
+import Core.Compiler: AbstractInterpreter, NativeInterpreter, InferenceState,
     OptimizationState, CodeInfo, CodeInstance, InferenceResult, WorldRange,
     IRCode, SSAValue, inlining_policy
 

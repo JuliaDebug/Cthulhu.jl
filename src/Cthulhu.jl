@@ -83,6 +83,7 @@ include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 include("backedges.jl")
+include("interface.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend
@@ -210,6 +211,8 @@ function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes =
     end
     __descend_with_error_handling(tt; kwargs...)
 end
+_descend_with_error_handling(mi::MethodInstance; kwargs...) =
+    __descend_with_error_handling(mi; kwargs...)
 _descend_with_error_handling(@nospecialize(tt::Type{<:Tuple}); kwargs...) =
     __descend_with_error_handling(tt; kwargs...)
 _descend_with_error_handling(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
@@ -237,18 +240,7 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-function descend_code_typed(mi::MethodInstance; terminal=default_terminal(), kwargs...)
-    interp = Cthulhu.CthulhuInterpreter()
-    Cthulhu.do_typeinf!(interp, mi)
-    _descend(terminal, interp, mi; iswarn=false, interruptexc=false, kwargs...)
-end
-function descend_code_warntype(mi::MethodInstance; terminal=default_terminal(), kwargs...)
-    interp = Cthulhu.CthulhuInterpreter()
-    Cthulhu.do_typeinf!(interp, mi)
-    _descend(terminal, interp, mi; iswarn=true, interruptexc=false, kwargs...)
-end
-
-descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
+descend(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
 
 function codeinst_rt(code::CodeInstance)
     rettype = code.rettype
@@ -318,7 +310,7 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
         error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
     end
     effects = get_effects(codeinst)
-    return (; src, rt, infos, slottypes, codeinf, effects)
+    return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
 function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
@@ -330,7 +322,50 @@ function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, infos, slottypes, codeinf, effects)
+    return (; src, rt, infos, slottypes, effects, codeinf)
+end
+
+function lookup_constproped(interp::CthulhuInterpreter, override::InferenceResult, optimize::Bool)
+    if optimize
+        return lookup_constproped_optimized(interp, override)
+    else
+        return lookup_constproped_unoptimized(interp, override)
+    end
+end
+
+function lookup_constproped_optimized(interp::CthulhuInterpreter, override::InferenceResult)
+    opt = override.src
+    if isa(opt, OptimizedSource)
+        # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+        # e.g. when we switch from constant-prop' unoptimized source
+        src = Core.Compiler.copy(opt.ir)
+        rt = override.result
+        infos = src.stmts.info
+        slottypes = src.argtypes
+        codeinf = opt.src
+        effects = opt.effects
+        return (; src, rt, infos, slottypes, effects, codeinf)
+    else
+        # the source might be unavailable at this point,
+        # when a result is fully constant-folded etc.
+        return lookup(interp, override.linfo, optimize)
+    end
+end
+
+function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::InferenceResult)
+    unopt = get(interp.unopt, override, nothing)
+    if unopt === nothing
+        unopt = interp.unopt[override.linfo]
+    end
+    codeinf = src = copy(unopt.src)
+    rt = unopt.rt
+    infos = unopt.stmt_info
+    effects = get_effects(unopt)
+    slottypes = src.slottypes
+    if isnothing(slottypes)
+        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+    end
+    return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
 ##
@@ -338,7 +373,7 @@ end
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::MethodInstance;
+function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::AbstractCursor;
     override::Union{Nothing,InferenceResult} = nothing,
     debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
     optimize::Bool                           = CONFIG.optimize,                      # default is true
@@ -375,38 +410,10 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
     end
     while true
         if override !== nothing
-            if optimize
-                opt = override.src
-                rt = override.result
-                if isa(opt, OptimizedSource)
-                    # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
-                    # e.g. when we switch from constant-prop' unoptimized source
-                    src = Core.Compiler.copy(opt.ir)
-                    codeinf = opt.src
-                    infos = src.stmts.info
-                    slottypes = src.argtypes
-                    effects = opt.effects
-                else
-                    # the source might be unavailable at this point,
-                    # when a result is fully constant-folded etc.
-                    (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
-                end
-            else
-                unopt = get(interp.unopt, override, nothing)
-                if unopt === nothing
-                    unopt = interp.unopt[override.linfo]
-                end
-                codeinf = src = copy(unopt.src)
-                rt = unopt.rt
-                infos = unopt.stmt_info
-                effects = get_effects(unopt)
-                slottypes = src.slottypes
-                if isnothing(slottypes)
-                    slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-                end
-            end
+            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
         else
             if optimize
+                mi = get_mi(curs)
                 codeinst = interp.opt[mi]
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
@@ -430,8 +437,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                     end
                 end
             end
-            (; src, rt, infos, slottypes, codeinf, effects) = lookup(interp, mi, optimize)
+            (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize)
         end
+        mi = get_mi(curs)
         src = preprocess_ci!(src, mi, optimize, CONFIG)
         if optimize # optimization might have deleted some statements
             infos = src.stmts.info
@@ -539,12 +547,12 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
             end
 
             # recurse
-            next_mi = get_mi(callsite)::Union{MethodInstance,Nothing}
-            if next_mi === nothing
+            next_cursor = navigate(curs, callsite)::Union{AbstractCursor,Nothing}
+            if next_cursor === nothing
                 continue
             end
 
-            _descend(term, interp, next_mi;
+            _descend(term, interp, next_cursor;
                      override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
@@ -605,6 +613,9 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
                 revise()
                 mi = get_specialization(mi.specTypes)::MethodInstance
                 do_typeinf!(interp, mi)
+                curs = update_cursor(curs, mi)
+            else
+                @warn "Failed to load Revise."
             end
         elseif toggle === :edit
             edit(whereis(mi.def::Method)...)
@@ -625,10 +636,10 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, mi::Method
         println(iostream)
     end
 end
-_descend(interp::CthulhuInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(default_terminal(), interp::CthulhuInterpreter, mi::MethodInstance; kwargs...)
+_descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
+    _descend(terminal, interp, mi; kwargs...)
 
-function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
+function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
@@ -660,15 +671,26 @@ end
 
 mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
 
+_descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
+    _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
+
 function _descend(@nospecialize(args...);
                   interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     (interp′, mi) = mkinterp(interp, args...)
-    _descend(interp′, mi; kwargs...)
+    _descend(interp′, mi; interruptexc=false, kwargs...)
 end
+
+function _descend(term::AbstractTerminal, mi::MethodInstance;
+    interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
+    interp′ = Cthulhu.CthulhuInterpreter(interp)
+    Cthulhu.do_typeinf!(interp′, mi)
+    _descend(term, interp′, mi; interruptexc=false, kwargs...)
+end
+
 function _descend(term::AbstractTerminal, @nospecialize(args...);
                   interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     (interp′, mi) = mkinterp(interp, args...)
-    _descend(term, interp′, mi; kwargs...)
+    _descend(term, interp′, mi; interruptexc=false, kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =

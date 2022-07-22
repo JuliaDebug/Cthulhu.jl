@@ -25,6 +25,18 @@ const keydict = Dict(:up => "\e[A",
                      :down => "\e[B",
                      :enter => '\r')
 
+macro with_try_stderr(out, expr)
+    quote
+        try
+            $(esc(expr))
+        catch err
+            bt = catch_backtrace()
+            Base.display_error(stderr, err, bt)
+            #close($(esc(out)))
+        end
+    end
+end
+
 @testset "Terminal" begin
     if isdefined(Base, :active_repl)
         @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
@@ -55,8 +67,8 @@ const keydict = Dict(:up => "\e[A",
 
     try
         fake_terminal() do term, in, out
-            @async begin
-                descend(simplef, Tuple{Float32, Int32}; interruptexc=false, terminal=term)
+            t = @async begin
+                @with_try_stderr out descend(simplef, Tuple{Float32, Int32}; interruptexc=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
@@ -176,14 +188,16 @@ const keydict = Dict(:up => "\e[A",
             lines = cread(out)
             @test occursin("z = a * b", lines)
             write(in, 'q')
+            wait(t)
         end
         # Multicall & iswarn=true
         fake_terminal() do term, in, out
-            @async begin
-                descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; interruptexc=false, optimize=false, terminal=term)
+            t = @async begin
+                @with_try_stderr out descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
-            @test occursin("\nBody\e[91m\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
+            @test occursin("\nBody\e[", lines)
+            @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
             @test occursin("\e[31m%\e[39m2  = call → fmulti(::Any)::Union{Float32, Int64}", lines)
             write(in, keydict[:enter])
@@ -192,37 +206,43 @@ const keydict = Dict(:up => "\e[A",
             @test occursin("%2  = fmulti(::Float32)::Union{Float32, $Int}", lines)
             @test occursin("%2  = fmulti(::Char)::Union{Float32, $Int}", lines)
             write(in, 'q')
+            wait(t)
         end
         # Tasks (see the special handling in `_descend`)
         ftask() = @sync @async show(io, "Hello")
         fake_terminal() do term, in, out
-            @async begin
-                @descend terminal=term ftask()
+            t = @async begin
+                @with_try_stderr out @descend terminal=term ftask()
             end
             lines = cread(out)
             @test occursin(r"• %\d\d  = task", lines)
             write(in, keydict[:enter])
             lines = cread(out)
             @test occursin("call show(::IO,::String)", lines)
+            # TODO: Should this first `q` quite the session?
             write(in, 'q')
+            write(in, 'q')
+            wait(t)
         end
         # descend with MethodInstances
         mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
         fake_terminal() do term, in, out
-            @async begin
-                descend(mi; interruptexc=false, optimize=false, terminal=term)
+            t = @async begin
+                @with_try_stderr out descend(mi; interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("fmulti(::Any)", lines)
             write(in, 'q')
+            wait(t)
         end
         fake_terminal() do term, in, out
-            @async begin
-                descend_code_warntype(mi; interruptexc=false, optimize=false, terminal=term)
+            t = @async begin
+                @with_try_stderr out descend_code_warntype(mi; interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
             write(in, 'q')
+            wait(t)
         end
 
         # ascend
@@ -232,8 +252,8 @@ const keydict = Dict(:up => "\e[A",
         inner1(0x0123)
         mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
         fake_terminal() do term, in, out
-            @async begin
-                ascend(term, mi)
+            t = @async begin
+                @with_try_stderr out ascend(term, mi)
             end
             write(in, keydict[:down])
             write(in, keydict[:enter])
@@ -248,6 +268,7 @@ const keydict = Dict(:up => "\e[A",
             @test any(str -> occursin("Variables", str), lines[ln+2:end])
             write(in, 'q')
             write(in, 'q')
+            wait(t)
         end
     finally
         # Restore the previous settings

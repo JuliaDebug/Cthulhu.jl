@@ -108,7 +108,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
     remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
-    type_annotations::Bool=true, interp::CthulhuInterpreter=CthulhuInterpreter())
+    type_annotations::Bool=true, interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
