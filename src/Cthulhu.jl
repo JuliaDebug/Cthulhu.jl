@@ -373,7 +373,7 @@ end
 # src/reflection.jl has the tools to discover methods
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
-function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::AbstractCursor;
+function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::AbstractCursor;
     override::Union{Nothing,InferenceResult} = nothing,
     debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
     optimize::Bool                           = CONFIG.optimize,                      # default is true
@@ -413,8 +413,7 @@ function _descend(term::AbstractTerminal, interp::CthulhuInterpreter, curs::Abst
             (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
         else
             if optimize
-                mi = get_mi(curs)
-                codeinst = interp.opt[mi]
+                codeinst = get_optimized_codeinst(interp, curs)
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
                         # This was inferred to a pure constant - we have no code to show,

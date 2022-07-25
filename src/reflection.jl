@@ -108,7 +108,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
 end
 
 function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
-    is_cached(@nospecialize(key)) = haskey(optimize ? interp.opt : interp.unopt, key)
+    is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
     if isa(info, MethodResultPure)
