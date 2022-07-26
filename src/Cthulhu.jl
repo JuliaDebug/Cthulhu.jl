@@ -77,6 +77,8 @@ end
 using .DInfo: DebugInfo
 const AnyDebugInfo = Union{DebugInfo,Symbol}
 
+@static @isdefined(LazyString) || include("strings/lazy.jl")
+
 include("interpreter.jl")
 include("callsite.jl")
 include("reflection.jl")

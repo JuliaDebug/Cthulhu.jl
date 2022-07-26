@@ -73,7 +73,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             if head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
                 mi = args[1]::MethodInstance
-                effects = get_effects(interp.unopt, mi)
+                effects = get_effects(interp, mi, false)
                 callsite = Callsite(id, MICallInfo(mi, rt, effects), head)
             elseif head === :foreigncall
                 # special handling of jl_new_task
