@@ -95,6 +95,10 @@ function _gen_descend_call(__module__, f, ex0)
     if i !== nothing
         @gensym frameargs
         ex0 = Base.setindex(ex0, :(frameargs = $frameargs), i)
+        if Meta.isexpr(ex0[end], :do)
+            insert!(ex0[end].args[1].args, 2, ex0[end].args[2])
+            ex0 = (ex0[1:end-1]..., ex0[end].args[1])
+        end
         ex = InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, f, ex0)
         if Meta.isexpr(ex, :call)
             quote
