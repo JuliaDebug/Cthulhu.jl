@@ -33,9 +33,11 @@ Base.@kwdef mutable struct CthulhuConfig
     asm_syntax::Symbol = :att
     dead_code_elimination::Bool = true
     pretty_ast::Bool = false
+    interruptexc::Bool = true
     debuginfo::Symbol = :compact
     optimize::Bool = true
     iswarn::Bool = false
+    hide_type_stable::Bool = false
     remarks::Bool = false
     with_effects::Bool = false
     inline_cost::Bool = false
@@ -56,9 +58,11 @@ end
   Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
   encounter errors. Please report such bugs with a MWE to Julia or Cthulhu.
 - `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
+- `interruptexc::Bool`: Use <q>-key to quit or ascend. Defaults to `false`.
 - `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
   Options:. `:none`, `:compact`, `:source`
 - `optimize::Bool`: Initial state of "optimize" toggle. Defaults to `true`.
+- `hide_type_stable::Bool`: Initial state of "hide_type_stable" toggle. Defaults to `false`.
 - `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
 - `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
@@ -240,7 +244,8 @@ Shortcut for [`descend_code_typed`](@ref).
 """
 const descend = descend_code_typed
 
-descend(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) = _descend(interp, mi; iswarn=false, interruptexc=false, kwargs...)
+descend_code_typed(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
+    _descend(interp, mi; iswarn=false, kwargs...)
 
 function codeinst_rt(code::CodeInstance)
     rettype = code.rettype
@@ -377,9 +382,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     override::Union{Nothing,InferenceResult} = nothing,
     debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
     optimize::Bool                           = CONFIG.optimize,                      # default is true
-    interruptexc::Bool                       = true,
+    interruptexc::Bool                       = CONFIG.interruptexc,
     iswarn::Bool                             = CONFIG.iswarn,                        # default is false
-    hide_type_stable::Union{Nothing,Bool}    = nothing,
+    hide_type_stable::Union{Nothing,Bool}    = CONFIG.hide_type_stable,
     verbose::Union{Nothing,Bool}             = nothing,
     remarks::Bool                            = CONFIG.remarks&!CONFIG.optimize,      # default is false
     with_effects::Bool                       = CONFIG.with_effects,                  # default is false
@@ -635,8 +640,6 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         println(iostream)
     end
 end
-_descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
-    _descend(terminal, interp, mi; kwargs...)
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
@@ -670,26 +673,25 @@ end
 
 mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
 
+_descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
+    _descend(terminal, interp, mi; kwargs...)
 _descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
     _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
-
 function _descend(@nospecialize(args...);
-                  interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
+    interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     (interp′, mi) = mkinterp(interp, args...)
-    _descend(interp′, mi; interruptexc=false, kwargs...)
+    _descend(interp′, mi; kwargs...)
 end
-
 function _descend(term::AbstractTerminal, mi::MethodInstance;
     interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     interp′ = Cthulhu.CthulhuInterpreter(interp)
     Cthulhu.do_typeinf!(interp′, mi)
-    _descend(term, interp′, mi; interruptexc=false, kwargs...)
+    _descend(term, interp′, mi; kwargs...)
 end
-
 function _descend(term::AbstractTerminal, @nospecialize(args...);
-                  interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
+    interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     (interp′, mi) = mkinterp(interp, args...)
-    _descend(term, interp′, mi; interruptexc=false, kwargs...)
+    _descend(term, interp′, mi; kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
