@@ -80,8 +80,14 @@ struct MultiCallInfo <: CallInfo
 end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-get_effects(mci::MultiCallInfo) =
-    @static EFFECTS_ENABLED ? mapreduce(get_effects, Core.Compiler.tristate_merge, mci.callinfos) : Effects()
+get_effects(mci::MultiCallInfo) = begin
+    @static EFFECTS_ENABLED || return Effects()
+    @static if isdefined(Compiler, :merge_effects)
+        return mapreduce(get_effects, Compiler.merge_effects, mci.callinfos)
+    else
+        return mapreduce(get_effects, Compiler.tristate_merge, mci.callinfos)
+    end
+end
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
