@@ -6,13 +6,9 @@ using Random
 using StaticArrays
 using Revise
 
-const CC = Core.Compiler
-import Core: MethodInstance, CodeInstance
-import .CC: WorldRange, WorldView
-
 @test isempty(detect_ambiguities(Cthulhu))
 
-include("utils.jl")
+include("setup.jl")
 
 function testf_simple()
     T = rand() > 0.5 ? Int64 : Float64

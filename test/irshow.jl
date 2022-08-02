@@ -1,6 +1,6 @@
 using Cthulhu, Test, DeepDiffs
 
-include("utils.jl")
+include("setup.jl")
 
 m = Module()
 Core.eval(m, Meta.parseall(raw"""

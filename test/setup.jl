@@ -1,4 +1,8 @@
-using Core.Compiler: NativeInterpreter
+using Test
+
+const CC = Core.Compiler
+import Core: MethodInstance, CodeInstance
+import .CC: WorldRange, WorldView, NativeInterpreter
 
 function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(NativeInterpreter(), f, TT)
