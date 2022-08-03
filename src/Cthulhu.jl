@@ -425,9 +425,10 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         # but make something up that looks plausible.
                         callsites = Callsite[]
                         if display_CI
+                            callsite = Callsite(-1, MICallInfo(codeinst.def, codeinst.rettype, get_effects(codeinst)), :invoke)
                             println(iostream)
-                            println(iostream, "│ ─ $(string(Callsite(-1, MICallInfo(mi, interp.opt[mi].rettype, get_effects(interp.opt[mi])), :invoke)))")
-                            println(iostream, "│  return ", Const(interp.opt[mi].rettype_const))
+                            println(iostream, "│ ─ $callsite")
+                            println(iostream, "│  return ", Const(codeinst.rettype_const))
                             println(iostream)
                         end
                         @goto show_menu
@@ -570,7 +571,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
-            if !iscached(mi, optimize)
+            if !iscached(get_mi(curs), optimize)
                 @warn "Can't switch to post-optimization state, since this inference frame isn't cached."
                 optimize ⊻= true
             end
