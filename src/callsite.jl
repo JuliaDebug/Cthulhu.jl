@@ -97,9 +97,8 @@ get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
 get_effects(tci::TaskCallInfo) = get_effects(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
-    ci::MICallInfo
-    InvokeCallInfo(mi::MethodInstance, @nospecialize(rt), effects::Effects) =
-        new(MICallInfo(mi, rt, effects))
+    ci::CallInfo
+    InvokeCallInfo(@nospecialize ci::CallInfo) = new(ci)
 end
 get_mi(ici::InvokeCallInfo) = get_mi(ici.ci)
 get_rt(ici::InvokeCallInfo) = get_rt(ici.ci)
@@ -107,14 +106,12 @@ get_effects(ici::InvokeCallInfo) = get_effects(ici.ci)
 
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
-    ci::MICallInfo
-    function OCCallInfo(mi::MethodInstance, @nospecialize(rt))
-        new(MICallInfo(mi, rt, Effects()))
-    end
+    ci::CallInfo
+    OCCallInfo(@nospecialize ci::CallInfo) = new(ci)
 end
 get_mi(occi::OCCallInfo) = get_mi(occi.ci)
 get_rt(occi::OCCallInfo) = get_rt(occi.ci)
-get_effects(::OCCallInfo) = Effects()
+get_effects(occi::OCCallInfo) = get_effects(occi.ci)
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
@@ -325,51 +322,51 @@ function print_callsite_info(limiter::IO, info::WrappedCallInfo)
 end
 
 function print_callsite_info(limiter::IO, info::PureCallInfo)
-    print(limiter, " = < pure > ")
+    print(limiter, "< pure > ")
     show_callinfo(limiter, info)
 end
 
 function print_callsite_info(limiter::IO, info::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
-    print(limiter, " = call ")
+    print(limiter, "call ")
     show_callinfo(limiter, info)
 end
 
 function print_callsite_info(limiter::IO, info::TaskCallInfo)
-    print(limiter, " = task < ")
+    print(limiter, "task < ")
     show_callinfo(limiter, info.ci)
     print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::InvokeCallInfo)
-    print(limiter, " = invoke < ")
+    print(limiter, "invoke < ")
     show_callinfo(limiter, info.ci)
     print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::ReturnTypeCallInfo)
-    print(limiter, " = return_type < ")
+    print(limiter, "return_type < ")
     show_callinfo(limiter, info)
     print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::CuCallInfo)
-    print(limiter, " = cucall < ")
+    print(limiter, "cucall < ")
     show_callinfo(limiter, info.cumi)
     print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::ConstPropCallInfo)
-    print(limiter, " = < constprop > ")
+    print(limiter, "< constprop > ")
     show_callinfo(limiter, info)
 end
 
 function print_callsite_info(limiter::IO, info::ConcreteCallInfo)
-    print(limiter, " = < concrete eval > ")
+    print(limiter, "< concrete eval > ")
     show_callinfo(limiter, info)
 end
 
 function print_callsite_info(limiter::IO, info::OCCallInfo)
-    print(limiter, " = < opaque closure call > ")
+    print(limiter, "< opaque closure call > ")
     show_callinfo(limiter, info.ci)
 end
 
@@ -397,6 +394,7 @@ function Base.show(io::IO, c::Callsite)
         optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
         show_callinfo(limiter, info)
     else
+        print(limiter, " = ")
         print_callsite_info(limiter, info)
     end
     return

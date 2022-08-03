@@ -9,15 +9,6 @@ import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
     sptypes_from_meth_instance, argtypes_to_type
 import Base: may_invoke_generator
 
-function code_for_method(method, metharg, methsp, world, preexisting=false)
-    @static if VERSION ≥ v"1.8.0-DEV.369"
-        # https://github.com/JuliaLang/julia/pull/41920
-        specialize_method(method, metharg, methsp; preexisting)
-    else
-        specialize_method(method, metharg, methsp, preexisting)
-    end
-end
-
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; world=get_world_counter())
     sptypes = sptypes_from_meth_instance(mi)
@@ -107,6 +98,37 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
     return callsites
 end
 
+function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),
+    argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result), optimize::Bool)
+    is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
+
+    if isnothing(result)
+        return thisinfo
+    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConcreteResult)
+        linfo = result.mi
+        effects = get_effects(result)
+        mici = MICallInfo(linfo, rt, effects)
+        return ConcreteCallInfo(mici, argtypes)
+    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConstPropResult)
+        result = result.result
+        linfo = result.linfo
+        effects = get_effects(result)
+        mici = MICallInfo(linfo, rt, effects)
+        return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+    elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
+        linfo = result.mi
+        effects = get_effects(result)
+        mici = MICallInfo(linfo, rt, effects)
+        return ConcreteCallInfo(mici, argtypes)
+    else
+        @assert isa(result, Compiler.InferenceResult)
+        linfo = result.linfo
+        effects = get_effects(result)
+        mici = MICallInfo(linfo, rt, effects)
+        return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+    end
+end
+
 function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
     is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
@@ -142,39 +164,30 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return mapany(enumerate(info.results)) do (i, result)
-            if isnothing(result)
-                infos[i]
-            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConcreteResult)
-                linfo = result.mi
-                effects = get_effects(result)
-                mici = MICallInfo(linfo, rt, effects)
-                ConcreteCallInfo(mici, argtypes)
-            elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConstPropResult)
-                linfo = result.result.linfo
-                effects = get_effects(result)
-                mici = MICallInfo(linfo, rt, effects)
-                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result.result)
-            elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
-                linfo = result.mi
-                effects = get_effects(result)
-                mici = MICallInfo(linfo, rt, effects)
-                ConcreteCallInfo(mici, argtypes)
-            else
-                @assert isa(result, Compiler.InferenceResult)
-                linfo = result.linfo
-                effects = get_effects(result)
-                mici = MICallInfo(linfo, rt, effects)
-                ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-            end
+            process_const_info(interp, infos[i], argtypes, rt, result, optimize)
         end
     elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
-        mi = Core.Compiler.specialize_method(info.match)
-        res = info.result
-        effects = isnothing(res) ? Effects() : get_effects(info.result)
-        ici = InvokeCallInfo(mi, rt, effects)
-        return Any[ici]
+        mi = specialize_method(info.match; preexisting=true)
+        effects = get_effects(interp, mi, false)
+        thisinfo = MICallInfo(mi, rt, effects)
+        @static if hasfield(Compiler.InvokeCallInfo, :result)
+            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+            info = InvokeCallInfo(innerinfo)
+        else
+            info = InvokeCallInfo(thisinfo)
+        end
+        return Any[info]
     elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
-        return Any[OCCallInfo(Core.Compiler.specialize_method(info.match), rt)]
+        mi = specialize_method(info.match; preexisting=true)
+        effects = get_effects(interp, mi, false)
+        thisinfo = MICallInfo(mi, rt, effects)
+        @static if hasfield(Compiler.OpaqueClosureCallInfo, :result)
+            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+            info = OCCallInfo(innerinfo)
+        else
+            info = OCCallInfo(thisinfo)
+        end
+        return Any[info]
     elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
@@ -266,7 +279,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
         if isdefined(meth, :generator) && !may_invoke_generator(meth, atypes, sparams)
             push!(callinfos, GeneratedCallInfo(sig, rt))
         else
-            mi = code_for_method(meth, atypes, sparams, world)
+            mi = specialize_method(meth, atypes, sparams)
             if mi !== nothing
                 push!(callinfos, MICallInfo(mi, rt, Effects()))
             else
