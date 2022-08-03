@@ -9,7 +9,7 @@ using REPL: REPL, AbstractTerminal
 
 using Core: MethodInstance
 const Compiler = Core.Compiler
-import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited, specialize_method
+import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
@@ -26,6 +26,13 @@ else
 end
 
 import Base: @constprop
+
+@static if hasmethod(Core.Compiler.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,:compilesig))
+    import Core.Compiler: specialize_method
+else
+    specialize_method(@nospecialize(args...); preexisting::Bool=false, compilesig::Bool=false) =
+        Core.Compiler.specialize_method(args..., preexisting, compilesig)
+end
 
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
@@ -373,6 +380,12 @@ function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::In
     return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
+function get_override(@nospecialize(info))
+    isa(info, ConstPropCallInfo) && return info.result
+    isa(info, OCCallInfo) && return get_override(info.ci)
+    return nothing
+end
+
 ##
 # _descend is the main driver function.
 # src/reflection.jl has the tools to discover methods
@@ -558,7 +571,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             end
 
             _descend(term, interp, next_cursor;
-                     override = isa(info, ConstPropCallInfo) ? info.result : nothing, debuginfo,
+                     override = get_override(info), debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
                      remarks, with_effects, inline_cost, type_annotations)

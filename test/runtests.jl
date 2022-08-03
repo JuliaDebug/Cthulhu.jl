@@ -320,28 +320,47 @@ end
 end
 
 @testset "OCCallInfo" begin
-    callsites = find_callsites_by_ftt((Int,Int,); optimize=false) do a, b
-        oc = Base.Experimental.@opaque b -> sin(a) + cos(b)
-        oc(b)
-    end
-    @test length(callsites) == 1
-    callinfo = only(callsites).info
-    @test callinfo isa Cthulhu.OCCallInfo
-    @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
-        # TODO not sure what these effects are (and neither is Base.infer_effects yet)
-    end
-    @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
-        sin(a) + cos(b)
-    end |> only === Float64
+    let callsites = find_callsites_by_ftt((Int,Int,); optimize=false) do a, b
+            oc = Base.Experimental.@opaque b -> sin(a) + cos(b)
+            oc(b)
+        end
+        @test length(callsites) == 1
+        callinfo = only(callsites).info
+        @test callinfo isa Cthulhu.OCCallInfo
+        @static if Cthulhu.EFFECTS_ENABLED
+            @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
+            # TODO not sure what these effects are (and neither is Base.infer_effects yet)
+        end
+        @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
+            sin(a) + cos(b)
+        end |> only === Float64
 
-    io = IOBuffer()
-    Cthulhu.show_callinfo(io, callinfo.ci)
-    s = "opaque closure(::$Int)::$Float64"
-    @test String(take!(io)) == s
-    io = IOBuffer()
-    print(io, only(callsites))
-    @test occursin("< opaque closure call > $s", String(take!(io)))
+        buf = IOBuffer()
+        Cthulhu.show_callinfo(buf, callinfo.ci)
+        s = "opaque closure(::$Int)::$Float64"
+        @test String(take!(buf)) == s
+        print(buf, only(callsites))
+        @test occursin("< opaque closure call > $s", String(take!(buf)))
+    end
+
+    # const-prop'ed OC callsite
+    @static hasfield(CC.OpaqueClosureCallInfo, :result) && let callsites = find_callsites_by_ftt((Int,); optimize=false) do a
+            oc = Base.Experimental.@opaque Base.@constprop :aggressive b -> sin(b)
+            oc(42)
+        end
+        @test length(callsites) == 1
+        callinfo = only(callsites).info
+        @test callinfo isa Cthulhu.OCCallInfo
+        inner = callinfo.ci
+        @test inner isa Cthulhu.ConstPropCallInfo
+
+        buf = IOBuffer()
+        Cthulhu.show_callinfo(buf, callinfo.ci)
+        s = "opaque closure(::$(Core.Compiler.Const(42)))::$(Core.Compiler.Const(sin(42)))"
+        @test String(take!(buf)) == s
+        print(buf, only(callsites))
+        @test occursin("< opaque closure call > $s", String(take!(buf)))
+    end
 end
 
 # tasks
@@ -355,40 +374,50 @@ let callsites = find_callsites_by_ftt(ftask, Tuple{})
     @test occursin("= task < #", String(take!(io)))
 end
 
-@testset "invoke" begin
-    m = Module()
-    @eval m begin
-        f(a::Integer) = :Integer
-        f(a::Int) = :Int
-    end
+invoke_call(::Integer) = :Integer
+invoke_call(::Int)     = :Int
+invoke_constcall(a::Any,    c::Bool) = c ? Any : :any
+invoke_constcall(a::Number, c::Bool) = c ? Number : :number
 
-    io = IOBuffer()
-    let
-        callsites = @eval m begin
-            $find_callsites_by_ftt((Int,); optimize=false) do n
-                Base.@invoke f(n::Integer)
-            end
+@testset "InvokeCallInfo" begin
+    let callsites = find_callsites_by_ftt((Int,); optimize=false) do n
+            Base.@invoke invoke_call(n::Integer)
         end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
         @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
-        print(io, callsite)
-        @test info.ci.rt === Core.Compiler.Const(:Integer)
+        rt = Core.Compiler.Const(:Integer)
+        @test info.ci.rt === rt
+        buf = IOBuffer()
+        show(buf, callsite)
+        @test occursin("= invoke < invoke_call(::$Int)::$rt >", String(take!(buf)))
     end
-    @test occursin("= invoke < f(::Int", String(take!(io)))
-
-    let
-        callsites = @eval m begin
-            $find_callsites_by_ftt((Int,); optimize=false) do n
-                Base.@invoke f(n::Int)
-            end
+    let callsites = find_callsites_by_ftt((Int,); optimize=false) do n
+            Base.@invoke invoke_call(n::Int)
         end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
         @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         @test info.ci.rt === Core.Compiler.Const(:Int)
+    end
+
+    # const prop' callsite
+    @static hasfield(CC.InvokeCallInfo, :result) && let callsites = find_callsites_by_ftt((Any,); optimize=false) do a
+            Base.@invoke invoke_constcall(a::Any, true::Bool)
+        end
+        callsite = only(callsites)
+        info = callsite.info
+        @test isa(info, Cthulhu.InvokeCallInfo)
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        inner = info.ci
+        @test isa(inner, Cthulhu.ConstPropCallInfo)
+        rt = Core.Compiler.Const(Any)
+        @test inner.result.result === rt
+        buf = IOBuffer()
+        show(buf, callsite)
+        @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
     end
 end
 
