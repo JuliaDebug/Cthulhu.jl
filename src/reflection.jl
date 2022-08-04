@@ -3,7 +3,7 @@
 ##
 
 using Base.Meta
-import .Compiler: widenconst, argextype, Const, MethodMatchInfo,
+import .CC: widenconst, argextype, Const, MethodMatchInfo,
     UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
     MethodResultPure, ApplyCallInfo,
     sptypes_from_meth_instance, argtypes_to_type
@@ -104,24 +104,24 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
 
     if isnothing(result)
         return thisinfo
-    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConcreteResult)
+    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, CC.ConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConcreteCallInfo(mici, argtypes)
-    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, Compiler.ConstPropResult)
+    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, CC.ConstPropResult)
         result = result.result
         linfo = result.linfo
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-    elseif (@static isdefined(Compiler, :ConstResult) && true) && isa(result, Compiler.ConstResult)
+    elseif (@static isdefined(CC, :ConstResult) && true) && isa(result, CC.ConstResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConcreteCallInfo(mici, argtypes)
     else
-        @assert isa(result, Compiler.InferenceResult)
+        @assert isa(result, CC.InferenceResult)
         linfo = result.linfo
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
@@ -134,7 +134,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
     if isa(info, MethodResultPure)
-        if isa(info.info, Compiler.ReturnTypeCallInfo)
+        if isa(info.info, CC.ReturnTypeCallInfo)
             # xref: https://github.com/JuliaLang/julia/pull/45299#discussion_r871939049
             info = info.info # cascade to the special handling below
         else
@@ -166,35 +166,35 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes
         return mapany(enumerate(info.results)) do (i, result)
             process_const_info(interp, infos[i], argtypes, rt, result, optimize)
         end
-    elseif (@static isdefined(Compiler, :InvokeCallInfo) && true) && isa(info, Compiler.InvokeCallInfo)
+    elseif (@static isdefined(CC, :InvokeCallInfo) && true) && isa(info, CC.InvokeCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        @static if hasfield(Compiler.InvokeCallInfo, :result)
+        @static if hasfield(CC.InvokeCallInfo, :result)
             innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
             info = InvokeCallInfo(innerinfo)
         else
             info = InvokeCallInfo(thisinfo)
         end
         return Any[info]
-    elseif (@static isdefined(Compiler, :OpaqueClosureCallInfo) && true) && isa(info, Compiler.OpaqueClosureCallInfo)
+    elseif (@static isdefined(CC, :OpaqueClosureCallInfo) && true) && isa(info, CC.OpaqueClosureCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        @static if hasfield(Compiler.OpaqueClosureCallInfo, :result)
+        @static if hasfield(CC.OpaqueClosureCallInfo, :result)
             innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
             info = OCCallInfo(innerinfo)
         else
             info = OCCallInfo(thisinfo)
         end
         return Any[info]
-    elseif (@static isdefined(Compiler, :OpaqueClosureCreateInfo) && true) && isa(info, Compiler.OpaqueClosureCreateInfo)
+    elseif (@static isdefined(CC, :OpaqueClosureCreateInfo) && true) && isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
-    elseif (@static isdefined(Compiler, :FinalizerInfo) && true) && isa(info, Compiler.FinalizerInfo)
+    elseif (@static isdefined(CC, :FinalizerInfo) && true) && isa(info, CC.FinalizerInfo)
         # TODO: Add ability to descend into finalizers at creation site
         return []
-    elseif isa(info, Compiler.ReturnTypeCallInfo)
+    elseif isa(info, CC.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]
         callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize)
         if length(callinfos) == 1
@@ -220,7 +220,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes
     end
 end
 
-unwrapType(@nospecialize t) = Compiler.isType(t) ? t.parameters[1] : t
+unwrapType(@nospecialize t) = CC.isType(t) ? t.parameters[1] : t
 
 ignorelhs(@nospecialize(x)) = isexpr(x, :(=)) ? last(x.args) : x
 function is_call_expr(x::Expr, optimize::Bool)
@@ -230,21 +230,21 @@ end
 
 function dce!(ci, mi)
     if VERSION >= v"1.7.0-DEV.705"
-        argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing, false)[1]
+        argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
     else
-        argtypes = Core.Compiler.matching_cache_argtypes(mi, nothing)[1]
+        argtypes = CC.matching_cache_argtypes(mi, nothing)[1]
     end
-    ir = Compiler.inflate_ir(ci, sptypes_from_meth_instance(mi),
+    ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi),
                              argtypes)
     ir = dce!(ir, mi)
-    Core.Compiler.replace_code_newstyle!(ci, ir, length(argtypes)-1)
+    CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
 end
 
 function dce!(ir::IRCode, mi)
-    compact = Core.Compiler.IncrementalCompact(ir, true)
+    compact = CC.IncrementalCompact(ir, true)
     # Just run through the iterator without any processing
-    Core.Compiler.foreach(x -> nothing, compact)
-    ir = Core.Compiler.finish(compact)
+    CC.foreach(x -> nothing, compact)
+    ir = CC.finish(compact)
 end
 
 function preprocess_ci!(ci::CodeInfo, mi, optimize, config::CthulhuConfig)

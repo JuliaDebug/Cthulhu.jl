@@ -143,8 +143,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
-        params = Core.Compiler.OptimizationParams(interp)
-        maxcost = Core.Compiler.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
+        params = CC.OptimizationParams(interp)
+        maxcost = CC.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
         nd = ndigits(maxcost)
         _lineprinter = lineprinter(src)
         function preprinter(io, linestart, idx)
@@ -264,7 +264,7 @@ function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     src = preprocess_ci!(src, mi, optimize, CONFIG)
     if src isa IRCode
         nargs = Int((mi.def::Method).nargs) - 1
-        Core.Compiler.replace_code_newstyle!(codeinf, src, nargs)
+        CC.replace_code_newstyle!(codeinf, src, nargs)
     end
     return codeinf => rt
 end

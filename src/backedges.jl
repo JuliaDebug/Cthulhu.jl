@@ -20,7 +20,7 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @n
             isdefined(uw.name.module, uw.name.mt.name) &&
             ft == typeof(getfield(uw.name.module, uw.name.mt.name))
         print(env_io, (demangle ? Base.demangle_function_name : identity)(uw.name.mt.name))
-    elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name && !CC.has_free_typevars(ft)
         f = ft.parameters[1]
         print(env_io, f)
     else
@@ -86,10 +86,10 @@ specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
 nextnode(mi, edge) = edge
 
-instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? Core.Compiler.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
+instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? CC.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 
-instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? Core.Compiler.Timings.ROOTmi : instance(ipframes[1].sfs)
+instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? CC.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
 function callstring(io::IO, obj)

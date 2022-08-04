@@ -8,30 +8,30 @@ using UUIDs
 using REPL: REPL, AbstractTerminal
 
 using Core: MethodInstance
-const Compiler = Core.Compiler
-import Core.Compiler: MethodMatch, LimitedAccuracy, ignorelimited
+const CC = Core.Compiler
+import .CC: MethodMatch, LimitedAccuracy, ignorelimited
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
 
-@static if !isdefined(Core.Compiler, :Effects)
+@static if !isdefined(CC, :Effects)
     const Effects = Nothing
     const EFFECTS_TOTAL = nothing
     const EFFECTS_ENABLED = false
 else
-    const Effects = Core.Compiler.Effects
-    const EFFECTS_TOTAL = Core.Compiler.EFFECTS_TOTAL
+    const Effects = CC.Effects
+    const EFFECTS_TOTAL = CC.EFFECTS_TOTAL
     const EFFECTS_ENABLED = true
 end
 
 import Base: @constprop
 
-@static if hasmethod(Core.Compiler.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,:compilesig))
-    import Core.Compiler: specialize_method
+@static if hasmethod(CC.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,:compilesig))
+    import .CC: specialize_method
 else
     specialize_method(@nospecialize(args...); preexisting::Bool=false, compilesig::Bool=false) =
-        Core.Compiler.specialize_method(args..., preexisting, compilesig)
+        CC.specialize_method(args..., preexisting, compilesig)
 end
 
 Base.@kwdef mutable struct CthulhuConfig
@@ -262,7 +262,7 @@ function codeinst_rt(code::CodeInstance)
             return Core.PartialStruct(rettype, rettype_const)
         elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
             return rettype_const
-        elseif isa(rettype_const, Core.Compiler.InterConditional) && !(Core.Compiler.InterConditional <: rettype)
+        elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
             return rettype_const
         else
             return Const(rettype_const)
@@ -273,17 +273,17 @@ function codeinst_rt(code::CodeInstance)
 end
 
 @static if EFFECTS_ENABLED
-    get_effects(codeinst::CodeInstance) = Core.Compiler.decode_effects(codeinst.ipo_purity_bits)
-    get_effects(codeinst::CodeInfo) = Core.Compiler.decode_effects(codeinst.purity)
+    get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
+    get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
     get_effects(src::InferredSource) = src.effects
     get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
         haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
     get_effects(result::InferenceResult) = result.ipo_effects
     @static if VERSION ≥ v"1.9.0-DEV.409"
-        get_effects(result::Compiler.ConstPropResult) = get_effects(result.result)
-        get_effects(result::Compiler.ConcreteResult) = result.effects
+        get_effects(result::CC.ConstPropResult) = get_effects(result.result)
+        get_effects(result::CC.ConcreteResult) = result.effects
     else
-        get_effects(result::Compiler.ConstResult) = result.effects
+        get_effects(result::CC.ConstResult) = result.effects
     end
 else
     get_effects(_...) = nothing
@@ -304,7 +304,7 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
     opt = codeinst.inferred
     if opt !== nothing
         opt = opt::OptimizedSource
-        src = Core.Compiler.copy(opt.ir)
+        src = CC.copy(opt.ir)
         codeinf = opt.src
         infos = src.stmts.info
         slottypes = src.argtypes
@@ -350,7 +350,7 @@ function lookup_constproped_optimized(interp::CthulhuInterpreter, override::Infe
     if isa(opt, OptimizedSource)
         # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
         # e.g. when we switch from constant-prop' unoptimized source
-        src = Core.Compiler.copy(opt.ir)
+        src = CC.copy(opt.ir)
         rt = override.result
         infos = src.stmts.info
         slottypes = src.argtypes
@@ -664,7 +664,7 @@ function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     frame = @static hasmethod(InferenceState, (InferenceResult,Symbol,AbstractInterpreter)) ?
             InferenceState(result, #=cache=# :global, interp)::InferenceState :
             InferenceState(result, #=cached=# true, interp)::InferenceState
-    Core.Compiler.typeinf(interp, frame)
+    CC.typeinf(interp, frame)
     return nothing
 end
 

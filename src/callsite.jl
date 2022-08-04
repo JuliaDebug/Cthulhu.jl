@@ -82,10 +82,10 @@ end
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 get_effects(mci::MultiCallInfo) = begin
     @static EFFECTS_ENABLED || return Effects()
-    @static if isdefined(Compiler, :merge_effects)
-        return mapreduce(get_effects, Compiler.merge_effects, mci.callinfos)
+    @static if isdefined(CC, :merge_effects)
+        return mapreduce(get_effects, CC.merge_effects, mci.callinfos)
     else
-        return mapreduce(get_effects, Compiler.tristate_merge, mci.callinfos)
+        return mapreduce(get_effects, CC.tristate_merge, mci.callinfos)
     end
 end
 
@@ -272,7 +272,7 @@ end
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     types = (ci.sig::DataType).parameters
     ft, tt = types[1], types[2:end]
-    f = Compiler.singleton_type(ft)
+    f = CC.singleton_type(ft)
     if f !== nothing
         name = "→ $f"
     elseif ft isa Union
@@ -285,7 +285,7 @@ end
 
 function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
     ft, tt... = argtypes
-    f = Compiler.singleton_type(ft)
+    f = CC.singleton_type(ft)
     name = isnothing(f) ? "unknown" : string(f)
     __show_limited(limiter, name, tt, rt)
 end
@@ -307,7 +307,7 @@ end
 function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
     if isa(vmi, FailedCallInfo)
         ft = Base.tuple_type_head(vmi.sig)
-        f = Compiler.singleton_type(ft)
+        f = CC.singleton_type(ft)
         name = isnothing(f) ? "unknown" : string(f)
         tt = Base.tuple_type_tail(vmi.sig).parameters
         __show_limited(limiter, name, tt, vmi.rt)
