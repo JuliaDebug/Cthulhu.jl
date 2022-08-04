@@ -389,9 +389,9 @@ function Base.show(io::IO, c::Callsite)
     end
     limiter = TextWidthLimiter(io, cols)
     limiter.width += 1   # for the '%' character
-    print(limiter, string(c.id, ' '))
+    print(limiter, string(c.id))
     if isa(info, MICallInfo)
-        optimize ? print(limiter, string(" = ", c.head, ' ')) : print(limiter, " = ")
+        print(limiter, optimize ? string(" = ", repr(c.head), ' ') : " = ")
         show_callinfo(limiter, info)
     else
         print(limiter, " = ")
