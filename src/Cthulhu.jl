@@ -7,7 +7,7 @@ using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
 
-using Core: MethodInstance
+import Core: MethodInstance
 const CC = Core.Compiler
 import .CC: MethodMatch, LimitedAccuracy, ignorelimited
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
@@ -413,7 +413,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    iscached(key, opt::Bool) = haskey(opt ? interp.opt : interp.unopt, key)
+    is_cached(key::MethodInstance) = can_descend(interp, key, optimize)
 
     menu_options = (cursor = '•', scroll_wrap = true)
     display_CI = true
@@ -584,7 +584,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             hide_type_stable ⊻= true
         elseif toggle === :optimize
             optimize ⊻= true
-            if !iscached(get_mi(curs), optimize)
+            if !is_cached(get_mi(curs))
                 @warn "Can't switch to post-optimization state, since this inference frame isn't cached."
                 optimize ⊻= true
             end
