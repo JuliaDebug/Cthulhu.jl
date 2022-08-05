@@ -132,7 +132,6 @@ using Infiltrator: @infiltrate
 using Cthulhu: @descend
 using Base: @noinline # already exported, but be explcit
 
-
 function foo(n)
     x = n < 2 ? 2 * n : 2.5 * n
     y = n < 4 ? 3 * n : 3.5 * n
@@ -161,7 +160,7 @@ Now, descend:
 which shows (after typing `w`)
 
 ```
-│ ─ %-1  = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
+│ ─ %-1 = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
 Variables
   #self#::Core.Const(bar)
   x::Union{Float64, Int64}
@@ -208,7 +207,7 @@ Enter `@descend bar(x, y, z)` and type `w`:
 ```
 infil> @descend bar(x, y, z)
 
-│ ─ %-1  = invoke bar(::Float64,::Float64,::Int64)::String
+│ ─ %-1 = invoke bar(::Float64,::Float64,::Int64)::String
 Variables
   #self#::Core.Const(bar)
   x::Float64

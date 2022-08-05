@@ -9,7 +9,7 @@ Variables
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
 
-│ ─ %-1  = invoke foo(::Int64,::Int64)::Any
+│ ─ %-1 = invoke foo(::Int64,::Int64)::Any
    [33m @ foobar.jl:2 within `foo`[39m
 [90m1 ─[39m       Core.NewvarNode(:(#1))
 [90m│  [39m       Core.NewvarNode(:(v))

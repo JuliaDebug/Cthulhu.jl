@@ -84,18 +84,18 @@ end
             @test occursin(r"\(z = a \* a\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
             @test occursin('[' * colorize(false, 'o') * "]ptimize", lines)
             @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
-            @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)
+            @test occursin("• %1 = *(::Float32,::Float32)::Float32", lines)
             # Call selection
             write(in, keydict[:down])
             write(in, keydict[:enter])
             lines = cread1(out)
             lines = cread(out)
-            @test occursin("• %1  = promote(::Float32,::Int32)::Tuple{Float32, Float32}", lines)
+            @test occursin("• %1 = promote(::Float32,::Int32)::Tuple{Float32, Float32}", lines)
             write(in, keydict[:up])
             write(in, keydict[:enter])
             lines = cread1(out)
             lines = cread(out)
-            @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)  # back to where we started
+            @test occursin("• %1 = *(::Float32,::Float32)::Float32", lines)  # back to where we started
             write(in, 'o')            # back to optimized
             lines = cread(out)
             @test !occursin("Variables", lines)
@@ -116,7 +116,7 @@ end
             @test occursin(r"\nBody.*Float32", lines)
             @test occursin('[' * colorize(true, 'w') * "]arn", lines)
             @test occursin("\nSelect a call to descend into", lines)   # beginning of the line
-            @test occursin("• %1  = *(::Float32,::Float32)::Float32", lines)
+            @test occursin("• %1 = *(::Float32,::Float32)::Float32", lines)
             # Source view
             write(in, 'S')
             lines = cread(out)
@@ -199,12 +199,12 @@ end
             @test occursin("\nBody\e[", lines)
             @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
-            @test occursin("\e[31m%\e[39m2  = call → fmulti(::Any)::Union{Float32, Int64}", lines)
+            @test occursin("\e[31m%\e[39m2 = call → fmulti(::Any)::Union{Float32, Int64}", lines)
             write(in, keydict[:enter])
             lines = cread1(out)
-            @test occursin("%2  = fmulti(::Int32)::Union{Float32, $Int}", lines)
-            @test occursin("%2  = fmulti(::Float32)::Union{Float32, $Int}", lines)
-            @test occursin("%2  = fmulti(::Char)::Union{Float32, $Int}", lines)
+            @test occursin("%2 = fmulti(::Int32)::Union{Float32, $Int}", lines)
+            @test occursin("%2 = fmulti(::Float32)::Union{Float32, $Int}", lines)
+            @test occursin("%2 = fmulti(::Char)::Union{Float32, $Int}", lines)
             write(in, 'q')
             wait(t)
         end
@@ -215,7 +215,7 @@ end
                 @with_try_stderr out @descend terminal=term ftask()
             end
             lines = cread(out)
-            @test occursin(r"• %\d\d  = task", lines)
+            @test occursin(r"• %\d\d = task", lines)
             write(in, keydict[:enter])
             lines = cread(out)
             @test occursin("call show(::IO,::String)", lines)

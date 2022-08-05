@@ -391,7 +391,7 @@ function Base.show(io::IO, c::Callsite)
     limiter.width += 1   # for the '%' character
     print(limiter, string(c.id))
     if isa(info, MICallInfo)
-        print(limiter, optimize ? string(" = ", repr(c.head), ' ') : " = ")
+        print(limiter, optimize ? string(" = ", c.head, ' ') : " = ")
         show_callinfo(limiter, info)
     else
         print(limiter, " = ")
