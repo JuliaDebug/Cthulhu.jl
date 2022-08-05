@@ -10,6 +10,7 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     toggle::Union{Nothing, Symbol}
     sub_menu::Bool
     config::TerminalMenus.Config
+    custom_toggles::Vector{CustomToggle}
 end
 
 function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, iswarn::Bool)
@@ -26,7 +27,8 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool; pagesize::Int=10, sub_menu = false, kwargs...)
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, custom_toggles::Vector{CustomToggle};
+    pagesize::Int=10, sub_menu = false, kwargs...)
     options = vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
@@ -41,7 +43,8 @@ function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool
     selected = -1 # none
 
     config = TerminalMenus.Config(; kwargs...)
-    CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config)
+
+    return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
 end
 
 TerminalMenus.options(m::CthulhuMenu) = m.options
@@ -56,7 +59,8 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight)
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
+    custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
@@ -65,7 +69,7 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
     ioctx = IOContext(io, :color=>true)
 
     println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
-    println(ioctx, "Toggles: [",
+    print(ioctx, "Toggles: [",
         colorize(optimize, 'o'), "]ptimize, [",
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
@@ -76,7 +80,14 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
         colorize(with_effects, 'e'), "]ffects, [",
         colorize(inline_cost, 'i'), "]nlining costs, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
-        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native.")
+        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+    for i = 1:length(custom_toggles)
+        ct = custom_toggles[i]
+        print(ioctx, ", [", colorize(ct.onoff, Char(ct.key)), ']', ct.description)
+        i ≠ length(custom_toggles) && print(ioctx, ", ")
+    end
+    print(ioctx, '.')
+    println(ioctx)
     println(ioctx, "Show: [",
         colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
         colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
@@ -90,64 +101,38 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
     return String(take!(io))
 end
 
+const TOGGLES = Dict(
+    UInt32('w') => :warn,
+    UInt32('h') => :hide_type_stable,
+    UInt32('o') => :optimize,
+    UInt32('d') => :debuginfo,
+    UInt32('r') => :remarks,
+    UInt32('e') => :with_effects,
+    UInt32('i') => :inline_cost,
+    UInt32('t') => :type_annotations,
+    UInt32('s') => :highlighter,
+    UInt32('S') => :source,
+    UInt32('A') => :ast,
+    UInt32('T') => :typed,
+    UInt32('L') => :llvm,
+    UInt32('N') => :native,
+    UInt32('P') => :dump_params,
+    UInt32('b') => :bookmark,
+    UInt32('R') => :revise,
+    UInt32('E') => :edit,
+)
+
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
     m.sub_menu && return false
-    if key == UInt32('w')
-        m.toggle = :warn
-        return true
-    elseif key == UInt32('h')
-        m.toggle = :hide_type_stable
-        return true
-    elseif key == UInt32('o')
-        m.toggle = :optimize
-        return true
-    elseif key == UInt32('d')
-        m.toggle = :debuginfo
-        return true
-    elseif key == UInt32('r')
-        m.toggle = :remarks
-        return true
-    elseif key == UInt32('e')
-        m.toggle = :with_effects
-        return true
-    elseif key == UInt32('i')
-        m.toggle = :inline_cost
-        return true
-    elseif key == UInt32('t')
-        m.toggle = :type_annotations
-        return true
-    elseif key == UInt32('s')
-        m.toggle = :highlighter
-        return true
-    elseif key == UInt32('S')
-        m.toggle = :source
-        return true
-    elseif key == UInt32('A')
-        m.toggle = :ast
-        return true
-    elseif key == UInt32('T')
-        m.toggle = :typed
-        return true
-    elseif key == UInt32('L')
-        m.toggle = :llvm
-        return true
-    elseif key == UInt32('N')
-        m.toggle = :native
-        return true
-    elseif key == UInt32('P')
-        m.toggle = :dump_params
-        return true
-    elseif key == UInt32('b')
-        m.toggle = :bookmark
-        return true
-    elseif key == UInt32('R')
-        m.toggle = :revise
-        return true
-    elseif key == UInt32('E')
-        m.toggle = :edit
+    toggle = get(TOGGLES, key, nothing)
+    if !isnothing(toggle)
+        m.toggle = toggle
         return true
     end
-    return false
+    local i = findfirst(ct->ct.key == key, m.custom_toggles)
+    isnothing(i) && return false
+    m.toggle = m.custom_toggles[i].toggle
+    return true
 end
 
 function TerminalMenus.pick(menu::CthulhuMenu, cursor::Int)

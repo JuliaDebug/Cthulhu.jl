@@ -70,3 +70,25 @@ AbstractCursor(interp::AbstractInterpreter, mi::MethodInstance) = CthulhuCursor(
 
 get_effects(interp::CthulhuInterpreter, mi::MethodInstance, opt::Bool) =
     get_effects(opt ? interp.opt : interp.unopt, mi)
+
+mutable struct CustomToggle
+    onoff::Bool
+    key::UInt32
+    toggle::Symbol
+    description::String
+    callback_on
+    callback_off
+    function CustomToggle(onoff::Bool, key, description,
+        @nospecialize(callback_on), @nospecialize(callback_off))
+        key = convert(UInt32, key)
+        desc = convert(String, description)
+        toggle = Symbol(desc)
+        if haskey(TOGGLES, key)
+            error(lazy"invalid Cthulhu API: key `$key` is already used.")
+        elseif toggle in values(TOGGLES)
+            error(lazy"invalid Cthulhu API: toggle `$toggle` is already used.")
+        end
+        return new(onoff, key, toggle, desc, callback_on, callback_off)
+    end
+end
+custom_toggles(interp::AbstractInterpreter) = CustomToggle[]
