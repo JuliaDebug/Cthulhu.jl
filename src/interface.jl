@@ -49,8 +49,8 @@ update_cursor(curs::CthulhuCursor, mi::MethodInstance) = CthulhuCursor(mi)
 # TODO: This interface is incomplete, should probably also take a current cursor,
 # or maybe be `CallSite based`
 can_descend(interp::AbstractInterpreter, @nospecialize(key), optimize::Bool) = error(lazy"""
-missing `$AbstractCursor` API:
-`$(typeof(curs))` is required to implement the `$can_descend(interp::$(typeof(interp)), @nospecialize(key), optimize::Bool) -> Bool` interface.
+missing `$AbstractInterpreter` API:
+`$(typeof(interp))` is required to implement the `$can_descend(interp::$(typeof(interp)), @nospecialize(key), optimize::Bool) -> Bool` interface.
 """)
 can_descend(interp::CthulhuInterpreter, @nospecialize(key), optimize::Bool) =
     haskey(optimize ? interp.opt : interp.unopt, key)
@@ -59,9 +59,10 @@ navigate(curs::AbstractCursor, callsite::Callsite) = error(lazy"""
 missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$navigate(curs::$(typeof(curs)), callsite::Callsite) -> AbstractCursor` interface.
 """)
-function navigate(curs::CthulhuCursor, callsite::Callsite)
-    CthulhuCursor(get_mi(callsite))
-end
+navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_mi(callsite))
+
+get_remarks(::AbstractInterpreter, ::MethodInstance) = nothing
+get_remarks(interp::CthulhuInterpreter, mi::MethodInstance) = get(interp.remarks, mi, nothing)
 
 # This method is optional, but should be implemented if there is
 # a sensible default cursor for a MethodInstance

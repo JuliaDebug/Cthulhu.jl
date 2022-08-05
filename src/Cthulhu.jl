@@ -415,7 +415,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
     is_cached(key::MethodInstance) = can_descend(interp, key, optimize)
 
-    menu_options = (cursor = '•', scroll_wrap = true)
+    menu_options = (; cursor = '•', scroll_wrap = true)
     display_CI = true
     view_cmd = cthulhu_typed
     iostream = term.out_stream::IO
@@ -467,7 +467,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
 
         if display_CI
-            _remarks = remarks ? get(interp.remarks, mi, nothing) : nothing
+            _remarks = remarks ? get_remarks(interp, mi) : nothing
             if with_effects
                 printstyled(IOContext(iostream, :limit=>true), '[', effects, ']', mi.def, '\n'; bold=true)
             else
@@ -684,7 +684,6 @@ function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
     do_typeinf!(interp′, mi)
     (interp′, mi)
 end
-
 mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
 
 _descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
