@@ -252,7 +252,7 @@ Shortcut for [`descend_code_typed`](@ref).
 const descend = descend_code_typed
 
 descend_code_typed(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(interp, mi; iswarn=false, kwargs...)
+    _descend_with_error_handling(interp, mi; iswarn=false, kwargs...)
 
 function codeinst_rt(code::CodeInstance)
     rettype = code.rettype
