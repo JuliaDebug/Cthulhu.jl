@@ -17,7 +17,7 @@ function fake_terminal(f; options::REPL.Options=REPL.Options(confirm_exit=false)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    term = REPL.Terminals.TTYTerminal(term_env, input.out, IOContext(output.in, :color=>true), err.in)
+    term = REPL.Terminals.TTYTerminal(term_env, input.out, IOContext(output.in, :color=>get(stdout, :color, false)), err.in)
     f(term, input.in, output.out)
     t = @async begin
         close(input.in)
