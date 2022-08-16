@@ -92,11 +92,11 @@ const AnyDebugInfo = Union{DebugInfo,Symbol}
 
 include("interpreter.jl")
 include("callsite.jl")
+include("interface.jl")
 include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 include("backedges.jl")
-include("interface.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend
@@ -426,6 +426,13 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                  debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
                  with_effects, inline_cost, type_annotations)
     end
+    custom_toggles = Cthulhu.custom_toggles(interp)
+    if !(custom_toggles isa Vector{CustomToggle})
+        error(lazy"""
+        invalid `$AbstractInterpreter` API:
+        `$(Cthulhu.custom_toggles)(interp::$(typeof(interp))` is expected to return `Vector{CustomToggle}` object.
+        """)
+    end
     while true
         if override !== nothing
             (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
@@ -506,8 +513,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
         @label show_menu
 
-        menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter)
+        menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, custom_toggles; menu_options...)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -534,7 +541,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     @error "Expected multiple callsites, but found none. Please fill an issue with a reproducing example."
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, with_effects, optimize, false; sub_menu=true, menu_options...)
+                menu = CthulhuMenu(sub_callsites, with_effects, optimize, false, custom_toggles; sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
@@ -638,17 +645,30 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         elseif toggle === :edit
             edit(whereis(mi.def::Method)...)
             display_CI = false
+        elseif toggle === :typed
+            view_cmd = cthulhu_typed
+            display_CI = true
+        elseif toggle === :ast || toggle === :llvm || toggle === :native || toggle === :source
+            view_cmd = CODEVIEWS[toggle]
+            println(iostream)
+            view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
+            display_CI = false
         else
-            #Handle Standard alternative view, e.g. :native, :llvm
-            if toggle === :typed
-                view_cmd = cthulhu_typed
-                display_CI = true
+            local i = findfirst(ct->ct.toggle === toggle, custom_toggles)
+            @assert i !== nothing
+            ct = custom_toggles[i]
+            onoff = ct.onoff ⊻= true
+            if onoff
+                curs = ct.callback_on(curs)
             else
-                view_cmd = get(CODEVIEWS, toggle, nothing)
-                @assert !isnothing(view_cmd) "invalid option $toggle"
-                println(iostream)
-                view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
-                display_CI = false
+                curs = ct.callback_off(curs)
+            end
+            if !(curs isa AbstractCursor)
+                local f = onoff ? "callback_on" : "callback_off"
+                error(lazy"""
+                invalid `$AbstractInterpreter` API:
+                `f` callback is expected to return `AbstractCursor` object.
+                """)
             end
         end
         println(iostream)
