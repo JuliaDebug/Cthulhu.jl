@@ -228,7 +228,7 @@ It can be used with the following functions:
 """
 struct Bookmark
     mi::MethodInstance
-    interp::CthulhuInterpreter
+    interp::AbstractInterpreter
 end
 
 """
