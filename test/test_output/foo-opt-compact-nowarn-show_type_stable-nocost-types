@@ -1,4 +1,4 @@
-│ ─ %-1 = invoke foo(::Int64,::Int64)::Any
+[90m[72G  [1G[39m[90m  [39m∘ ── %0 = invoke foo(::Int64,::Int64)::Any
 [90m[72G│╻ Box[1G[39m[90m2 [39m[0m1 ── %1  = Core.Box[36m::Core.Const(Core.Box)[39m
 [90m[72G││[1G[39m[90m  [39m[0m│    %2  = %new(%1)[36m::Core.Box[39m
 [90m[72G│╻ +[1G[39m[90m  [39m[0m│    %3  = Base.add_int(_2, _3)[36m::Int64[39m

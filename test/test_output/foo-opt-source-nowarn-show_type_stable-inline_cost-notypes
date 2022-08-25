@@ -1,4 +1,4 @@
-│ ─ %-1 = invoke foo(::Int64,::Int64)::Any
+∘ ──[32m 3032[39m  %0 = invoke foo(::Int64,::Int64)::Any
           [33m @ foobar.jl:2 within `foo`[39m
           [33m┌ @ boot.jl: within `Box`[39m
 [90m1 ──[39m[32m    0[39m [33m│[39m %1  = Core.Box

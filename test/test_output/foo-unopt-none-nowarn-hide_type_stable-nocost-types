@@ -9,7 +9,7 @@ Variables
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
 
-│ ─ %-1 = invoke foo(::Int64,::Int64)::Any
+∘ ─ %0 = invoke foo(::Int64,::Int64)::Any
 [90m│  [39m       (z@_7 = Core.Box())[90m::Core.Box[39m
 [90m4 ┄[39m %12 = Core.getfield(z@_7, :contents)[36m::Any[39m
 [90m│  [39m %13 = (%12 < 4)[36m::Any[39m
