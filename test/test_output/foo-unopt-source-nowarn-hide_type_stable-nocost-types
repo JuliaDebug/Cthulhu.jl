@@ -9,7 +9,7 @@ Variables
   z@_8[36m::Union{}[39m
   z@_9[36m::Union{}[39m
 
-│ ─ %-1 = invoke foo(::Int64,::Int64)::Any
+∘ ─ %0 = invoke foo(::Int64,::Int64)::Any
 [90m│ [39m [33m @ foobar.jl:2 within `foo`[39m
 [90m│  [39m       (z@_7 = Core.Box())[90m::Core.Box[39m
    [33m @ foobar.jl:3 within `foo`[39m

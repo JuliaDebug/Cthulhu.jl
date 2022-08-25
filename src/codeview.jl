@@ -128,36 +128,36 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
     end
 
-    if iswarn
-        print(io, "Body")
-        InteractiveUtils.warntype_type_printer(lambda_io, rettype, true)
-        println(io)
-    else
-        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        print(io, "│ ─ ")
-        println(lambda_io, Callsite(-1, MICallInfo(mi, rettype, Effects()), :invoke))
-    end
-
     # preprinter configuration
     if src isa IRCode && inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
-        maxcost = CC.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
-        nd = ndigits(maxcost)
+        CC.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
+        total_cost = sum(cst)
+        nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)
         function preprinter(io, linestart, idx)
-            str = idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1)
-            str = sprint(io -> Base.printstyled(io, str; color=:green); context=:color=>true)
+            str = idx > 0   ? lpad(cst[idx], nd+1) :
+                  idx == -1 ? lpad(total_cost, nd+1) :
+                  " "^(nd+1)
+            str = sprint(; context=:color=>true) do @nospecialize io
+                Base.printstyled(io, str; color=:green)
+            end
             if debuginfo === :source
                 str *= " "
                 linestart *= " "^(nd+2)
             end
+            idx == -1 && (idx = 0) # fix up the special index for the default preprinter
             return str * _lineprinter(io, linestart, idx)
         end
     else
-        preprinter = lineprinter(src)
+        _lineprinter = lineprinter(src)
+        preprinter = function (io, linestart, idx)
+            idx == -1 && (idx = 0) # fix up the special index for the default preprinter
+            _lineprinter(io, linestart, idx)
+        end
     end
     # postprinter configuration
     _postprinter = if type_annotations
@@ -186,6 +186,19 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
 
     irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
+
+    if iswarn
+        print(io, "Body")
+        InteractiveUtils.warntype_type_printer(lambda_io, rettype, true)
+        println(io)
+    else
+        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
+        cfg = src isa IRCode ? src.cfg : Core.Compiler.compute_basic_blocks(src.code)
+        max_bb_idx_size = length(string(length(cfg.blocks)))
+        str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
+        callsite = Callsite(0, MICallInfo(mi, rettype, Effects()), :invoke)
+        println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
+    end
 
     show_ir(lambda_io, src, irshow_config)
     return nothing

@@ -160,7 +160,7 @@ Now, descend:
 which shows (after typing `w`)
 
 ```
-│ ─ %-1 = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
+∘ ── %0 = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
 Variables
   #self#::Core.Const(bar)
   x::Union{Float64, Int64}
@@ -207,7 +207,7 @@ Enter `@descend bar(x, y, z)` and type `w`:
 ```
 infil> @descend bar(x, y, z)
 
-│ ─ %-1 = invoke bar(::Float64,::Float64,::Int64)::String
+∘ ── %0 = invoke bar(::Float64,::Float64,::Int64)::String
 Variables
   #self#::Core.Const(bar)
   x::Float64

@@ -36,7 +36,10 @@ end
                             end
                             s = strip_base_linenums(s)
 
-                            ground_truth = read(irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations), String)
+                            fname = irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)
+                            fpath = normpath(@__DIR__, fname)
+
+                            ground_truth = read(fpath, String)
                             if Sys.iswindows()
                                 ground_truth = replace(ground_truth, "\r\n" => "\n")
                             end
