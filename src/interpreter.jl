@@ -93,7 +93,13 @@ function create_cthulhu_source(@nospecialize(x), effects::Effects)
 end
 
 @static if hasmethod(CC.transform_result_for_cache,
-    (AbstractInterpreter, MethodInstance, WorldRange, Any, Effects))
+        (AbstractInterpreter, MethodInstance, WorldRange, InferenceResult))
+    function CC.transform_result_for_cache(interp::CthulhuInterpreter,
+        linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+        return create_cthulhu_source(result.src, result.ipo_effects)
+    end
+elseif hasmethod(CC.transform_result_for_cache,
+        (AbstractInterpreter, MethodInstance, WorldRange, Any, Effects))
     function CC.transform_result_for_cache(interp::CthulhuInterpreter,
         linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result),
         ipo_effects::CC.Effects)
