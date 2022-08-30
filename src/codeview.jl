@@ -107,7 +107,7 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
-    remarks::Union{Nothing,Remarks}=nothing, inline_cost::Bool=false,
+    pc2remarks::Union{Nothing,PC2Remarks}=nothing, inline_cost::Bool=false,
     type_annotations::Bool=true, interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -115,7 +115,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     rettype = ignorelimited(rt)
     lambda_io = IOContext(io, :limit=>true)
 
-    if isa(src, Core.CodeInfo)
+    if isa(src, CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
         src = copy(src)
         src.ssavaluetypes = Base.mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
@@ -165,17 +165,15 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     else
         Returns(nothing)
     end
-    if !isnothing(remarks) && isa(src, Core.CodeInfo)
-        sort!(remarks)
-        unique!(remarks) # abstract interpretation may have visited a same statement multiple times
+    if !isnothing(pc2remarks) && isa(src, CodeInfo)
+        sort!(pc2remarks)
+        unique!(pc2remarks) # abstract interpretation may have visited a same statement multiple times
         function postprinter(io::IO, @nospecialize(typ), used::Bool)
             _postprinter(io, typ, used)
             haskey(io, :idx) || return
             idx = io[:idx]::Int
-            firstind = searchsortedfirst(remarks, idx=>"")
-            for i in firstind:lastindex(remarks)
-                remarks[i].first == idx || break
-                printstyled(io, ' ', remarks[i].second; color=:light_black)
+            for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
+                printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
             end
         end
     else

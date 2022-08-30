@@ -17,24 +17,24 @@ struct OptimizedSource
     effects::Effects
 end
 
-const Remarks = Vector{Pair{Int, String}}
+const PC2Remarks = Vector{Pair{Int, String}}
 
 struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
 
-    unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}
+    unopt::Dict{Union{MethodInstance,InferenceResult}, InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
 
-    remarks::Dict{MethodInstance, Remarks}
+    remarks::Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}
 end
 
-CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter()) =
-    CthulhuInterpreter(
+function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
+    return CthulhuInterpreter(
         interp,
-        Dict{MethodInstance, InferredSource}(),
+        Dict{Union{MethodInstance,InferenceResult}, InferredSource}(),
         Dict{MethodInstance, CodeInstance}(),
-        Dict{MethodInstance, Remarks}()
-    )
+        Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}())
+end
 
 import .CC: InferenceParams, OptimizationParams, get_world_counter,
     get_inference_cache, code_cache, lock_mi_inference, unlock_mi_inference, method_table,
@@ -69,10 +69,34 @@ CC.may_discard_trees(interp::CthulhuInterpreter) = false
 CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
-    if !haskey(interp.remarks, sv.linfo)
-        interp.remarks[sv.linfo] = Remarks()
+    key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
+    push!(get!(interp.remarks, key, PC2Remarks()), sv.currpc=>msg)
+end
+
+function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_optimizer::Bool)
+    changemap = @invoke CC.type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
+    changemap === nothing && return nothing
+    key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
+    pc2remarks = get(interp.remarks, key, nothing)
+    if pc2remarks !== nothing
+        sort!(pc2remarks)
+        unique!(pc2remarks)
+        for (idx, v) in enumerate(changemap)
+            if v == typemin(Int)
+                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
+                    @assert false "remarks found in unreached region"
+                end
+            end
+        end
+        for (idx, v) in enumerate(changemap)
+            if v < 0
+                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
+                    pc2remarks[i] = pc2remarks[i].first+v => pc2remarks[i].second
+                end
+            end
+        end
     end
-    push!(interp.remarks[sv.linfo], sv.currpc => msg)
+    return changemap
 end
 
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
