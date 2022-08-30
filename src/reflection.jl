@@ -115,6 +115,11 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+    elseif (@static isdefined(CC, :SemiConcreteResult) && true) && isa(result, CC.SemiConcreteResult)
+        linfo = result.mi
+        effects = get_effects(result)
+        mici = MICallInfo(linfo, rt, effects)
+        return SemiConcreteCallInfo(mici, argtypes, result.ir)
     elseif (@static isdefined(CC, :ConstResult) && true) && isa(result, CC.ConstResult)
         linfo = result.mi
         effects = get_effects(result)

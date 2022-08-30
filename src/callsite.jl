@@ -138,6 +138,15 @@ get_mi(ceci::ConcreteCallInfo) = get_mi(ceci.mi)
 get_rt(ceci::ConcreteCallInfo) = get_rt(ceci.mi)
 get_effects(ceci::ConcreteCallInfo) = get_effects(ceci.mi)
 
+struct SemiConcreteCallInfo <: CallInfo
+    mi::CallInfo
+    argtypes::ArgTypes
+    ir::IRCode
+end
+get_mi(scci::SemiConcreteCallInfo) = get_mi(scci.mi)
+get_rt(scci::SemiConcreteCallInfo) = get_rt(scci.mi)
+get_effects(scci::SemiConcreteCallInfo) = get_effects(scci.mi)
+
 # CUDA callsite
 struct CuCallInfo <: CallInfo
      cumi::MICallInfo
@@ -309,6 +318,13 @@ function show_callinfo(limiter, ci::ConstPropCallInfo)
     __show_limited(limiter, name, tt, get_rt(ci), get_effects(ci))
 end
 
+function show_callinfo(limiter, ci::SemiConcreteCallInfo)
+    # XXX: The first argument could be const-overriden too
+    name = get_mi(ci).def.name
+    tt = ci.argtypes[2:end]
+    __show_limited(limiter, name, tt, get_rt(ci))
+end
+
 function show_callinfo(limiter, ci::ConcreteCallInfo)
     # XXX: The first argument could be const-overriden too
     name = get_mi(ci).def.name
@@ -370,6 +386,11 @@ end
 
 function print_callsite_info(limiter::IO, info::ConstPropCallInfo)
     print(limiter, "< constprop > ")
+    show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::SemiConcreteCallInfo)
+    print(limiter, " = < semi-consteval > ")
     show_callinfo(limiter, info)
 end
 

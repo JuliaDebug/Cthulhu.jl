@@ -281,7 +281,7 @@ end
     get_effects(result::InferenceResult) = result.ipo_effects
     @static if VERSION ≥ v"1.9.0-DEV.409"
         get_effects(result::CC.ConstPropResult) = get_effects(result.result)
-        get_effects(result::CC.ConcreteResult) = result.effects
+        get_effects(result::CC.ConstResult) = result.effects
     else
         get_effects(result::CC.ConstResult) = result.effects
     end
@@ -382,6 +382,7 @@ end
 
 function get_override(@nospecialize(info))
     isa(info, ConstPropCallInfo) && return info.result
+    isa(info, SemiConcreteCallInfo) && return info
     isa(info, OCCallInfo) && return get_override(info.ci)
     return nothing
 end
@@ -392,7 +393,7 @@ end
 # src/ui.jl provides the user facing interface to which _descend responds
 ##
 function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::AbstractCursor;
-    override::Union{Nothing,InferenceResult} = nothing,
+    override::Union{Nothing,InferenceResult,SemiConcreteCallInfo} = nothing,
     debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
     optimize::Bool                           = CONFIG.optimize,                      # default is true
     interruptexc::Bool                       = CONFIG.interruptexc,
@@ -434,10 +435,17 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         """)
     end
     while true
-        if override !== nothing
+        if override !== nothing && !isa(override, SemiConcreteCallInfo)
             (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
         else
-            if optimize
+            if isa(override, SemiConcreteCallInfo)
+                src = CC.copy(override.ir)
+                rt = get_rt(override)
+                infos = src.stmts.info
+                slottypes = src.argtypes
+                effects = get_effects(override)
+                (;codeinf) = lookup(interp, mi, optimize)
+            elseif optimize
                 codeinst = get_optimized_codeinst(interp, curs)
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
@@ -466,7 +474,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
         mi = get_mi(curs)
         src = preprocess_ci!(src, mi, optimize, CONFIG)
-        if optimize # optimization might have deleted some statements
+        if optimize || isa(src, IRCode) # optimization might have deleted some statements
             infos = src.stmts.info
         else
             @assert length(src.code) == length(infos)
