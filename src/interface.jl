@@ -61,8 +61,8 @@ missing `$AbstractCursor` API:
 """)
 navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_mi(callsite))
 
-get_remarks(::AbstractInterpreter, ::MethodInstance) = nothing
-get_remarks(interp::CthulhuInterpreter, mi::MethodInstance) = get(interp.remarks, mi, nothing)
+get_remarks(::AbstractInterpreter, ::Union{MethodInstance,InferenceResult}) = nothing
+get_remarks(interp::CthulhuInterpreter, key::Union{MethodInstance,InferenceResult}) = get(interp.remarks, key, nothing)
 
 # This method is optional, but should be implemented if there is
 # a sensible default cursor for a MethodInstance
