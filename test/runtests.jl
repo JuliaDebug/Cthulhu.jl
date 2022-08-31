@@ -9,6 +9,7 @@ using Revise
 @test isempty(detect_ambiguities(Cthulhu))
 
 include("setup.jl")
+include("irutils.jl")
 
 function testf_simple()
     T = rand() > 0.5 ? Int64 : Float64
@@ -940,4 +941,25 @@ end
     Cthulhu.read_config!(Cthulhu.CONFIG)
     @test Cthulhu.CONFIG.debuginfo === :none
     @test Cthulhu.CONFIG.enable_highlighter
+end
+
+Base.@constprop :none sin_noconstprop(x) = sin(x)
+function remarks_dced(x)
+    if isa(x, Float64)
+        v, w = sin(x), sin_noconstprop(x)
+    else
+        v, w = sin_noconstprop(x), sin(x)
+    end
+    return v
+end
+@testset "remarks" begin
+    interp, mi = Cthulhu.mkinterp(remarks_dced, (Float64,));
+    src = interp.unopt[mi].src
+    i = only(findall(iscall((src, sin)), src.code))
+    j = only(findall(iscall((src, sin_noconstprop)), src.code))
+    @test i < j
+    pc2remarks = interp.remarks[mi]
+    @test any(pc2remarks) do (pc, msg)
+        pc == j && occursin("Disabled by method parameter", msg)
+    end
 end

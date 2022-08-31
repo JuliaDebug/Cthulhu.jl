@@ -70,7 +70,7 @@ CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
-    push!(get!(interp.remarks, key, PC2Remarks()), sv.currpc=>msg)
+    push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
 function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_optimizer::Bool)
