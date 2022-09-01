@@ -475,21 +475,22 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
-            if with_effects
-                printstyled(IOContext(iostream, :limit=>true), '[', effects, ']', mi.def, '\n'; bold=true)
-            else
-                printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
-            end
+            pc2effects = with_effects ? get_effects(interp, override !== nothing ? override : mi) : nothing
+            printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
             if debuginfo == DInfo.compact
                 str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
                           iswarn=iswarn, hide_type_stable=hide_type_stable,
-                          pc2remarks=pc2remarks, inline_cost=inline_cost, type_annotations=type_annotations
-                    ioctx = IOContext(iostream, :color=>true, :displaysize=>displaysize(iostream)) # displaysize doesn't propagate otherwise
-                    stringify(ioctx) do io
-                        lambda_io = IOContext(io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
-                        cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
+                          pc2remarks=pc2remarks, pc2effects=pc2effects, inline_cost=inline_cost, type_annotations=type_annotations
+                    ioctx = IOContext(iostream,
+                        :color=>true,
+                        :displaysize=>displaysize(iostream), # displaysize doesn't propagate otherwise
+                        :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
+                        :with_effects => with_effects)
+                    stringify(ioctx) do lambda_io
+                        cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
                                       iswarn, hide_type_stable,
-                                      pc2remarks, inline_cost, type_annotations,
+                                      pc2remarks, pc2effects,
+                                      inline_cost, type_annotations,
                                       interp)
                     end
                 end
@@ -500,10 +501,13 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 end
                 print(iostream, str)
             else
-                lambda_io = IOContext(iostream, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf))
-                cthulhu_typed(lambda_io, debuginfo, src, rt, mi;
+                lambda_io = IOContext(iostream,
+                    :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
+                    :with_effects => with_effects)
+                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
                               iswarn, hide_type_stable,
-                              pc2remarks, inline_cost, type_annotations,
+                              pc2remarks, pc2effects,
+                              inline_cost, type_annotations,
                               interp)
             end
             view_cmd = cthulhu_typed

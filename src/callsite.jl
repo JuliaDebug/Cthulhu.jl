@@ -6,7 +6,7 @@ abstract type CallInfo end
 struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
-    effects
+    effects::Effects
     function MICallInfo(mi::MethodInstance, @nospecialize(rt), effects)
         if isa(rt, LimitedAccuracy)
             return LimitedCallInfo(new(mi, ignorelimited(rt), effects))
@@ -45,6 +45,7 @@ struct PureCallInfo <: CallInfo
         new(argtypes, rt)
 end
 get_mi(::PureCallInfo) = nothing
+get_rt(pci::PureCallInfo) = pci.rt
 get_effects(::PureCallInfo) = EFFECTS_TOTAL
 
 # Failed
@@ -160,6 +161,7 @@ mutable struct TextWidthLimiter <: IO
     limit::Int
 end
 TextWidthLimiter(io::IO, limit) = TextWidthLimiter(io, 0, limit)
+Base.get(limiter::TextWidthLimiter, key, default) = get(limiter.io, key, default)
 
 # Uncomment this to debug display of a TextWidthLimiter (e.g., triggered by `print(limited, args1, args...)`)
 # Base.show(io::IO, twl::TextWidthLimiter) = error("do not display")
@@ -221,7 +223,7 @@ function headstring(@nospecialize(T))
     end
 end
 
-function __show_limited(limiter, name, tt, @nospecialize(rt))
+function __show_limited(limiter, name, tt, @nospecialize(rt), effects)
     vastring(@nospecialize(T)) = (isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
     if !has_space(limiter, name)
@@ -252,13 +254,22 @@ function __show_limited(limiter, name, tt, @nospecialize(rt))
     print(limiter, ")")
 
     # If we have space for the return type, print it
-    rts = string(rt)::String
-    if has_space(limiter, textwidth(rts)+2)
-        print(limiter, string("::", rts))
+    rt_str = string(rt)::String
+    if has_space(limiter, textwidth(rt_str)+2)
+        print(limiter, "::", rt_str)
+        with_effects = get(limiter, :with_effects, false)::Bool
+        if with_effects
+            # Additionally, if we have space for the effects, print it
+            effects_str = string(effects)::String
+            if has_space(limiter, textwidth(effects_str)+1)
+                print(limiter, " ", effects)
+            end
+        end
     elseif has_space(limiter, 3)
         print(limiter, "::…")
     end
-    return
+
+    return nothing
 end
 
 function show_callinfo(limiter, mici::MICallInfo)
@@ -266,7 +277,7 @@ function show_callinfo(limiter, mici::MICallInfo)
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     name = (mi.def::Method).name
     rt = get_rt(mici)
-    __show_limited(limiter, name, tt, rt)
+    __show_limited(limiter, name, tt, rt, get_effects(mici))
 end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
@@ -280,37 +291,39 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     else
         name = "→ (::$(nameof(ft)))"
     end
-    __show_limited(limiter, name::String, tt, get_rt(ci))
+    __show_limited(limiter, name::String, tt, get_rt(ci), get_effects(ci))
 end
 
-function show_callinfo(limiter, (; argtypes, rt)::PureCallInfo)
-    ft, tt... = argtypes
+function show_callinfo(limiter, pci::PureCallInfo)
+    ft, tt... = pci.argtypes
     f = CC.singleton_type(ft)
     name = isnothing(f) ? "unknown" : string(f)
-    __show_limited(limiter, name, tt, rt)
+    __show_limited(limiter, name, tt, get_rt(pci), get_effects(pci))
 end
 
 function show_callinfo(limiter, ci::ConstPropCallInfo)
     # XXX: The first argument could be const-overriden too
     name = ci.result.linfo.def.name
     tt = ci.result.argtypes[2:end]
-    __show_limited(limiter, name, tt, get_rt(ignorewrappers(ci.mi)::MICallInfo))
+    ci = ignorewrappers(ci.mi)::MICallInfo
+    __show_limited(limiter, name, tt, get_rt(ci), get_effects(ci))
 end
 
 function show_callinfo(limiter, ci::ConcreteCallInfo)
     # XXX: The first argument could be const-overriden too
     name = get_mi(ci).def.name
     tt = ci.argtypes[2:end]
-    __show_limited(limiter, name, tt, get_rt(ci))
+    __show_limited(limiter, name, tt, get_rt(ci), get_effects(ci))
 end
 
-function show_callinfo(limiter, (; vmi)::ReturnTypeCallInfo)
+function show_callinfo(limiter, rci::ReturnTypeCallInfo)
+    vmi = rci.vmi
     if isa(vmi, FailedCallInfo)
         ft = Base.tuple_type_head(vmi.sig)
         f = CC.singleton_type(ft)
         name = isnothing(f) ? "unknown" : string(f)
         tt = Base.tuple_type_tail(vmi.sig).parameters
-        __show_limited(limiter, name, tt, vmi.rt)
+        __show_limited(limiter, name, tt, vmi.rt, get_effects(vmi))
     else
         show_callinfo(limiter, vmi)
     end
@@ -377,11 +390,6 @@ function Base.show(io::IO, c::Callsite)
     iswarn = get(io, :iswarn, false)::Bool
     info = c.info
     rt = get_rt(info)
-    with_effects = get(io, :with_effects, false)
-    if with_effects
-        show(io, get_effects(c))
-        print(io, ' ')
-    end
     if iswarn && is_type_unstable(rt)
         printstyled(io, '%'; color=:red)
     else
@@ -397,7 +405,7 @@ function Base.show(io::IO, c::Callsite)
         print(limiter, " = ")
         print_callsite_info(limiter, info)
     end
-    return
+    return nothing
 end
 
 function wrapped_callinfo(limiter, ci::WrappedCallInfo)

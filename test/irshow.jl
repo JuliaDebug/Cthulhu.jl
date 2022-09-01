@@ -19,7 +19,7 @@ end
     tf = (true, false)
 
     @testset "optimize: $optimize" for optimize in tf
-        _, src, infos, mi, rt, slottypes = process(m.foo, (Int, Int); optimize);
+        (; src, infos, mi, rt, effects, slottypes) = cthulhu_info(m.foo, (Int, Int); optimize);
 
         @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
             @testset "iswarn: $iswarn" for iswarn in tf
@@ -31,7 +31,7 @@ end
 
                             s = sprint(; context=:color=>true) do io
                                 Cthulhu.cthulhu_typed(io, debuginfo,
-                                                      src, rt, mi;
+                                                      src, rt, effects, mi;
                                                       iswarn, hide_type_stable, inline_cost, type_annotations)
                             end
                             s = strip_base_linenums(s)
