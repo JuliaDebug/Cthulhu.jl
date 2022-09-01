@@ -10,18 +10,18 @@ Variables
   z@_9[36m::Union{}[39m
 
 ∘ ─ %0 = invoke foo(::Int64,::Int64)::Any
-[90m│ [39m [33m @ foobar.jl:2 within `foo`[39m
+[90m│ [39m [33m @ IRShowSandbox.jl:2 within `foo`[39m
 [90m│  [39m       (z@_7 = Core.Box())[90m::Core.Box[39m
-   [33m @ foobar.jl:3 within `foo`[39m
+   [33m @ IRShowSandbox.jl:3 within `foo`[39m
 [90m4 ┄[39m %12 = Core.getfield(z@_7, :contents)[36m::Any[39m
 [90m│  [39m %13 = (%12 < 4)[36m::Any[39m
-   [33m @ foobar.jl:4 within `foo`[39m
+   [33m @ IRShowSandbox.jl:4 within `foo`[39m
 [90m8 ┄[39m %20 = Core.getfield(z@_7, :contents)[36m::Any[39m
 [90m│  [39m %21 = (%20 + 1)[36m::Any[39m
-[90m│ [39m [33m @ foobar.jl:6 within `foo`[39m
+[90m│ [39m [33m @ IRShowSandbox.jl:6 within `foo`[39m
 [90m│  [39m       (u = (%24)(x))[90m::Any[39m
-[90m│ [39m [33m @ foobar.jl:7 within `foo`[39m
+[90m│ [39m [33m @ IRShowSandbox.jl:7 within `foo`[39m
 [90m│  [39m %29 = Base.getindex(%28)[36m::Union{Missing, Int64}[39m
 [90m│  [39m       (v = %29 + y)[90m::Union{Missing, Int64}[39m
-[90m│ [39m [33m @ foobar.jl:8 within `foo`[39m
+[90m│ [39m [33m @ IRShowSandbox.jl:8 within `foo`[39m
 [90m│  [39m %31 = (u + v)[36m::Any[39m

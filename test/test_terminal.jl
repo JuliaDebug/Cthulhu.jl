@@ -1,11 +1,10 @@
-using Test
-using REPL
-using Cthulhu
-using Revise
+module test_terminal
+
+using Test, REPL, Cthulhu, Revise
 
 if !isdefined(@__MODULE__, :fake_terminal)
-    @eval begin
-        includet(joinpath(@__DIR__, "FakeTerminals.jl"))   # FIXME change to include
+    @eval (@__MODULE__) begin
+        includet(@__MODULE__, normpath(@__DIR__, "FakeTerminals.jl"))   # FIXME change to include
         using .FakeTerminals
     end
 end
@@ -56,7 +55,7 @@ end
         end
         """)
     end
-    includet(fn)
+    includet(@__MODULE__, fn)
 
     # Copy the user's current settings and set up the defaults
     CONFIG = deepcopy(Cthulhu.CONFIG)
@@ -278,3 +277,5 @@ end
         rm(fn)
     end
 end
+
+end # module test_terminal

@@ -1,5 +1,5 @@
 ∘ ──[32m 3032[39m  %0 = invoke foo(::Int64,::Int64)::Any
-          [33m @ foobar.jl:2 within `foo`[39m
+          [33m @ IRShowSandbox.jl:2 within `foo`[39m
           [33m┌ @ boot.jl: within `Box`[39m
 [90m1 ──[39m[32m    0[39m [33m│[39m %1  = Core.Box[36m::Core.Const(Core.Box)[39m
 [90m│   [39m[32m    0[39m [33m│[39m %2  = %new(%1)[36m::Core.Box[39m
@@ -8,7 +8,7 @@
 [90m│   [39m[32m    1[39m [33m│[39m %3  = Base.add_int(_2, _3)[36m::Int64[39m
 [90m│ [39m        [33m└[39m
 [90m│   [39m[32m    3[39m        Core.setfield!(%2, :contents, %3)[90m::Int64[39m
-[90m│ [39m        [33m @ foobar.jl:3 within `foo`[39m
+[90m│ [39m        [33m @ IRShowSandbox.jl:3 within `foo`[39m
 [90m│   [39m[32m    1[39m  %5  = Core.isdefined(%2, :contents)[36m::Bool[39m
 [90m└───[39m[32m    0[39m        goto #3 if not %5
 [90m2 ──[39m[32m    0[39m        goto #4
@@ -16,7 +16,7 @@
 [90m4 ┄─[39m[32m    0[39m  %9  = Core.getfield(%2, :contents)[36m::Any[39m
 [90m│   [39m[32m 1000[39m  %10 = (%9 < 4)[36m::Any[39m
 [90m└───[39m[32m    0[39m        goto #9 if not %10
-          [33m @ foobar.jl:4 within `foo`[39m
+          [33m @ IRShowSandbox.jl:4 within `foo`[39m
 [90m5 ──[39m[32m    1[39m  %12 = Core.isdefined(%2, :contents)[36m::Bool[39m
 [90m└───[39m[32m    0[39m        goto #7 if not %12
 [90m6 ──[39m[32m    0[39m        goto #8
@@ -24,10 +24,10 @@
 [90m8 ┄─[39m[32m    0[39m  %16 = Core.getfield(%2, :contents)[36m::Any[39m
 [90m│   [39m[32m 1000[39m  %17 = (%16 + 1)[36m::Any[39m
 [90m└───[39m[32m    3[39m        Core.setfield!(%2, :contents, %17)[90m::Any[39m
-          [33m @ foobar.jl:6 within `foo`[39m
+          [33m @ IRShowSandbox.jl:6 within `foo`[39m
 [90m9 ┄─[39m[32m    0[39m  %19 = %new(Main.anonymous.:(var"#1#2"), %2)[36m::Main.anonymous.var"#1#2"[39m
 [90m│   [39m[32m   20[39m  %20 = invoke %19(_2::Int64)[36m::Any[39m
-[90m│ [39m        [33m @ foobar.jl:7 within `foo`[39m
+[90m│ [39m        [33m @ IRShowSandbox.jl:7 within `foo`[39m
 [90m│   [39m[32m    1[39m  %21 = (isa)(_2, Missing)[36m::Bool[39m
 [90m└───[39m[32m    0[39m        goto #11 if not %21
 [90m10 ─[39m[32m    0[39m        goto #14
@@ -40,6 +40,6 @@
 [90m13 ─[39m[32m    0[39m        Core.throw(ErrorException("fatal error in type inference (type bound)"))[90m::Union{}[39m
 [90m└───[39m[32m    0[39m        unreachable
 [90m14 ┄[39m[32m    0[39m  %30 = φ (#10 => $(QuoteNode(missing)), #12 => %26)[36m::Union{Missing, Int64}[39m
-[90m│ [39m        [33m @ foobar.jl:8 within `foo`[39m
+[90m│ [39m        [33m @ IRShowSandbox.jl:8 within `foo`[39m
 [90m│   [39m[32m 1000[39m  %31 = (%20 + %30)[36m::Any[39m
 [90m└───[39m[32m    0[39m        return %31

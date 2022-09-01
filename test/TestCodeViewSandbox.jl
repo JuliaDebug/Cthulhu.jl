@@ -1,4 +1,4 @@
-module CthulhuTestSandbox
+module TestCodeViewSandbox
 
 function testf_revise()
     T = rand() > 0.5 ? Int64 : Float64

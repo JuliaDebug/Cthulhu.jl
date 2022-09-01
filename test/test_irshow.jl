@@ -1,25 +1,16 @@
+module tests_irshow
+
 using Cthulhu, Test, DeepDiffs
 
 include("setup.jl")
+include("irshowutils.jl")
+include("IRShowSandbox.jl")
 
-m = Module()
-Core.eval(m, Meta.parseall(raw"""
-function foo(x, y)
-    z = x + y
-    if z < 4
-        z += 1
-    end
-    u = (x -> x + z)(x)
-    v = Ref{Union{Int, Missing}}(x)[] + y
-    return u + v
-end
-"""; filename="foobar.jl"))
-
-@testset "IRShow tests" begin
+@testset "cthulhu_typed" begin
     tf = (true, false)
 
     @testset "optimize: $optimize" for optimize in tf
-        (; src, infos, mi, rt, effects, slottypes) = cthulhu_info(m.foo, (Int, Int); optimize);
+        (; src, infos, mi, rt, effects, slottypes) = cthulhu_info(IRShowSandbox.foo, (Int, Int); optimize);
 
         @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
             @testset "iswarn: $iswarn" for iswarn in tf
@@ -36,8 +27,8 @@ end
                             end
                             s = strip_base_linenums(s)
 
-                            fname = irshow_filename(optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)
-                            fpath = normpath(@__DIR__, fname)
+                            bname = irshow_filename("foo", optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)
+                            fpath = normpath(@__DIR__, bname)
 
                             ground_truth = read(fpath, String)
                             if Sys.iswindows()
@@ -52,3 +43,5 @@ end
         end
     end
 end
+
+end # module tests_irshow
