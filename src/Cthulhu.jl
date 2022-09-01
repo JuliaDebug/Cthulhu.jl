@@ -482,8 +482,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                           iswarn=iswarn, hide_type_stable=hide_type_stable,
                           pc2remarks=pc2remarks, pc2effects=pc2effects, inline_cost=inline_cost, type_annotations=type_annotations
                     ioctx = IOContext(iostream,
-                        :color=>true,
-                        :displaysize=>displaysize(iostream), # displaysize doesn't propagate otherwise
+                        :color => true,
+                        :displaysize => displaysize(iostream), # displaysize doesn't propagate otherwise
                         :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
