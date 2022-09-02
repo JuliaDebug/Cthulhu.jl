@@ -1,7 +1,13 @@
-# NOTE setup too for `cthulhu_ast`
-include("sandbox.jl")
-using .CthulhuTestSandbox
-Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
+module test_codeview
+
+using Cthulhu, Test, Revise
+
+include("setup.jl")
+
+# NOTE setup for `cthulhu_ast`
+include("TestCodeViewSandbox.jl")
+using .TestCodeViewSandbox
+Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
 
 @testset "printer test" begin
     (; interp, src, infos, mi, rt, effects, slottypes) = cthulhu_info(testf_revise);
@@ -38,9 +44,6 @@ Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
         end
     end
 end
-
-using PerformanceTestTools
-PerformanceTestTools.@include("irshow.jl")
 
 @testset "hide type-stable statements" begin
     let # optimize code
@@ -109,3 +112,5 @@ PerformanceTestTools.@include("irshow.jl")
         end
     end
 end
+
+end # module test_codeview
