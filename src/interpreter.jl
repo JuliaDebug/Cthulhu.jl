@@ -18,6 +18,7 @@ struct OptimizedSource
 end
 
 const PC2Remarks = Vector{Pair{Int, String}}
+const PC2Effects = Dict{Int, Effects}
 
 struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
@@ -26,6 +27,7 @@ struct CthulhuInterpreter <: AbstractInterpreter
     opt::Dict{MethodInstance, CodeInstance}
 
     remarks::Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}
+    effects::Dict{Union{MethodInstance,InferenceResult}, PC2Effects}
 end
 
 function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
@@ -33,7 +35,8 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         interp,
         Dict{Union{MethodInstance,InferenceResult}, InferredSource}(),
         Dict{MethodInstance, CodeInstance}(),
-        Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}())
+        Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}(),
+        Dict{Union{MethodInstance,InferenceResult}, PC2Effects}())
 end
 
 import .CC: InferenceParams, OptimizationParams, get_world_counter,
@@ -73,6 +76,15 @@ function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
+@static if isdefined(CC, :merge_effects!)
+function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effects::Effects)
+    key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
+    pc2effects = get!(interp.effects, key, PC2Effects())
+    pc2effects[sv.currpc] = CC.merge_effects(get!(pc2effects, sv.currpc, EFFECTS_TOTAL), effects)
+    @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
+end
+end
+
 function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_optimizer::Bool)
     changemap = @invoke CC.type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
     changemap === nothing && return nothing
@@ -93,6 +105,21 @@ function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_o
                 for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
                     pc2remarks[i] = pc2remarks[i].first+v => pc2remarks[i].second
                 end
+            end
+        end
+    end
+    pc2effects = get(interp.effects, key, nothing)
+    if pc2effects !== nothing
+        for (idx, v) in enumerate(changemap)
+            if v == typemin(Int)
+                delete!(pc2effects, idx)
+            end
+        end
+        for (idx, v) in enumerate(changemap)
+            if v < 0
+                haskey(pc2effects, idx) || continue
+                pc2effects[idx+v] = pc2effects[idx]
+                delete!(pc2effects, idx)
             end
         end
     end

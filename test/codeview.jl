@@ -4,7 +4,7 @@ using .CthulhuTestSandbox
 Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
 
 @testset "printer test" begin
-    interp, src, infos, mi, rt, slottypes = process(testf_revise);
+    (; interp, src, infos, mi, rt, effects, slottypes) = cthulhu_info(testf_revise);
     tf = (true, false)
 
     @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
@@ -29,7 +29,7 @@ Revise.track(CthulhuTestSandbox, normpath(@__DIR__, "sandbox.jl"))
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
                         io = IOBuffer()
                         Cthulhu.cthulhu_typed(io, debuginfo,
-                            src, rt, mi;
+                            src, rt, effects, mi;
                             iswarn, hide_type_stable, inline_cost, type_annotations)
                         @test !isempty(String(take!(io))) # just check it works
                     end
@@ -44,9 +44,9 @@ PerformanceTestTools.@include("irshow.jl")
 
 @testset "hide type-stable statements" begin
     let # optimize code
-        _, src, infos, mi, rt, slottypes = @eval Module() begin
+        (; src, infos, mi, rt, effects, slottypes) = @eval Module() begin
             const globalvar = Ref(42)
-            $process() do
+            $cthulhu_info() do
                 a = sin(globalvar[])
                 b = sin(undefvar)
                 return (a, b)
@@ -54,7 +54,7 @@ PerformanceTestTools.@include("irshow.jl")
         end
         function prints(; kwargs...)
             io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, mi; kwargs...)
+            Cthulhu.cthulhu_typed(io, :none, src, rt, effects, mi; kwargs...)
             return String(take!(io))
         end
 
@@ -71,9 +71,9 @@ PerformanceTestTools.@include("irshow.jl")
     end
 
     let # unoptimize code
-        _, src, infos, mi, rt, slottypes = @eval Module() begin
+        (; src, infos, mi, rt, effects, slottypes) = @eval Module() begin
             const globalvar = Ref(42)
-            $process(; optimize=false) do
+            $cthulhu_info(; optimize=false) do
                 a = sin(globalvar[])
                 b = sin(undefvar)
                 return (a, b)
@@ -81,7 +81,7 @@ PerformanceTestTools.@include("irshow.jl")
         end
         function prints(; kwargs...)
             io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, mi; kwargs...)
+            Cthulhu.cthulhu_typed(io, :none, src, rt, effects, mi; kwargs...)
             return String(take!(io))
         end
 

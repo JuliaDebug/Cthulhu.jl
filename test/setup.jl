@@ -4,19 +4,19 @@ const CC = Core.Compiler
 import Core: MethodInstance, CodeInstance
 import .CC: WorldRange, WorldView, NativeInterpreter
 
-function process(@nospecialize(f), @nospecialize(TT=()); optimize=true)
+function cthulhu_info(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(NativeInterpreter(), f, TT)
-    (; src, rt, infos, slottypes) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
+    (; src, rt, infos, slottypes, effects) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
     if src !== nothing
         src = Cthulhu.preprocess_ci!(src, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     end
-    (; interp, src, infos, mi, rt, slottypes)
+    (; interp, src, infos, mi, rt, slottypes, effects)
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
-    interp, ci, infos, mi, _, slottypes = process(f, TT; optimize)
-    ci === nothing && return Cthulhu.Callsite[]
-    callsites = Cthulhu.find_callsites(interp, ci, infos, mi, slottypes, optimize)
+    (; interp, src, infos, mi, slottypes) = cthulhu_info(f, TT; optimize)
+    src === nothing && return Cthulhu.Callsite[]
+    callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, optimize)
     @test all(c -> Cthulhu.get_effects(c) isa Cthulhu.Effects, callsites)
     return callsites
 end
@@ -41,7 +41,7 @@ function generate_test_cases(foo)
     outputs = Dict()
     tf = (true, false)
     for optimize in tf
-        _, src, infos, mi, rt, slottypes = process(foo, (Int, Int); optimize);
+        _, src, infos, mi, rt, slottypes = cthulhu_info(foo, (Int, Int); optimize);
         for (debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations) in Iterators.product(
             instances(Cthulhu.DInfo.DebugInfo), tf, tf, tf, tf,
         )

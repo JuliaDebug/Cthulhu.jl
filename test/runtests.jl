@@ -119,16 +119,16 @@ end
 #     end
 #
 #     let
-#         (_,CI, _, _, _, _) = process(M.g, Tuple{Vector{Float64}})
-#         @test all(CI.stmts.inst) do stmt
+#         (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
+#         @test all(src.stmts.inst) do stmt
 #             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
 #         end
 #     end
 #
 #     let
-#         (_,CI, _, _, _, _) = process(M.h, Tuple{Vector{Float64}})
-#         @test count(!isnothing, CI.stmts.inst) == 2
-#         stmt = CI.stmts.inst[end]
+#         (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
+#         @test count(!isnothing, src.stmts.inst) == 2
+#         stmt = src.stmts.inst[end]
 #         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
 #     end
 # end
@@ -572,9 +572,10 @@ end
 
 @testset "warntype variables" begin
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
+    effects = Cthulhu.EFFECTS_ENABLED ? Base.infer_effects(identity, (Any,)) : nothing
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
-    Cthulhu.cthulhu_warntype(ioctx, :none, src, rettype, nothing)
+    Cthulhu.cthulhu_warntype(ioctx, :none, src, rettype, effects, nothing)
     str = String(take!(io))
     @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
 end
@@ -590,10 +591,9 @@ end
         end
     end
     function doprint(f)
-        interp, mi = Cthulhu.mkinterp(NativeInterpreter(), f, ())
-        (; src, rt) = Cthulhu.lookup(interp, mi, true)
+        (; src, mi, rt, effects) = cthulhu_info(f)
         io = IOBuffer()
-        Cthulhu.cthulhu_typed(io, :none, src, rt, mi; iswarn=false)
+        Cthulhu.cthulhu_typed(io, :none, src, rt, effects, mi; iswarn=false)
         return String(take!(io))
     end
     @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
@@ -845,32 +845,6 @@ include("codeview.jl")
 end
 
 include("terminal.jl")
-
-using Cthulhu: MultiCallInfo, show_callinfo, CallInfo, TextWidthLimiter
-
-@testset "printing of MultiCallInfo" begin
-    # PR 226
-    m = Module()
-    @eval m begin
-        struct Foo
-            x
-        end
-        struct Bar end
-    end
-    ci = MultiCallInfo(Tuple{m.Foo, Float64}, Float64, CallInfo[])
-    @test sprint(show_callinfo, ci) == "→ (::Foo)(::Float64)::Float64"
-    ci = MultiCallInfo(Tuple{Union{m.Foo, m.Bar}, Float64}, Float64, CallInfo[])
-    @test sprint(show_callinfo, ci) == "→ (::Union{Bar, Foo})(::Float64)::Float64"
-    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 2}}, Float64, CallInfo[])
-    @test sprint(show_callinfo, ci) ==
-        "→ +(::Bool,::Rational{BigInt},::Rational{BigInt})::Float64"
-    ci = MultiCallInfo(Tuple{typeof(+), Bool, Vararg{Rational{BigInt}, 4}}, Float64, CallInfo[])
-    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
-        "→ +(::Bool,::Rational{…},::Rational{…},::Rational{…},::Rational{…})::Float64"
-    ci = MultiCallInfo(Tuple{m.Foo, Vararg{Float64, 30}}, Float64, CallInfo[])
-    @test sprint(io -> show_callinfo(TextWidthLimiter(io, 80), ci)) ==
-        "→ (::Foo)(…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…,…)::…"
-end
 
 # external AbstractInterpreter integration
 # ========================================
