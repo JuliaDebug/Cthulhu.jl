@@ -322,7 +322,7 @@ function show_callinfo(limiter, ci::SemiConcreteCallInfo)
     # XXX: The first argument could be const-overriden too
     name = get_mi(ci).def.name
     tt = ci.argtypes[2:end]
-    __show_limited(limiter, name, tt, get_rt(ci))
+    __show_limited(limiter, name, tt, get_rt(ci), get_effects(ci))
 end
 
 function show_callinfo(limiter, ci::ConcreteCallInfo)

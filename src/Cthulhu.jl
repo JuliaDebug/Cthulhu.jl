@@ -281,7 +281,8 @@ end
     get_effects(result::InferenceResult) = result.ipo_effects
     @static if VERSION ≥ v"1.9.0-DEV.409"
         get_effects(result::CC.ConstPropResult) = get_effects(result.result)
-        get_effects(result::CC.ConstResult) = result.effects
+        get_effects(result::CC.ConcreteResult) = result.effects
+        get_effects(result::CC.SemiConcreteResult) = result.effects
     else
         get_effects(result::CC.ConstResult) = result.effects
     end
@@ -380,6 +381,16 @@ function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::In
     return (; src, rt, infos, slottypes, effects, codeinf)
 end
 
+function lookup_semiconcrete(interp::CthulhuInterpreter, override::SemiConcreteCallInfo, optimize::Bool)
+    src = CC.copy(override.ir)
+    rt = get_rt(override)
+    infos = src.stmts.info
+    slottypes = src.argtypes
+    effects = get_effects(override)
+    (; codeinf) = lookup(interp, get_mi(override), optimize)
+    return (; src, rt, infos, slottypes, effects, codeinf)
+end
+
 function get_override(@nospecialize(info))
     isa(info, ConstPropCallInfo) && return info.result
     isa(info, SemiConcreteCallInfo) && return info
@@ -435,17 +446,12 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         """)
     end
     while true
-        if override !== nothing && !isa(override, SemiConcreteCallInfo)
+        if isa(override, InferenceResult)
             (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
+        elseif isa(override, SemiConcreteCallInfo)
+                (; src, rt, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize)
         else
-            if isa(override, SemiConcreteCallInfo)
-                src = CC.copy(override.ir)
-                rt = get_rt(override)
-                infos = src.stmts.info
-                slottypes = src.argtypes
-                effects = get_effects(override)
-                (;codeinf) = lookup(interp, mi, optimize)
-            elseif optimize
+            if optimize
                 codeinst = get_optimized_codeinst(interp, curs)
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)

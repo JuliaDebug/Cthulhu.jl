@@ -28,6 +28,13 @@ missing `$AbstractCursor` API:
 lookup_constproped(interp::CthulhuInterpreter, ::CthulhuCursor, override::InferenceResult, optimize::Bool) =
     lookup_constproped(interp, override, optimize)
 
+lookup_semiconcrete(interp::AbstractInterpreter, curs::AbstractCursor, override::SemiConcreteCallInfo, optimize::Bool) = error(lazy"""
+missing `$AbstractCursor` API:
+`$(typeof(curs))` is required to implement the `$lookup_semicocnrete(interp::$(typeof(interp)), curs::$(typeof(curs)), override::SemiConcreteCallInfo, optimize::Bool)` interface.
+""")
+lookup_semiconcrete(interp::CthulhuInterpreter, ::CthulhuCursor, override::SemiConcreteCallInfo, optimize::Bool) =
+    lookup_semiconcrete(interp, override, optimize)
+
 get_mi(curs::AbstractCursor) = error(lazy"""
 missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$get_mi(curs::$(typeof(curs))) -> MethodInstance` interface.
