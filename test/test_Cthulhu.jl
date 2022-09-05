@@ -237,32 +237,59 @@ end
             @test occursin("= < constprop > getproperty(", String(take!(io)))
         end
     end
+end
 
-    @static isdefined(Core.Compiler, :ConstResult) && @testset "ConstResult" begin
-        # constant prop' on all the splits
-        let callsites = (@eval Module() begin
-                Base.@assume_effects :terminates_locally function issue41694(x)
-                    res = 1
-                    1 < x < 20 || throw("bad")
-                    while x > 1
-                        res *= x
-                        x -= 1
-                    end
-                    return res
-                end
-
-                $find_callsites_by_ftt(; optimize = false) do
-                    issue41694(12)
-                end
-            end)
-            callinfo = only(callsites).info
-            @test isa(callinfo, Cthulhu.ConcreteCallInfo)
-            @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
-            @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
-            io = IOBuffer()
-            print(io, only(callsites))
-            @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
+Base.@assume_effects :terminates_locally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@static isdefined(Core.Compiler, :ConstResult) && @testset "ConstResult" begin
+    # constant prop' on all the splits
+    let callsites = find_callsites_by_ftt(; optimize = false) do
+            issue41694(12)
         end
+        callinfo = only(callsites).info
+        @test isa(callinfo, Cthulhu.ConcreteCallInfo)
+        @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
+        @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+        io = IOBuffer()
+        print(io, only(callsites))
+        @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
+    end
+end
+
+let # check the performance benefit of semi concrete evaluation
+    param = 1000
+    ex = Expr(:block)
+    var = gensym()
+    push!(ex.args, :($var = x))
+    for _ = 1:param
+        newvar = gensym()
+        push!(ex.args, :($newvar = sin($var)))
+        var = newvar
+    end
+    @eval global Base.@constprop :aggressive Base.@assume_effects :nothrow function semi_concrete_eval(x::Int, _::Int)
+        out = $ex
+        out
+    end
+end
+@static isdefined(Core.Compiler, :SemiConcreteResult) && @testset "SemiConcreteResult" begin
+    # constant prop' on all the splits
+    let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
+            semi_concrete_eval(42, x)
+        end
+        callinfo = only(callsites).info
+        @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
+        @test Cthulhu.get_rt(callinfo) == Core.Const(semi_concrete_eval(42, 0))
+        # @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_semiconcrete_eligible
+        io = IOBuffer()
+        print(io, only(callsites))
+        @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
     end
 end
 
@@ -402,7 +429,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 
-    # const prop' callsite
+    # const prop' / semi-concrete callsite
     @static hasfield(Core.Compiler.InvokeCallInfo, :result) && let callsites = find_callsites_by_ftt((Any,); optimize=false) do a
             Base.@invoke invoke_constcall(a::Any, true::Bool)
         end
@@ -411,12 +438,17 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         @test isa(info, Cthulhu.InvokeCallInfo)
         @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
         inner = info.ci
-        @test isa(inner, Cthulhu.ConstPropCallInfo)
         rt = Core.Compiler.Const(Any)
-        @test inner.result.result === rt
+        @test Cthulhu.get_rt(info) === rt
         buf = IOBuffer()
         show(buf, callsite)
-        @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
+        @static if isdefined(Core.Compiler, :SemiConcreteResult)
+            @test isa(inner, Cthulhu.SemiConcreteCallInfo)
+            @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
+        else
+            @test isa(inner, Cthulhu.ConstPropCallInfo)
+            @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
+        end
     end
 end
 

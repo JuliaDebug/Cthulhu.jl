@@ -192,6 +192,13 @@ function CC.inlining_policy(interp::CthulhuInterpreter)
 end
 end # @static if isdefined(CC, :is_stmt_inline)
 
+@static if isdefined(CC, :codeinst_to_ir)
+function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
+    isa(code.inferred, Nothing) && return nothing
+    return CC.copy((code.inferred::OptimizedSource).ir)
+end
+end # @static if isdefined(CC, :codeinst_to_ir)
+
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     effects = EFFECTS_ENABLED ? caller.ipo_effects : nothing
     caller.src = create_cthulhu_source(caller.src, effects)
