@@ -390,7 +390,7 @@ function print_callsite_info(limiter::IO, info::ConstPropCallInfo)
 end
 
 function print_callsite_info(limiter::IO, info::SemiConcreteCallInfo)
-    print(limiter, " = < semi-consteval > ")
+    print(limiter, " = < semi-concrete eval > ")
     show_callinfo(limiter, info)
 end
 
