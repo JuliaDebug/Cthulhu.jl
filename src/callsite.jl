@@ -140,7 +140,6 @@ get_effects(ceci::ConcreteCallInfo) = get_effects(ceci.mi)
 
 struct SemiConcreteCallInfo <: CallInfo
     mi::CallInfo
-    argtypes::ArgTypes
     ir::IRCode
 end
 get_mi(scci::SemiConcreteCallInfo) = get_mi(scci.mi)
@@ -321,7 +320,7 @@ end
 function show_callinfo(limiter, ci::SemiConcreteCallInfo)
     # XXX: The first argument could be const-overriden too
     name = get_mi(ci).def.name
-    tt = ci.argtypes[2:end]
+    tt = ci.ir.argtypes[2:end]
     __show_limited(limiter, name, tt, get_rt(ci), get_effects(ci))
 end
 

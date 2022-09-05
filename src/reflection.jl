@@ -119,7 +119,7 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
-        return SemiConcreteCallInfo(mici, argtypes, result.ir)
+        return SemiConcreteCallInfo(mici, result.ir)
     elseif (@static isdefined(CC, :ConstResult) && true) && isa(result, CC.ConstResult)
         linfo = result.mi
         effects = get_effects(result)
