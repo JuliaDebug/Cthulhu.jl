@@ -911,4 +911,32 @@ end
     end
 end
 
+function effects_dced(x)
+    if isa(x, Int)
+        a = Int[]
+    else
+        a = Any[]
+    end
+    push!(a, x)
+    n = Core.arraysize(a)
+    return a, n
+end
+@testset "per-statement effects" begin
+    interp, mi = Cthulhu.mkinterp(effects_dced, (Int,));
+    src = interp.unopt[mi].src
+    i1 = only(findall(iscall((src, isa)), src.code))
+    i2 = only(findall(iscall((src, getindex)), src.code))
+    i3 = only(findall(iscall((src, push!)), src.code))
+    i4 = only(findall(iscall((src, Core.arraysize)), src.code))
+    @test i1 < i2 < i3 < i4
+    @static if isdefined(Core.Compiler, :merge_effects!) && hasmethod(
+        Core.Compiler.merge_effects!, (Cthulhu.CthulhuInterpreter, Core.Compiler.InferenceState, Cthulhu.Effects))
+        pc2effects = interp.effects[mi]
+        @test haskey(pc2effects, i1)
+        @test haskey(pc2effects, i2)
+        @test haskey(pc2effects, i3)
+        @test haskey(pc2effects, i4)
+    end
+end
+
 end # module test_Cthulhu

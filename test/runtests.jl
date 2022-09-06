@@ -9,8 +9,13 @@ using Test, PerformanceTestTools
         include("test_codeview.jl")
     end
 
-    @testset "test_irshow.jl" begin
-        PerformanceTestTools.@include("test_irshow.jl")
+    # TODO enable this test on nightly
+    @static if VERSION < v"1.9.0-DEV.1295"
+        @testset "test_irshow.jl" begin
+            PerformanceTestTools.@include("test_irshow.jl")
+        end
+    else
+        @info "skipped test_irshow.jl"
     end
 
     @testset "test_terminal.jl" begin
