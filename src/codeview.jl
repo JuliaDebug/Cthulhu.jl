@@ -167,13 +167,22 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         Returns(nothing)
     end
     _postprinter = if isa(src, CodeInfo) && !isnothing(pc2effects)
-        function (io::IO, @nospecialize(typ), used::Bool)
-            __postprinter(io, typ, used)
-            haskey(io, :idx) || return
-            idx = io[:idx]::Int
-            local effects = get(pc2effects, idx, nothing)
-            effects === nothing && return
-            print(io, ' ', effects)
+        @static if hasmethod(IRShow.default_expr_type_printer, (IO,))
+            function (io::IO; idx::Int, @nospecialize(kws...))
+                __postprinter(io; idx, kws...)
+                local effects = get(pc2effects, idx, nothing)
+                effects === nothing && return
+                print(io, ' ', effects)
+            end
+        else
+            function (io::IO, @nospecialize(typ), used::Bool)
+                __postprinter(io, typ, used)
+                haskey(io, :idx) || return
+                idx = io[:idx]::Int
+                local effects = get(pc2effects, idx, nothing)
+                effects === nothing && return
+                print(io, ' ', effects)
+            end
         end
     else
         __postprinter
@@ -181,12 +190,21 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     postprinter = if isa(src, CodeInfo) && !isnothing(pc2remarks)
         sort!(pc2remarks)
         unique!(pc2remarks) # abstract interpretation may have visited a same statement multiple times
-        function (io::IO, @nospecialize(typ), used::Bool)
-            _postprinter(io, typ, used)
-            haskey(io, :idx) || return
-            idx = io[:idx]::Int
-            for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
-                printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
+        @static if hasmethod(IRShow.default_expr_type_printer, (IO,))
+            function (io::IO; idx::Int, @nospecialize(kws...))
+                _postprinter(io; kws...)
+                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
+                    printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
+                end
+            end
+        else
+            function (io::IO, @nospecialize(typ), used::Bool)
+                _postprinter(io, typ, used)
+                haskey(io, :idx) || return
+                idx = io[:idx]::Int
+                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
+                    printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
+                end
             end
         end
     else
@@ -200,7 +218,12 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if iswarn
         print(lambda_io, "Body")
-        InteractiveUtils.warntype_type_printer(lambda_io, rettype, true)
+        @static if hasmethod(InteractiveUtils.warntype_type_printer, (IO,))
+            # https://github.com/JuliaLang/julia/pull/46574
+            InteractiveUtils.warntype_type_printer(lambda_io; type=rettype, used=true)
+        else
+            InteractiveUtils.warntype_type_printer(lambda_io, rettype, true)
+        end
         if get(lambda_io, :with_effects, false)::Bool
             print(lambda_io, ' ', effects)
         end
@@ -224,7 +247,12 @@ function show_variables(io, src, slotnames)
     for i = 1:length(slotnames)
         print(io, "  ", slotnames[i])
         if isa(slottypes, Vector{Any})
-            InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
+            @static if hasmethod(InteractiveUtils.warntype_type_printer, (IO,))
+                # https://github.com/JuliaLang/julia/pull/46574
+                InteractiveUtils.warntype_type_printer(io; type=slottypes[i], used=true)
+            else
+                InteractiveUtils.warntype_type_printer(io, slottypes[i], true)
+            end
         end
         println(io)
     end
