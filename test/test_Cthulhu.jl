@@ -929,7 +929,8 @@ end
     i3 = only(findall(iscall((src, push!)), src.code))
     i4 = only(findall(iscall((src, Core.arraysize)), src.code))
     @test i1 < i2 < i3 < i4
-    @static if hasmethod(Core.Compiler.merge_effects!, (Cthulhu.CthulhuInterpreter, Core.Compiler.InferenceState, Cthulhu.Effects))
+    @static if isdefined(Core.Compiler, :merge_effects!) && hasmethod(
+        Core.Compiler.merge_effects!, (Cthulhu.CthulhuInterpreter, Core.Compiler.InferenceState, Cthulhu.Effects))
         pc2effects = interp.effects[mi]
         @test haskey(pc2effects, i1)
         @test haskey(pc2effects, i2)
