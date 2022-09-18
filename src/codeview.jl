@@ -192,7 +192,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         unique!(pc2remarks) # abstract interpretation may have visited a same statement multiple times
         @static if hasmethod(IRShow.default_expr_type_printer, (IO,))
             function (io::IO; idx::Int, @nospecialize(kws...))
-                _postprinter(io; kws...)
+                _postprinter(io; idx, kws...)
                 for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
                     printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
                 end
