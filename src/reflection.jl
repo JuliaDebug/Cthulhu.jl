@@ -19,7 +19,7 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
 end
 
 function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
-                        stmt_info::Union{Vector, Nothing}, mi::Core.MethodInstance,
+                        stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true)
     sptypes = sptypes_from_meth_instance(mi)
     callsites = Callsite[]
@@ -30,9 +30,9 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
         stmt = stmts[id]
         isa(stmt, Expr) || continue
         callsite = nothing
-        if stmt_info !== nothing && is_call_expr(stmt, optimize)
-            info = stmt_info[id]
-            if info !== nothing
+        if stmt_infos !== nothing && is_call_expr(stmt, optimize)
+            info = stmt_infos[id]
+            if info !== NoCallInfo()
                 rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
@@ -134,7 +134,7 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
     end
 end
 
-function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
+function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInfo), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
     is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
 
@@ -211,7 +211,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info), argtypes
             vmi = FailedCallInfo(sig, Union{})
         end
         return Any[ReturnTypeCallInfo(vmi)]
-    elseif info == false
+    elseif info == NoCallInfo() || info === false
         return []
     else
         @eval Main begin

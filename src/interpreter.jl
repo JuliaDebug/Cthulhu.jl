@@ -1,12 +1,19 @@
-using .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
+import .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
     CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue
+@static if isdefined(CC, :CallInfo)
+    const CCCallInfo = CC.CallInfo
+    const NoCallInfo = CC.NoCallInfo
+else
+    const CCCallInfo = Any
+    const NoCallInfo = Nothing
+end
 
 struct InferredSource
     src::CodeInfo
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CCCallInfo}
     effects::Effects
     rt::Any
-    InferredSource(src::CodeInfo, stmt_info::Vector{Any}, effects, @nospecialize(rt)) =
+    InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt)) =
         new(src, stmt_info, effects, rt)
 end
 
@@ -165,11 +172,9 @@ else
     end
 end
 
-# branch on https://github.com/JuliaLang/julia/pull/41328
-@static if isdefined(CC, :is_stmt_inline)
-function CC.inlining_policy(
-    interp::CthulhuInterpreter, @nospecialize(src), stmt_flag::UInt8,
-    mi::MethodInstance, argtypes::Vector{Any})
+@static if isdefined(CC, :CallInfo)
+function CC.inlining_policy(interp::CthulhuInterpreter,
+    @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
     @assert isa(src, OptimizedSource) || isnothing(src)
     if isa(src, OptimizedSource)
         if CC.is_stmt_inline(stmt_flag) || src.isinlineable
@@ -177,20 +182,35 @@ function CC.inlining_policy(
         end
     else
         # the default inlining policy may try additional effor to find the source in a local cache
-        return @invoke CC.inlining_policy(
-            interp::AbstractInterpreter, nothing, stmt_flag::UInt8,
-            mi::MethodInstance, argtypes::Vector{Any})
+        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
+            nothing, info::CCCallInfo, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
     end
     return nothing
 end
-else # @static if isdefined(CC, :is_stmt_inline)
+# branch on https://github.com/JuliaLang/julia/pull/41328
+elseif isdefined(CC, :is_stmt_inline)
+function CC.inlining_policy(interp::CthulhuInterpreter,
+    @nospecialize(src), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+    @assert isa(src, OptimizedSource) || isnothing(src)
+    if isa(src, OptimizedSource)
+        if CC.is_stmt_inline(stmt_flag) || src.isinlineable
+            return src.ir
+        end
+    else
+        # the default inlining policy may try additional effor to find the source in a local cache
+        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
+            nothing, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+    end
+    return nothing
+end
+else
 function CC.inlining_policy(interp::CthulhuInterpreter)
     function (src)
         @assert isa(src, OptimizedSource)
         return src.isinlineable ? src.ir : nothing
     end
 end
-end # @static if isdefined(CC, :is_stmt_inline)
+end
 
 @static if isdefined(CC, :codeinst_to_ir)
 function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
