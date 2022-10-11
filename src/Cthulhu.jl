@@ -282,9 +282,11 @@ end
     @static if VERSION ≥ v"1.9.0-DEV.409"
         get_effects(result::CC.ConstPropResult) = get_effects(result.result)
         get_effects(result::CC.ConcreteResult) = result.effects
-        get_effects(result::CC.SemiConcreteResult) = result.effects
     else
         get_effects(result::CC.ConstResult) = result.effects
+    end
+    @static if VERSION ≥ v"1.9.0-DEV.1248"
+        get_effects(result::CC.SemiConcreteResult) = result.effects
     end
 else
     get_effects(_...) = nothing
