@@ -233,41 +233,29 @@ function is_call_expr(x::Expr, optimize::Bool)
     return isexpr(ignorelhs(x), :call)
 end
 
-function dce!(ci, mi)
-    if VERSION >= v"1.7.0-DEV.705"
-        argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
-    else
-        argtypes = CC.matching_cache_argtypes(mi, nothing)[1]
-    end
-    ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi),
-                             argtypes)
-    ir = dce!(ir, mi)
-    CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
+function dce!(ir::IRCode)
+    ir = Core.Compiler.compact!(ir, #=allow_cfg_transform=#true)
+    ir = Core.Compiler.compact!(ir, #=allow_cfg_transform=#true)
+    return ir
 end
 
-function dce!(ir::IRCode, mi)
-    compact = CC.IncrementalCompact(ir, true)
-    # Just run through the iterator without any processing
-    CC.foreach(x -> nothing, compact)
-    ir = CC.finish(compact)
-end
-
-function preprocess_ci!(ci::CodeInfo, mi, optimize, config::CthulhuConfig)
+function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::CthulhuConfig)
     if optimize && config.dead_code_elimination
-        # if the optimizer hasn't run, the IR hasn't been converted
-        # to SSA form yet and dce is not legal
-        dce!(ci, mi)
-        dce!(ci, mi)
+        @static if VERSION >= v"1.7.0-DEV.705"
+            argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
+        else
+            argtypes = CC.matching_cache_argtypes(mi, nothing)[1]
+        end
+        ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
+        ir = dce!(ir)
+        ci = CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
     end
     return ci
 end
 
-function preprocess_ci!(ir::IRCode, mi, optimize, config::CthulhuConfig)
+function preprocess_ci!(ir::IRCode, _::MethodInstance, optimize::Bool, config::CthulhuConfig)
     if optimize && config.dead_code_elimination
-        # if the optimizer hasn't run, the IR hasn't been converted
-        # to SSA form yet and dce is not legal
-        ir = dce!(ir, mi)
-        ir = dce!(ir, mi)
+        ir = dce!(ir)
     end
     return ir
 end
