@@ -175,7 +175,6 @@ end
 @static if isdefined(CC, :CallInfo)
 function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
-    @assert isa(src, OptimizedSource) || isnothing(src)
     if isa(src, OptimizedSource)
         if CC.is_stmt_inline(stmt_flag) || src.isinlineable
             return src.ir
