@@ -59,7 +59,7 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
+function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight, view_always,
     custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
@@ -80,7 +80,8 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
         colorize(with_effects, 'e'), "]ffects, [",
         colorize(inline_cost, 'i'), "]nlining costs, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
-        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native, [",
+        colorize(view_always, 'v'), "]iew source in editor always")
     for i = 1:length(custom_toggles)
         ct = custom_toggles[i]
         print(ioctx, ", [", colorize(ct.onoff, Char(ct.key)), ']', ct.description)
@@ -111,6 +112,7 @@ const TOGGLES = Dict(
     UInt32('i') => :inline_cost,
     UInt32('t') => :type_annotations,
     UInt32('s') => :highlighter,
+    UInt32('v') => :view_always,
     UInt32('S') => :source,
     UInt32('A') => :ast,
     UInt32('T') => :typed,

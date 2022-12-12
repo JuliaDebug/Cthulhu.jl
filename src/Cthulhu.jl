@@ -49,7 +49,7 @@ Base.@kwdef mutable struct CthulhuConfig
     with_effects::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
-    always_edit::Bool=false
+    view_always::Bool = true # should be false
 end
 
 """
@@ -76,7 +76,7 @@ end
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
-- `always_edit::Bool` Initial state of "always edit" toggle. Defaults to `false`.
+- `view_always::Bool` Initial state of "always edit" toggle. Defaults to `false`.
 """
 const CONFIG = CthulhuConfig()
 
@@ -419,7 +419,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     with_effects::Bool                       = CONFIG.with_effects,                  # default is false
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool                   = CONFIG.type_annotations,               # default is true
-    always_edit::Bool = CONFIG.always_edit  
+    view_always::Bool                        = CONFIG.view_always  
     )
 
     if isnothing(hide_type_stable)
@@ -491,7 +491,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             @assert length(src.code) == length(infos)
         end
         callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
-        always_edit && edit(whereis(mi.def::Method)...)
+        view_always && edit(whereis(mi.def::Method)...)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
@@ -538,7 +538,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, custom_toggles; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
+        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, view_always, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -644,6 +644,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 @info "Turned off syntax highlighter for Julia, LLVM and native code."
             end
             display_CI = false
+        # elseif toggle === :view_always
+        #     view_always ⊻= true
         elseif toggle === :dump_params
             @info "Dumping inference cache."
             Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(get_inference_cache(interp))))
