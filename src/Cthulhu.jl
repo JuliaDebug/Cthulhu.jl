@@ -49,6 +49,7 @@ Base.@kwdef mutable struct CthulhuConfig
     with_effects::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
+    always_edit::Bool=false
 end
 
 """
@@ -75,6 +76,7 @@ end
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
+- `always_edit::Bool` Initial state of "always edit" toggle. Defaults to `false`.
 """
 const CONFIG = CthulhuConfig()
 
@@ -416,7 +418,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     remarks::Bool                            = CONFIG.remarks&!CONFIG.optimize,      # default is false
     with_effects::Bool                       = CONFIG.with_effects,                  # default is false
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
-    type_annotations::Bool                   = CONFIG.type_annotations               # default is true
+    type_annotations::Bool                   = CONFIG.type_annotations,               # default is true
+    always_edit::Bool = CONFIG.always_edit  
     )
 
     if isnothing(hide_type_stable)
@@ -488,6 +491,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             @assert length(src.code) == length(infos)
         end
         callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
+        always_edit && edit(whereis(mi.def::Method)...)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
