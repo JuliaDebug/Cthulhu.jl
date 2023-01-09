@@ -363,7 +363,7 @@ function lookup_constproped_optimized(interp::CthulhuInterpreter, override::Infe
     else
         # the source might be unavailable at this point,
         # when a result is fully constant-folded etc.
-        return lookup(interp, override.linfo, optimize)
+        return lookup(interp, override.linfo, true)
     end
 end
 
