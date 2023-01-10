@@ -198,7 +198,12 @@ end
             @test occursin("\nBody\e[", lines)
             @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
-            @test occursin("\e[31m%\e[39m2 = call → fmulti(::Any)::Union{Float32, Int64}", lines)
+            warncolor = if Cthulhu.is_expected_union(Union{Float32, Int64})
+                Base.text_colors[Base.warn_color()]
+            else
+                Base.text_colors[Base.error_color()]
+            end
+            @test occursin("$(warncolor)%\e[39m2 = call → fmulti(::Any)::Union{Float32, Int64}", lines)
             write(in, keydict[:enter])
             lines = cread1(out)
             @test occursin("%2 = fmulti(::Int32)::Union{Float32, $Int}", lines)

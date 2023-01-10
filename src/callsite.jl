@@ -403,6 +403,12 @@ function print_callsite_info(limiter::IO, info::OCCallInfo)
     show_callinfo(limiter, info.ci)
 end
 
+@static if VERSION >= v"1.9.0-beta2"
+    is_expected_union = InteractiveUtils.is_expected_union
+else
+    is_expected_union = Base.is_expected_union
+end
+
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
     cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
@@ -411,7 +417,12 @@ function Base.show(io::IO, c::Callsite)
     info = c.info
     rt = get_rt(info)
     if iswarn && is_type_unstable(rt)
-        printstyled(io, '%'; color=:red)
+        color = if rt isa Union && is_expected_union(rt)
+            Base.warn_color()
+        else
+            Base.error_color()
+        end
+        printstyled(io, '%'; color)
     else
         print(io, '%')
     end
