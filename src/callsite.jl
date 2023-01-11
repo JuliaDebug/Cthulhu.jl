@@ -403,11 +403,8 @@ function print_callsite_info(limiter::IO, info::OCCallInfo)
     show_callinfo(limiter, info.ci)
 end
 
-@static if VERSION >= v"1.9.0-beta2"
-    is_expected_union = InteractiveUtils.is_expected_union
-else
-    is_expected_union = Base.is_expected_union
-end
+const is_expected_union = @static isdefined(InteractiveUtils, :is_expected_union) ?
+    InteractiveUtils.is_expected_union : Base.is_expected_union
 
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
