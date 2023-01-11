@@ -80,7 +80,7 @@ const CONFIG = CthulhuConfig()
 
 using Preferences
 include("preferences.jl")
-read_config!(CONFIG)
+__init__() = read_config!(CONFIG)
 
 module DInfo
     @enum DebugInfo none compact source
