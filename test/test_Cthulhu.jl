@@ -179,11 +179,11 @@ end
     @testset "union-split constant-prop'ed callsites" begin
         # constant prop' on all the splits
         let callsites = (@eval Module() begin
-                struct F32
+                mutable struct F32
                     val::Float32
                     _v::Int
                 end
-                struct F64
+                mutable struct F64
                     val::Float64
                     _v::Int
                 end
@@ -223,7 +223,7 @@ end
         end
 
         let callsites = (@eval Module() begin
-                struct F32
+                mutable struct F32
                     val::Float32
                     _v::Int
                 end
@@ -466,7 +466,7 @@ let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 
@@ -488,7 +488,7 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Cthulhu.MICallInfo, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 

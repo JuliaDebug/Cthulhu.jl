@@ -89,7 +89,7 @@ end
             write(in, keydict[:enter])
             lines = cread1(out)
             lines = cread(out)
-            @test occursin("• %1 = promote(::Float32,::Int32)::Tuple{Float32, Float32}", lines)
+            @test occursin(r"• %\d = promote\(::Float32,::Int32\)::Tuple{Float32, Float32}", lines)
             write(in, keydict[:up])
             write(in, keydict[:enter])
             lines = cread1(out)
