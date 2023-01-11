@@ -162,9 +162,11 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
     elseif isa(info, UnionSplitApplyCallInfo)
         return mapreduce(process_recursive, vcat, info.infos; init=[])::Vector{Any}
     elseif isa(info, ApplyCallInfo)
-        # XXX: This could probably use its own info. For now,
-        # we ignore any implicit iterate calls.
-        return process_recursive(info.call)
+        # XXX: This could probably use its own info.
+        r = vcat(process_recursive(info.call), reduce(vcat,
+            Any[mapreduce(meta->process_recursive(meta.info), vcat, arg.each)
+                for arg in info.arginfo if arg !== nothing], init=Any[]))
+        return r
     elseif isa(info, ConstCallInfo)
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
