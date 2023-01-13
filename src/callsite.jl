@@ -234,9 +234,18 @@ end
 function __show_limited(limiter, name, tt, @nospecialize(rt), effects)
     vastring(@nospecialize(T)) = (isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
+    # If effects are explicitly turned on, make sure to print them, even
+    # if there otherwise isn't space for them, since the effects are the
+    # most important piece of information if turned on.
+    with_effects = get(limiter, :with_effects, false)::Bool
+
+    if with_effects
+        limiter.width += textwidth(repr(effects)) + 1
+    end
+
     if !has_space(limiter, name)
         print(limiter, '…')
-        return
+        @goto print_effects
     end
     print(limiter, string(name))
     pstrings = String[vastring(T) for T in tt]
@@ -265,16 +274,14 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects)
     rt_str = string(rt)::String
     if has_space(limiter, textwidth(rt_str)+2)
         print(limiter, "::", rt_str)
-        with_effects = get(limiter, :with_effects, false)::Bool
-        if with_effects
-            # Additionally, if we have space for the effects, print it
-            effects_str = string(effects)::String
-            if has_space(limiter, textwidth(effects_str)+1)
-                print(limiter, " ", effects)
-            end
-        end
     elseif has_space(limiter, 3)
         print(limiter, "::…")
+    end
+
+@label print_effects
+    if with_effects
+        # Print effects unlimited
+        print(limiter.io, " ", effects)
     end
 
     return nothing
