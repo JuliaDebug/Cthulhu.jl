@@ -813,6 +813,7 @@ if ccall(:jl_generating_output, Cint, ()) == 1
     term = REPL.Terminals.TTYTerminal("dumb", input.out, IOBuffer(), IOBuffer())
     write(input.in, 'q')
     descend(gcd, (Int, Int); terminal=term)
+    close(input)
     nothing
 end
 
