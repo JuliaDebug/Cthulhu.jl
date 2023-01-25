@@ -818,9 +818,14 @@ using SnoopPrecompile
         descend(gcd, (Int, Int); terminal=term)
         readuntil(output.out, "↩")
     end
-    close(input.in)
-    close(output.in)
-    close(err.in)
+    @sync begin
+        @async read(output.out, String)
+        @async begin
+            close(input.in)
+            close(output.in)
+            close(err.in)
+        end
+    end
     nothing
 end
 
