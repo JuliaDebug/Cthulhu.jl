@@ -813,20 +813,20 @@ using SnoopPrecompile
 
     input, output, err = linked_pipe(), linked_pipe(), linked_pipe()
     term = REPL.Terminals.TTYTerminal("dumb", input.out, output.in, err.in)
+    # set up reader async support (must be done prior to writing to `output` and `err`)
+    tout = @async write(devnull, output)
+    terr = @async write(devnull, err)
     write(input.in, 'q')
     @precompile_all_calls begin
         descend(gcd, (Int, Int); terminal=term)
-        readuntil(output.out, "↩")
+        # declare we are done with streams
+        close(input.in)
+        close(output.in)
+        close(err.in)
+        # pause to finish precompiling
+        wait(tout)
+        wait(terr)
     end
-    @sync begin
-        @async read(output.out, String)
-        @async begin
-            close(input.in)
-            close(output.in)
-            close(err.in)
-        end
-    end
-    nothing
 end
 
 end
