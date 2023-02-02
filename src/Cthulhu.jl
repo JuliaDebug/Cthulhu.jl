@@ -809,23 +809,13 @@ ascend
 
 using SnoopPrecompile
 @precompile_setup begin
-    linked_pipe() = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
-
-    input, output, err = linked_pipe(), linked_pipe(), linked_pipe()
-    term = REPL.Terminals.TTYTerminal("dumb", input.out, output.in, err.in)
-    # set up reader async support (must be done prior to writing to `output` and `err`)
-    tout = @async write(devnull, output)
-    terr = @async write(devnull, err)
+    input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
+    term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
     write(input.in, 'q')
     @precompile_all_calls begin
         descend(gcd, (Int, Int); terminal=term)
         # declare we are done with streams
         close(input.in)
-        close(output.in)
-        close(err.in)
-        # pause to finish precompiling
-        wait(tout)
-        wait(terr)
     end
 end
 
