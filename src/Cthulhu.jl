@@ -807,14 +807,16 @@ with the option to `descend` into intermediate calls. `kwargs` are passed to [`d
 """
 ascend
 
-if ccall(:jl_generating_output, Cint, ()) == 1
-    input = Pipe()
-    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
-    term = REPL.Terminals.TTYTerminal("dumb", input.out, IOBuffer(), IOBuffer())
+using SnoopPrecompile
+@precompile_setup begin
+    input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
+    term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
     write(input.in, 'q')
-    descend(gcd, (Int, Int); terminal=term)
-    close(input)
-    nothing
+    @precompile_all_calls begin
+        descend(gcd, (Int, Int); terminal=term)
+        # declare we are done with streams
+        close(input.in)
+    end
 end
 
 end
