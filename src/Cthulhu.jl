@@ -49,6 +49,7 @@ Base.@kwdef mutable struct CthulhuConfig
     with_effects::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
+    annotate_source::Bool = false   # incompatible with optimize=true
 end
 
 """
@@ -75,6 +76,7 @@ end
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
+- `annotate_source::Bool` Initial state of "Source". Defaults to `false`.
 """
 const CONFIG = CthulhuConfig()
 
@@ -97,6 +99,7 @@ include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 include("backedges.jl")
+include("sourcetext.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend
@@ -416,7 +419,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     remarks::Bool                            = CONFIG.remarks&!CONFIG.optimize,      # default is false
     with_effects::Bool                       = CONFIG.with_effects,                  # default is false
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
-    type_annotations::Bool                   = CONFIG.type_annotations               # default is true
+    type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
+    annotate_source::Bool                    = CONFIG.annotate_source,               # default is false
     )
 
     if isnothing(hide_type_stable)
@@ -453,7 +457,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         elseif isa(override, SemiConcreteCallInfo)
                 (; src, rt, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize)
         else
-            if optimize
+            if optimize && !annotate_source
                 codeinst = get_optimized_codeinst(interp, curs)
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
@@ -506,7 +510,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
                                       iswarn, hide_type_stable,
                                       pc2remarks, pc2effects,
-                                      inline_cost, type_annotations,
+                                      inline_cost, type_annotations, annotate_source,
                                       interp)
                     end
                 end
@@ -523,7 +527,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
                               iswarn, hide_type_stable,
                               pc2remarks, pc2effects,
-                              inline_cost, type_annotations,
+                              inline_cost, type_annotations, annotate_source,
                               interp)
             end
             view_cmd = cthulhu_typed

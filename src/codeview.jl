@@ -108,13 +108,25 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
-    inline_cost::Bool=false, type_annotations::Bool=true,
+    inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
     lambda_io = IOContext(io, :limit=>true)
+
+    if annotate_source
+        meth = mi.def::Method
+        def = definition(String, meth)
+        if isnothing(def)
+            return @warn "couldn't retrieve source of $meth"
+        end
+        srctxt, lineno = def
+        rootnode = JuliaSyntax.parse(SyntaxNode, srctxt, filename=String(meth.file))
+        show_annotated(io, src, lineno, rt, mi, rootnode; iswarn, hide_type_stable)
+        return nothing
+    end
 
     if isa(src, CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
