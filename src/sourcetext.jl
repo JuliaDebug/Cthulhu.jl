@@ -1,11 +1,16 @@
 using Core: CodeInfo, MethodInstance
-using JuliaSyntax: SyntaxNode, head, children, untokenize, first_byte, last_byte, flags, EMPTY_FLAGS, INFIX_FLAG, @K_str
+using JuliaSyntax: JuliaSyntax, SyntaxNode, head, kind, children, untokenize, first_byte, last_byte,
+                   flags, EMPTY_FLAGS, INFIX_FLAG, @K_str, source_location
 using Cthulhu: is_type_unstable
 
-function show_src_signature(io::IO, lineno::Int32, @nospecialize(rt), mi::MethodInstance, signode::SyntaxNode;
+function show_src_signature(io::IO, lineno::Int, @nospecialize(rt), mi::MethodInstance, signode::SyntaxNode;
                             iswarn::Bool=false, hide_type_stable::Bool=false)
     hdtok = untokenize(head(signode))
-    hdtok == "call" || error("expected call signature, got ", hd)
+    if hdtok == "where"
+       signode = signode.val[1]
+       hdtok = untokenize(head(signode))
+    end
+    hdtok == "call" || error("expected call signature, got ", hdtok)
     args = signode.val[2:end]
     srctxt = signode.source.code
     sigT = Base.unwrap_unionall(mi.specTypes)
@@ -55,25 +60,39 @@ function show_src_signature(io::IO, lineno::Int32, @nospecialize(rt), mi::Method
     return lastidx
 end
 
-function match_call(callname, src, taken)
+function match_call(callname, src, lineno, taken)
+    clidx = findfirst(src.linetable) do lin
+        lin.line == lineno
+    end
+    clidx === nothing && return nothing # `do`-block internal functions & similar; @show src.linetable lineno callname
+    @assert clidx == length(src.linetable) || src.linetable[clidx+1].line > lineno
     for i in eachindex(taken)
+        src.codelocs[i] == clidx || continue
         taken[i] && continue
         stmt = src.code[i]
         isa(stmt, Expr) || continue
+        if stmt.head == :(=)
+            stmt = stmt.args[2]
+            isa(stmt, Expr) || continue
+        end
         stmt.head ∈ (:call, :invoke) || continue
         f = stmt.args[1]
-        @assert isa(f, GlobalRef)
+        (isa(f, Core.SlotNumber) || isa(f, Core.SSAValue)) && (@warn("unhandled slot or SSAValue in $stmt"); continue)
+        isa(f, GlobalRef) || error("expected GlobalRef, got ", f)
         string(f.name) == callname && return i
     end
     return nothing
 end
 
-function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int32, node::SyntaxNode, lastidx::Int;
+function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, node::SyntaxNode, lastidx::Int;
                         iswarn::Bool=false, hide_type_stable::Bool=false)
     hd = head(node)
     srctxt = node.source.code
     _lastidx = last_byte(node)
-    if flags(hd) === EMPTY_FLAGS && hd.kind != K"call"
+    if kind(hd) != K"call"
+        for child in children(node)
+            lastidx = show_src_expr!(io, taken, src, lineno, child, lastidx; iswarn, hide_type_stable)
+        end
         print(io, srctxt[lastidx+1:_lastidx])
         return _lastidx
     end
@@ -83,7 +102,13 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int32, node::Synta
         pre, post = "(", ")"
         callname = node.val[2]
     end
-    idx = match_call(string(callname), src, taken)
+    line, _ = source_location(node.source, node.position)
+    idx = match_call(string(callname), src, line + lineno - 1, taken)
+    if idx === nothing
+        @warn "unmatched call $node"
+        print(io, srctxt[lastidx+1:_lastidx])
+        return _lastidx
+    end
     taken[idx] = true
     T = src.ssavaluetypes[idx]
     type_annotate = !hide_type_stable || is_type_unstable(T)
@@ -99,13 +124,20 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int32, node::Synta
     return _lastidx
 end
 
-function show_annotated(io::IO, src::CodeInfo, lineno::Int32, @nospecialize(rt), mi::MethodInstance, rootnode::SyntaxNode;
+function show_annotated(io::IO, src::CodeInfo, lineno::Int, @nospecialize(rt), mi::MethodInstance, rootnode::SyntaxNode;
                         iswarn::Bool=false, hide_type_stable::Bool=false)
     # Function signature
     hd = untokenize(head(rootnode))
-    hd == "=" || hd == "function" || error("expected function definition, got head ", hd)
+    while hd != "=" && hd != "function"
+        hd == "macrocall" || error("expected function definition, got head ", hd)
+        rootnode = rootnode.val[end]
+        hd = untokenize(head(rootnode))
+    end
     length(rootnode.val) == 2 || error("expected sig, body args, got ", length(rootnode.val), " children")
     signode = rootnode.val[1]
+    # FIXME? use the line number when the method was created. This is needed
+    # for call-matching but might mess things up if we someday print line numbers in the left margin
+    lineno = Int(mi.def.line)
     lastidx = show_src_signature(io, lineno, rt, mi, signode; iswarn, hide_type_stable)
     bodynode = rootnode.val[2]
     taken = fill(false, length(src.code))
