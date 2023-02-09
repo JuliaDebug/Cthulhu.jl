@@ -68,8 +68,8 @@ function stringify(calltok::SyntaxNode)
     h = untokenize(head(calltok))
     h == "." || error("unhandled calltok ", calltok)
     length(calltok.val) == 2 || error("unhandled calltok ", calltok)
-    kind(head(calltok.val[1])) == K"Identifier" || error("unhandled calltok ", calltok)
-    kind(head(calltok.val[2])) == K"quote" || error("unhandled calltok ", calltok)
+    kind(calltok[1]) == K"Identifier" || error("unhandled calltok ", calltok)
+    kind(calltok[2]) == K"quote" || error("unhandled calltok ", calltok)
     return stringify(calltok.val[1]) * "." * stringify(calltok.val[2].val[1])
 end
 
@@ -185,11 +185,11 @@ function show_annotated(io::IO, src::CodeInfo, lineno::Int, @nospecialize(rt), m
                         iswarn::Bool=false, hide_type_stable::Bool=false)
     # FIXME: `lineno` will be useful for handling edited (`Revise`d) files
     # Function signature
-    hd = untokenize(head(rootnode))
-    while hd != "=" && hd != "function"
-        hd == "macrocall" || error("expected function definition, got head ", hd)
+    k = kind(rootnode)
+    while k != K"=" && k != K"function"
+        k == K"macrocall" || error("expected function definition, got kind ", k)
         rootnode = rootnode.val[end]
-        hd = untokenize(head(rootnode))
+        k = kind(rootnode)
     end
     length(rootnode.val) == 2 || error("expected sig, body args, got ", length(rootnode.val), " children")
     signode = rootnode.val[1]
