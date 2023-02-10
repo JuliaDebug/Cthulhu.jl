@@ -89,7 +89,7 @@ function find_coderange(src, lineno)
     return ibegin:iend
 end
 
-function match_call(callname, src, lineno, taken)
+function match_call(callname, src, lineno, mi, taken)
     @assert axes(taken) == axes(src.code)
     clidx = find_codeloc(src, lineno)
     i = searchsortedfirst(src.codelocs, clidx) - 1
@@ -127,13 +127,29 @@ function match_call(callname, src, lineno, taken)
             @warn "unhandled slot or SSAValue in $stmt"
             continue
         end
+        if isexpr(f, :static_parameter)
+            varname = sparam_name(mi, f.args[1]::Int)
+            callname == varname && return i
+            continue
+        end
         isa(f, GlobalRef) || error("expected GlobalRef, got ", f)
         string(f.name) == callname && return i
     end
     return nothing
 end
 
-function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, node::SyntaxNode, lastidx::Int;
+function sparam_name(mi::MethodInstance, i::Int)
+    sig = (mi.def::Method).sig::UnionAll
+    while true
+        i == 1 && break
+        sig = sig.body::UnionAll
+        i -= 1
+    end
+    return sig.var.name
+end
+
+function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, mi::MethodInstance,
+                        node::SyntaxNode, lastidx::Int;
                         iswarn::Bool=false, hide_type_stable::Bool=false)
     hd = head(node)
     srctxt = node.source.code
@@ -145,7 +161,7 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, node::SyntaxN
     # We only handle "call" nodes. For anything else, just print the node (recursing into children)
     if kind(hd) != K"call"
         for child in children(node)
-            lastidx = show_src_expr!(io, taken, src, lineno, child, lastidx; iswarn, hide_type_stable)
+            lastidx = show_src_expr!(io, taken, src, lineno, mi, child, lastidx; iswarn, hide_type_stable)
         end
         print(io, srctxt[lastidx+1:_lastidx])
         return _lastidx
@@ -158,7 +174,7 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, node::SyntaxN
     end
     # Connect the call in the raw source text to an inferred call in `src`
     line, _ = source_location(node.source, node.position)
-    idx = match_call(stringify(calltok), src, line + lineno - 1, taken)
+    idx = match_call(stringify(calltok), src, line + lineno - 1, mi, taken)
     if idx === nothing
         # @warn "unmatched call $node on line $(line+lineno-1)"
         # rng = find_coderange(src, line + lineno - 1)
@@ -171,7 +187,7 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, node::SyntaxN
     type_annotate = !hide_type_stable || is_type_unstable(T)   # should we print a type-annotation?
     type_annotate && print(io, pre)
     for child in children(node)
-        lastidx = show_src_expr!(io, taken, src, lineno, child, lastidx; iswarn, hide_type_stable)
+        lastidx = show_src_expr!(io, taken, src, lineno, mi, child, lastidx; iswarn, hide_type_stable)
     end
     print(io, srctxt[lastidx+1:_lastidx])
     if type_annotate
@@ -198,8 +214,8 @@ function show_annotated(io::IO, src::CodeInfo, lineno::Int, @nospecialize(rt), m
     bodynode = rootnode.val[2]
     taken = fill(false, length(src.code))
     for node in children(bodynode)
-        lastidx = show_src_expr!(io, taken, src, mlineno, node, lastidx; iswarn, hide_type_stable)
+        lastidx = show_src_expr!(io, taken, src, mlineno, mi, node, lastidx; iswarn, hide_type_stable)
     end
     srctxt = rootnode.source.code
-    print(io, srctxt[lastidx+1:end])
+    println(io, srctxt[lastidx+1:end])
 end
