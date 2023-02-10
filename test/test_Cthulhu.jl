@@ -102,32 +102,28 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-# # TODO run this testset in a separate process
-# # julia --check-bounds=auto --code-coverage=none
-# @testset "DCE & boundscheck" begin
-#     M = Module()
-#     @eval M begin
-#         Base.@propagate_inbounds function f(x)
-#             @boundscheck error()
-#         end
-#         g(x) = @inbounds f(x)
-#         h(x) = f(x)
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-#         @test all(src.stmts.inst) do stmt
-#             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
-#         end
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
-#         @test count(!isnothing, src.stmts.inst) == 2
-#         stmt = src.stmts.inst[end]
-#         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
-#     end
-# end
+@testset "DCE & boundscheck" begin
+    M = Module()
+    @eval M begin
+        Base.@propagate_inbounds function f(x)
+            @boundscheck error()
+        end
+        g(x) = @inbounds f(x)
+        h(x) = f(x)
+    end
+
+    let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
+        @test all(src.stmts.inst) do stmt
+            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+        end
+    end
+
+    let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
+        @test count(!isnothing, src.stmts.inst) == 2
+        stmt = src.stmts.inst[end]
+        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+    end
+end
 
 # Something with many methods, but enough to be under the match limit
 g_matches(a::Int, b::Int) = a+b

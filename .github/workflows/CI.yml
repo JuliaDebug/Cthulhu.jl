@@ -40,7 +40,8 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
-          coverage: false
+          check_bounds: 'auto'
+          coverage: 'false'
       # - name: Coverage off  # `empty_func` test doesn't work as intended with `coverage=true`
       #   if: ${{ matrix.os == 'ubuntu-latest' }}
       #   run: julia --project -e 'using Pkg; Pkg.test("Cthulhu"; coverage=false)'
