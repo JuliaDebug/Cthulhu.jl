@@ -56,7 +56,11 @@ function show_src_signature(io::IO, lineno::Int, @nospecialize(rt), mi::MethodIn
         lastidx = nextind(srctxt, lastidx)
     end
     print(io, "::")
-    iswarn && is_type_unstable(rt) ? printstyled(io, rt; color=:red) : print(io, rt)
+    if iswarn
+        printstyled(io, rt; color = is_type_unstable(rt) ? :red : :cyan)
+    else
+        print(io, rt)
+    end
     return lastidx
 end
 
@@ -192,7 +196,11 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, mi::MethodIns
     print(io, srctxt[lastidx+1:_lastidx])
     if type_annotate
         print(io, post, "::")
-        iswarn && is_type_unstable(T) ? printstyled(io, T; color=:red) : print(io, T)
+        if iswarn
+            printstyled(io, T; color = is_type_unstable(T) ? :red : :cyan)
+        else
+            print(io, T)
+        end
     end
     return _lastidx
 end
