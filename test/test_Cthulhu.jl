@@ -16,8 +16,6 @@ end
 
 function empty_func(::Bool) end
 
-isordered(::Type{T}) where {T<:AbstractDict} = false
-
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -31,7 +29,7 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
     # handle pure
     callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
     @test occursin("< pure >", string(callsites[1]))
-    @test occursin(r"< constprop > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
+    @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
     callsites = @eval find_callsites_by_ftt(; optimize=false) do
         length($(QuoteNode(Core.svec(0,1,2))))
     end
@@ -104,32 +102,28 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-# # TODO run this testset in a separate process
-# # julia --check-bounds=auto --code-coverage=none
-# @testset "DCE & boundscheck" begin
-#     M = Module()
-#     @eval M begin
-#         Base.@propagate_inbounds function f(x)
-#             @boundscheck error()
-#         end
-#         g(x) = @inbounds f(x)
-#         h(x) = f(x)
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-#         @test all(src.stmts.inst) do stmt
-#             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
-#         end
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
-#         @test count(!isnothing, src.stmts.inst) == 2
-#         stmt = src.stmts.inst[end]
-#         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
-#     end
-# end
+@testset "DCE & boundscheck" begin
+    M = Module()
+    @eval M begin
+        Base.@propagate_inbounds function f(x)
+            @boundscheck error()
+        end
+        g(x) = @inbounds f(x)
+        h(x) = f(x)
+    end
+
+    let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
+        @test all(src.stmts.inst) do stmt
+            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+        end
+    end
+
+    let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
+        @test count(!isnothing, src.stmts.inst) == 2
+        stmt = src.stmts.inst[end]
+        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+    end
+end
 
 # Something with many methods, but enough to be under the match limit
 g_matches(a::Int, b::Int) = a+b
@@ -219,7 +213,7 @@ end
             callinfos = callinfo.callinfos
             @test length(callinfos) == 2
             @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1        # getindex(::Vector{Any}, ::Const(1))
-            @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo) || isa(ci, Cthulhu.SemiConcreteCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
         end
 
         let callsites = (@eval Module() begin
@@ -374,11 +368,12 @@ end
             oc = Base.Experimental.@opaque Base.@constprop :aggressive b -> sin(b)
             oc(42)
         end
+
         @test length(callsites) == 1
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
         inner = callinfo.ci
-        @test inner isa Cthulhu.ConstPropCallInfo
+        @test inner isa Cthulhu.ConstPropCallInfo || inner isa Cthulhu.SemiConcreteCallInfo
 
         buf = IOBuffer()
         Cthulhu.show_callinfo(buf, callinfo.ci)
@@ -587,17 +582,6 @@ end
     cs = find_callsites_by_ftt(undef, Tuple{Bool})[end]
     @test cs.head === :invoke
     @test cs.info.mi.def == which(string, (String,String))
-end
-
-like_cat(dims, xs::AbstractArray{T}...) where T = like_cat_t(T, xs...; dims=dims)
-like_cat_t(::Type{T}, xs...; dims) where T = T
-
-let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Float32}}})
-    @test length(callsites) == 1
-    cs = callsites[1]
-    @test cs isa Cthulhu.Callsite
-    mi = cs.info.mi
-    @test mi.specTypes.parameters[4] === Type{Float32}
 end
 
 @testset "warntype variables" begin
