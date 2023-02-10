@@ -1,6 +1,6 @@
 using Core: CodeInfo, MethodInstance
 using JuliaSyntax: JuliaSyntax, SyntaxNode, head, kind, children, haschildren, untokenize, first_byte, last_byte,
-                   flags, EMPTY_FLAGS, INFIX_FLAG, @K_str, source_location
+                   flags, EMPTY_FLAGS, PREFIX_OP_FLAG, INFIX_FLAG, @K_str, source_location
 using Cthulhu: is_type_unstable
 
 function show_src_signature(io::IO, lineno::Int, @nospecialize(rt), mi::MethodInstance, signode::SyntaxNode;
@@ -170,11 +170,13 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, mi::MethodIns
         print(io, srctxt[lastidx+1:_lastidx])
         return _lastidx
     end
-    pre = post = ""
+    pre = prepost = post = ""
     calltok = node.val[1]
     if !iszero(flags(hd) & INFIX_FLAG)   # wrap infix calls in parens before type-annotating
         pre, post = "(", ")"
         calltok = node.val[2]
+    elseif !iszero(flags(hd) & PREFIX_OP_FLAG) # insert parens after prefix op and before type-annotating
+        prepost, post = "(", ")"
     end
     # Connect the call in the raw source text to an inferred call in `src`
     line, _ = source_location(node.source, node.position)
@@ -190,8 +192,11 @@ function show_src_expr!(io::IO, taken, src::CodeInfo, lineno::Int, mi::MethodIns
     T = src.ssavaluetypes[idx]
     type_annotate = !hide_type_stable || is_type_unstable(T)   # should we print a type-annotation?
     type_annotate && print(io, pre)
+    childid = 1
     for child in children(node)
+        childid == 2 && type_annotate && print(io, prepost)
         lastidx = show_src_expr!(io, taken, src, lineno, mi, child, lastidx; iswarn, hide_type_stable)
+        childid += 1
     end
     print(io, srctxt[lastidx+1:_lastidx])
     if type_annotate

@@ -124,7 +124,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
         srctxt, lineno = def
         rootnode = JuliaSyntax.parse(SyntaxNode, srctxt, filename=String(meth.file))
-        show_annotated(io, src, Int(lineno), rt, mi, rootnode; iswarn, hide_type_stable)
+        show_annotated(lambda_io, src, Int(lineno), rt, mi, rootnode; iswarn, hide_type_stable)
         return nothing
     end
 
