@@ -28,11 +28,11 @@ line:col│ byte_range  │ tree                                   │ type or c
 
 The right hand column is the new information added by `TypedSyntaxNode`: each is either a type or a list of integers (indicating a failure to map to a unique type in the type-inferred code).
 
-You can also display this in a form closer to the original source code:
+You can also display this in a form closer to the original source code, but with type-annotations:
 
 ```julia
 julia> printstyled(stdout, node; hide_type_stable=false)
-
+f(x::Float64, y::Int64, z::Float32)::Float64 = (x::Float64 + (y::Int64 * z::Float32)::Float32)::Float64
 ```
 
 `hide_type_stable=true` (which is the default) will suppress printing of concrete types, so you need to set it to `false` if you want to see all the types.
@@ -51,6 +51,8 @@ The boldfaced text above is typically printed in color in the REPL:
 
 - red indicates non-concrete types
 - yellow indicates a "small union" of concrete types. These usually pose no issues, unless there are too many combinations of such unions.
+
+Printing with color can be suppressed with the keyword argument `iswarn=false`.
 
 ## Caveats
 
@@ -94,7 +96,7 @@ line:col│ byte_range  │ tree                                   │ type or c
 Note that the two `[call]` expressions involving `first` are marked with "type" `[3]`.
 Since this vector has only one element, it means that only one type-inferred call to `first` could be found.
 However, there were two source statements "competing" to be assigned to it.
-Since it could not uniquely resolve the caller, these are marked in yellow with `::NF`:
+Since it could not uniquely resolve the caller, these are marked in yellow with `::NF` (for "not found"):
 
 ```julia
 julia> printstyled(stdout, TypedSyntaxNode(firstfirst, (Vector{Any},)))
