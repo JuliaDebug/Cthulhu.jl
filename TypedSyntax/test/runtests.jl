@@ -53,4 +53,21 @@ module TSN end
         @test !hastype(child(body, idxsinner...).typ)  # first(x) is hidden in anonymous function and not assignable
         @test child(body, idxsouter...).typ === Vector{Real}
     end
+
+    # `ref` indexing
+    st = """
+    function setlist!(list, i, j)
+        list[i+1][j+1] = list[i][j]
+    end
+    """
+    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN4.jl")
+    TSN.eval(Expr(rootnode))
+    src, _ = getsrc(TSN.setlist!, (Vector{Vector{String}}, Int, Int))
+    tsn = TypedSyntaxNode(rootnode, src)
+    _, body = children(tsn)
+    @test child(body, 1, 2, 1, 1).typ === Vector{Vector{String}}   # `list`
+    @test child(body, 1, 2, 1).typ === Vector{String}              # `list[i]`
+    @test child(body, 1, 2).typ === String                         # `list[i][j]`
+    @test child(body, 1, 1).typ === nothing                        # `setindex!` call
+    @test child(body, 1, 1, 1).typ === Vector{String}              # `list[i+1]`
 end

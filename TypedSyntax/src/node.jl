@@ -47,10 +47,10 @@ function typednode_pass1(node::SyntaxNode, src::CodeInfo, parent, taken, Δline,
         tsd = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, T)
         return TreeNode(parent, nothing, tsd)
     end
-    tsd = if kind(hd) == K"call" && haschildren(node) && mayassign
+    tsd = if (kind(hd) == K"call" || is_getindex(node)) && haschildren(node) && mayassign
         line = source_line(node.source, node.position)
-        calltok = node.children[1 + is_infix_op_call(hd)]
-        codeidxs = match_call(JuliaSyntax.sourcetext(calltok), src, line - Δline, src.parent)  # FIXME: match arg types too
+        calltok = kind(hd) == K"ref" ? "getindex" : JuliaSyntax.sourcetext(node.children[1 + is_infix_op_call(hd)])
+        codeidxs = match_call(calltok, src, line - Δline, src.parent)  # FIXME: match arg types too
         TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, codeidxs)
     else
         TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, nothing)
@@ -101,6 +101,25 @@ function typednode_pass2!(tnode, src, taken)
                 j += 1
             end
             if length(mapsame) == len
+                # Successive `ref`s `a[i][j]` have to be reverse-ordered
+                tidx = 1
+                while tidx <= len
+                    titem = t[tidx]
+                    if kind(titem) == K"ref"
+                        tidxlastref = tidx
+                        while tidxlastref < len && (nextnode = t[tidxlastref + 1]; kind(nextnode) == K"ref")
+                            titem.parent == nextnode || break
+                            tidxlastref += 1
+                            titem = nextnode
+                        end
+                        if tidxlastref != tidx
+                            reverse!(view(t, tidx:tidxlastref))
+                        end
+                        tidx = tidxlastref + 1
+                    else
+                        tidx += 1
+                    end
+                end
                 for (tidx, j) in enumerate(mapsame)
                     t[tidx].typ = src.ssavaluetypes[j]
                 end
@@ -207,4 +226,12 @@ end
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
     return only(srcrts)
+end
+
+function is_getindex(node)
+    kind(node) == K"ref" || return false
+    # is this `getindex` or `setindex!`?
+    pnode = node.parent
+    kind(pnode) == K"=" || return true
+    return child(pnode, 1) !== node
 end
