@@ -19,13 +19,13 @@ function TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...)
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     src, rt = getsrc(f, t)
     node = TypedSyntaxNode(rootnode, src, lineno - m.line)
-    node.data.val = rt
+    node.val = rt
     return node
 end
 
 function TypedSyntaxNode(node::SyntaxNode, src::CodeInfo, Δline=0)
     taken = [TypedSyntaxNode[] for _ = 1:length(src.code)]
-    tnode = typednode_pass1(node, src, nothing, taken, Δline)   # pass1 finds all possible matches
+    tnode = typednode_pass1(node, src, nothing, taken, Δline, true)   # pass1 finds all possible matches
     tnode = typednode_pass2!(tnode, src, taken)
     tnode = typednode_pass3!(tnode)
     return tnode
@@ -37,16 +37,17 @@ end
 # we can line them up one-to-one.
 # A case where that *won't* happen is a line like `ntuple(i -> a[i], b[j])`, where the anonymous
 # function will not be in `src` and so there will be two `getindex` calls in the sourcetext but only one in `src`.
-function typednode_pass1(node::SyntaxNode, src::CodeInfo, parent, taken, Δline)
+function typednode_pass1(node::SyntaxNode, src::CodeInfo, parent, taken, Δline, mayassign::Bool)
     hd = head(node)
     sd = node.data
     if kind(hd) == K"Identifier"
         # typed value
         slotidx = findfirst(==(node.val::Symbol), src.slotnames)
-        tsd = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, slotidx === nothing ? NotFound : src.slottypes[slotidx])
+        T = slotidx === nothing ? NotFound : src.slottypes[slotidx]
+        tsd = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, T)
         return TreeNode(parent, nothing, tsd)
     end
-    tsd = if kind(hd) == K"call" && haschildren(node)
+    tsd = if kind(hd) == K"call" && haschildren(node) && mayassign
         line = source_line(node.source, node.position)
         calltok = node.children[1 + is_infix_op_call(hd)]
         codeidxs = match_call(JuliaSyntax.sourcetext(calltok), src, line - Δline, src.parent)  # FIXME: match arg types too
@@ -56,9 +57,18 @@ function typednode_pass1(node::SyntaxNode, src::CodeInfo, parent, taken, Δline)
     end
     newparent = TreeNode(parent, #= replaceme after constructing children =# nothing, tsd)
     if haschildren(node)
+        # Avoid assigning in code that is hidden in anonymous functions
+        if kind(hd) == K"->"
+            mayassign = false
+        end
+        mayassign2 = mayassign
+        if kind(hd) == K"do"  # in a do block we can
+            mayassign2 = false
+        end
         newchildren = TypedSyntaxNode[]
         for child in children(node)
-            push!(newchildren, typednode_pass1(child, src, newparent, taken, Δline))
+            push!(newchildren, typednode_pass1(child, src, newparent, taken, Δline, mayassign))
+            mayassign = mayassign2
         end
         newparent.children = newchildren
     end
@@ -77,7 +87,7 @@ function typednode_pass2!(tnode, src, taken)
         t = taken[i]
         len = length(t)
         if len == 1
-            only(t).data.typ = src.ssavaluetypes[i]
+            only(t).typ = src.ssavaluetypes[i]
             empty!(t)
         elseif len > 1
             # Multiple calls map to this one. If the number mapping is equal to the number of duplicates,
@@ -109,7 +119,7 @@ function typednode_pass3!(tnode)
         typednode_pass3!(child)
     end
     if kind(tnode) == K"return"
-        tnode.data.typ = only(children(tnode)).typ
+        tnode.typ = only(children(tnode)).typ
     end
     return tnode
 end
