@@ -37,19 +37,20 @@ module TSN end
     @test children(body)[2].typ === Int32
 
     # Mapping ambiguity
-    for (st, idxs) in (
-        ("firstfirst(c) = map(x -> first(x), first(c))", (2, 2)),
+    for (st, idxsinner, idxsouter) in (
+        ("firstfirst(c) = map(x -> first(x), first(c))", (2, 2), (3,)),
         ("""
         firstfirst(c) = map(first(c)) do x
             first(x)
         end
-        """, (3, 1))
+        """, (3, 1), (1, 2))
         )
         rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN3.jl")
         TSN.eval(Expr(rootnode))
-        src, _ = getsrc(TSN.firstfirst, (Vector{Any},))
+        src, _ = getsrc(TSN.firstfirst, (Vector{Vector{Real}},))
         tsn = TypedSyntaxNode(rootnode, src)
         sig, body = children(tsn)
-        @test !hastype(child(body, idxs...).typ)  # first(x) is hidden in anonymous function and not assignable
+        @test !hastype(child(body, idxsinner...).typ)  # first(x) is hidden in anonymous function and not assignable
+        @test child(body, idxsouter...).typ === Vector{Real}
     end
 end
