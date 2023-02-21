@@ -1,4 +1,4 @@
-using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child
+using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
 using TypedSyntax: TypedSyntax, TypedSyntaxNode, NotFound, getsrc
 using Test
 
@@ -55,19 +55,36 @@ module TSN end
     end
 
     # `ref` indexing
-    st = """
-    function setlist!(list, i, j)
-        list[i+1][j+1] = list[i][j]
+    for st in (
+        """
+        function setlist!(listset, listget, i, j)
+            listset[i+1][j+1] = listget[i][j]
+        end
+        """,
+        """
+        function setlist!(listset, listget, i, j)
+            listset[i+1][j+1] = listget[i][j]
+            return "distraction"
+        end
+        """,
+        )
+        rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN4.jl")
+        TSN.eval(Expr(rootnode))
+        src, rt = getsrc(TSN.setlist!, (Vector{Vector{Float32}}, Vector{Vector{UInt8}}, Int, Int))
+        tsn = TypedSyntaxNode(rootnode, src)
+        sig, body = children(tsn)
+        nodelist = child(body, 1, 2, 1, 1)                             # `listget`
+        @test sourcetext(nodelist) == "listget" && nodelist.typ === Vector{Vector{UInt8}}
+        @test nodelist.parent.typ === Vector{UInt8}                    # `listget[i]`
+        @test sourcetext(child(nodelist.parent, 2)) == "i"
+        @test nodelist.parent.parent.typ === UInt8                     # `listget[i][j]`
+
+        nodelist = child(body, 1, 1, 1, 1)                             # `listset`
+        @test sourcetext(nodelist) == "listset" && nodelist.typ === Vector{Vector{Float32}}
+        @test sourcetext(child(nodelist.parent, 2)) == "i+1"
+        @test nodelist.parent.typ === Vector{Float32}                  # `listset[i+1]`
+        @test nodelist.parent.parent.typ === nothing                   # `listset[i+1][j+1]`
+        @test kind(nodelist.parent.parent.parent) == K"="              # the `setindex!` call
+        @test sig.typ === rt
     end
-    """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN4.jl")
-    TSN.eval(Expr(rootnode))
-    src, _ = getsrc(TSN.setlist!, (Vector{Vector{String}}, Int, Int))
-    tsn = TypedSyntaxNode(rootnode, src)
-    _, body = children(tsn)
-    @test child(body, 1, 2, 1, 1).typ === Vector{Vector{String}}   # `list`
-    @test child(body, 1, 2, 1).typ === Vector{String}              # `list[i]`
-    @test child(body, 1, 2).typ === String                         # `list[i][j]`
-    @test child(body, 1, 1).typ === nothing                        # `setindex!` call
-    @test child(body, 1, 1, 1).typ === Vector{String}              # `list[i+1]`
 end
