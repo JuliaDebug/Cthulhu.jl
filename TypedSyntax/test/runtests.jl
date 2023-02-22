@@ -3,6 +3,7 @@ using TypedSyntax: TypedSyntax, TypedSyntaxNode, NotFound, getsrc
 using Test
 
 hastype(@nospecialize(T)) = isa(T, Type) && T !== NotFound
+has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 
 module TSN end
 
@@ -35,8 +36,23 @@ module TSN end
     sig, body = children(tsn)
     @test length(children(sig)) == 4
     @test children(body)[2].typ === Int32
+    # Check that `x` gets an assigned type
+    nodex = child(body, 1, 1)
+    @test nodex.typ === Int16
 
-    # Mapping ambiguity
+    # Target ambiguity
+    st = "math(x) = x + sin(x + π / 4)"
+    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN2.jl")
+    TSN.eval(Expr(rootnode))
+    src, _ = getsrc(TSN.math, (Int,))
+    tsn = TypedSyntaxNode(rootnode, src)
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1), :x, Int)
+    @test has_name_typ(child(body, 3, 2, 1), :x, Int)
+    pi4 = child(body, 3, 2, 3)
+    @test kind(pi4) == K"call" && pi4.typ == Core.Const(π / 4)
+
+    # Inner functions
     for (st, idxsinner, idxsouter) in (
         ("firstfirst(c) = map(x -> first(x), first(c))", (2, 2), (3,)),
         ("""
@@ -75,6 +91,27 @@ module TSN end
     @test sourcetext(nodelist) == "listset" && nodelist.typ === Vector{Vector{Float32}}
     @test sourcetext(child(nodelist.parent, 2)) == "i+1"
     @test nodelist.parent.typ === Vector{Float32}                  # `listset[i+1]`
-    # @test nodelist.parent.parent.typ === nothing                   # `listset[i+1][j+1]`
     @test kind(nodelist.parent.parent.parent) == K"="              # the `setindex!` call
+
+    # tuple-destructuring
+    st = """
+        function callfindmin(list)
+            val, idx = findmin(list)
+            x, y = idx, val
+            return y
+        end
+    """
+    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN5.jl")
+    TSN.eval(Expr(rootnode))
+    src, rt = getsrc(TSN.callfindmin, (Vector{Float64},))
+    tsn = TypedSyntaxNode(rootnode, src)
+    sig, body = children(tsn)
+    t = child(body, 1, 1)
+    @test kind(t) == K"tuple"
+    @test has_name_typ(child(t, 1), :val, Float64)
+    @test has_name_typ(child(t, 2), :idx, Int)
+    t = child(body, 2, 1)
+    @test kind(t) == K"tuple"
+    @test has_name_typ(child(t, 1), :x, Int)
+    @test has_name_typ(child(t, 2), :y, Float64)
 end
