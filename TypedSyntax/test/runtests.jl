@@ -52,6 +52,16 @@ module TSN end
     pi4 = child(body, 3, 2, 3)
     @test kind(pi4) == K"call" && pi4.typ == Core.Const(π / 4)
 
+    # Target duplication
+    st = "math2(x) = sin(x) + sin(x)"
+    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN2.jl")
+    TSN.eval(Expr(rootnode))
+    src, _ = getsrc(TSN.math2, (Int,))
+    tsn = TypedSyntaxNode(rootnode, src)
+    sig, body = children(tsn)
+    @test body.typ === Float64
+    @test_broken child(body, 1).typ === Float64
+
     # Inner functions
     for (st, idxsinner, idxsouter) in (
         ("firstfirst(c) = map(x -> first(x), first(c))", (2, 2), (3,)),
@@ -114,4 +124,6 @@ module TSN end
     @test kind(t) == K"tuple"
     @test has_name_typ(child(t, 1), :x, Int)
     @test has_name_typ(child(t, 2), :y, Float64)
+
+
 end
