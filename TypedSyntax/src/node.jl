@@ -7,6 +7,7 @@ mutable struct TypedSyntaxData <: AbstractSyntaxData
     val::Any
     typ::Any    # can either be a Type, `nothing`, or a `idxs::Vector{Int}` of *potential* call matches `src.code[idxs]`
 end
+TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, typ)
 
 const TypedSyntaxNode = TreeNode{TypedSyntaxData}
 
@@ -23,124 +24,56 @@ function TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...)
     return node
 end
 
-function TypedSyntaxNode(node::SyntaxNode, src::CodeInfo, Δline=0)
-    taken = [TypedSyntaxNode[] for _ = 1:length(src.code)]
-    tnode = typednode_pass1(node, src, nothing, taken, Δline, true)   # pass1 finds all possible matches
-    tnode = typednode_pass2!(tnode, src, taken)
-    tnode = typednode_pass3!(tnode)
-    return tnode
-end
-
-# During pass1, we list all possible matches for each call.
-# Then during pass2, we use the fact that inference preserves order to say that if there are the
-# same number of call sites in the sourcetext as we found in the typed code,
-# we can line them up one-to-one.
-# A case where that *won't* happen is a line like `ntuple(i -> a[i], b[j])`, where the anonymous
-# function will not be in `src` and so there will be two `getindex` calls in the sourcetext but only one in `src`.
-function typednode_pass1(node::SyntaxNode, src::CodeInfo, parent, taken, Δline, mayassign::Bool)
-    hd = head(node)
-    sd = node.data
-    if kind(hd) == K"Identifier"
-        # typed value
-        slotidx = findfirst(==(node.val::Symbol), src.slotnames)
-        T = slotidx === nothing ? NotFound : src.slottypes[slotidx]
-        tsd = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, T)
-        return TreeNode(parent, nothing, tsd)
-    end
-    tsd = if (kind(hd) == K"call" || is_getindex(node)) && haschildren(node) && mayassign
-        line = source_line(node.source, node.position)
-        calltok = kind(hd) == K"ref" ? "getindex" : JuliaSyntax.sourcetext(node.children[1 + is_infix_op_call(hd)])
-        codeidxs = match_call(calltok, src, line - Δline, src.parent)  # FIXME: match arg types too
-        TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, codeidxs)
-    else
-        TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, nothing)
-    end
-    newparent = TreeNode(parent, #= replaceme after constructing children =# nothing, tsd)
-    if haschildren(node)
-        # Avoid assigning in code that is hidden in anonymous functions
-        if kind(hd) == K"->"
-            mayassign = false
-        end
-        mayassign2 = mayassign
-        if kind(hd) == K"do"  # in a do block we can
-            mayassign2 = false
-        end
-        newchildren = TypedSyntaxNode[]
-        for child in children(node)
-            push!(newchildren, typednode_pass1(child, src, newparent, taken, Δline, mayassign))
-            mayassign = mayassign2
-        end
-        newparent.children = newchildren
-    end
-    if isa(tsd.typ, Vector{Int})
-        foreach(tsd.typ) do i
-            push!(taken[i], newparent)
-        end
-    end
-    return newparent
-end
-
-function typednode_pass2!(tnode, src, taken)
-    # Resolve all the calls that can be unambiguously resolved
-    n = length(src.code)
-    for i = 1:n
-        t = taken[i]
-        len = length(t)
-        if len == 1
-            only(t).typ = src.ssavaluetypes[i]
-            empty!(t)
-        elseif len > 1
-            # Multiple calls map to this one. If the number mapping is equal to the number of duplicates,
-            # we can unambiguously assign them by order
-            mapsame, lineidx = [i], src.codelocs[i]
-            j = i + 1
-            while j <= n && src.codelocs[j] == lineidx
-                if taken[j] == t
-                    push!(mapsame, j)
+function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline=0)
+    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+    node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
+    trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data, src, gettyp(node2ssa, rootnode, src)))
+    addchildren!(trootnode, rootnode, src, node2ssa, symtyps)
+    # Add argtyps to signature
+    if is_functiondef(trootnode)
+        sig, body = children(trootnode)
+        @assert kind(sig) == K"call"
+        i = 1
+        for arg in Iterators.drop(children(sig), 1)
+            @assert kind(arg) == K"Identifier"
+            argname = arg.val
+            while i <= length(src.slotnames)
+                if src.slotnames[i] == argname
+                    arg.typ = src.slottypes[i]
+                    i += 1
+                    break
                 end
-                j += 1
-            end
-            if length(mapsame) == len
-                # Successive `ref`s `a[i][j]` have to be reverse-ordered
-                tidx = 1
-                while tidx <= len
-                    titem = t[tidx]
-                    if kind(titem) == K"ref"
-                        tidxlastref = tidx
-                        while tidxlastref < len && (nextnode = t[tidxlastref + 1]; kind(nextnode) == K"ref")
-                            titem.parent == nextnode || break
-                            tidxlastref += 1
-                            titem = nextnode
-                        end
-                        if tidxlastref != tidx
-                            reverse!(view(t, tidx:tidxlastref))
-                        end
-                        tidx = tidxlastref + 1
-                    else
-                        tidx += 1
-                    end
-                end
-                for (tidx, j) in enumerate(mapsame)
-                    t[tidx].typ = src.ssavaluetypes[j]
-                end
-                for j in mapsame
-                    empty!(taken[j])
-                end
+                i += 1
             end
         end
     end
-    return tnode  # while this is the only direct use of `tnode`, we accessed it via `taken` so this is clearer
+    return trootnode
 end
 
-# Propagate typ upward in tree
-function typednode_pass3!(tnode)
-    for child in children(tnode)
-        typednode_pass3!(child)
+function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps)
+    if haschildren(parent) && tparent.children === nothing
+        tparent.children = TypedSyntaxNode[]
     end
-    if kind(tnode) == K"return"
-        tnode.typ = only(children(tnode)).typ
+    for child in children(parent)
+        tnode = TreeNode(tparent, nothing, TypedSyntaxData(child.data, src, gettyp(node2ssa, child, src)))
+        if tnode.typ === nothing && kind(child) == K"Identifier"
+            tnode.typ = get(symtyps, child, nothing)
+        end
+        push!(tparent, tnode)
+        addchildren!(tnode, child, src, node2ssa, symtyps)
     end
-    return tnode
+    if kind(tparent) == K"return" && haschildren(tparent)
+        tparent.typ = only(children(tparent)).typ
+    end
+    return tparent
+end
+
+function gettyp(node2ssa, node, src)
+    typ = get(node2ssa, node, nothing)
+    if typ !== nothing
+        typ = src.ssavaluetypes[typ]
+    end
+    return typ
 end
 
 function find_codeloc(src, lineno)
@@ -157,60 +90,6 @@ function find_coderange(src, lineno)
     ibegin += src.codelocs[ibegin] > lineno
     iend = searchsortedlast(src.codelocs, clidx)
     return ibegin:iend
-end
-
-function match_call(callname, src, lineno, mi)
-    clidx = find_codeloc(src, lineno)
-    codeidxs = Int[]
-    i, n = searchsortedfirst(src.codelocs, clidx) - 1, lastindex(src.codelocs)
-    while i < n
-        i += 1
-        src.codelocs[i] == clidx || break
-        stmt = src.code[i]
-        isa(stmt, Expr) || continue
-        if stmt.head == :(=)
-            stmt = stmt.args[2]
-            isa(stmt, Expr) || continue
-        end
-        stmt.head ∈ (:call, :invoke) || continue
-        f = stmt.args[1]
-        if isa(f, GlobalRef) && f.mod === Core && f.name == :_apply_iterate   # handle vararg calls
-            # Sanity check
-            fiter = stmt.args[2]
-            @assert isa(fiter, GlobalRef) && fiter.name == :iterate
-            f = stmt.args[3]   # get the actual call
-        end
-        if isa(f, Core.SlotNumber)
-            fname = src.slotnames[f.id]
-            if string(fname) == callname
-                push!(codeidxs, i)
-                continue
-            end
-        end
-        if isa(f, Core.SSAValue)
-            fname = src.ssavaluetypes[f.id]
-            if isa(fname, Core.Const)
-                fname = fname.val
-            end
-            fname = string(fname)
-            if (endswith(fname, callname) || endswith(callname, fname))
-                push!(codeidxs, i)
-                continue
-            end
-        end
-        if isa(f, Core.SlotNumber) || isa(f, Core.SSAValue)
-            @warn "unhandled slot or SSAValue in $stmt"
-            continue
-        end
-        if isexpr(f, :static_parameter)
-            varname = sparam_name(mi, f.args[1]::Int)
-            callname == varname && push!(codeidxs, i)
-            continue
-        end
-        isa(f, GlobalRef) || error("expected GlobalRef, got ", f)
-        string(f.name) == callname && push!(codeidxs, i)
-    end
-    return codeidxs
 end
 
 function sparam_name(mi::MethodInstance, i::Int)
@@ -256,14 +135,6 @@ function getsrc(@nospecialize(f), @nospecialize(t))
     return only(srcrts)
 end
 
-function is_getindex(node)
-    kind(node) == K"ref" || return false
-    # is this `getindex` or `setindex!`?
-    pnode = node.parent
-    kind(pnode) == K"=" || return true
-    return child(pnode, 1) !== node
-end
-
 function is_functiondef(node)
     kind(node) == K"function" && return true
     kind(node) == K"=" && kind(child(node, 1)) == K"call" && return true
@@ -303,14 +174,15 @@ function collect_symbol_nodes(rootnode, slotnames)
     return collect_symbol_nodes!(symlocs, child(rootnode, 2))
 end
 
-function map_ssas_to_source(src, rootnode)
-    symlocs = collect_symbol_nodes(rootnode, src.slotnames)
-    mapping = [typeof(rootnode)[] for _ in eachindex(src.code)]
+function map_ssas_to_source(src, rootnode, Δline)
+    symlocs = collect_symbol_nodes(rootnode, src.slotnames)      # all uses of slotnames
+    mapping = [typeof(rootnode)[] for _ in eachindex(src.code)]  # attributions of stmts to sourcetext nodes
+    symtyps = IdDict{typeof(rootnode),Any}()
 
     function append_targets_for_line!(mapped, i, targets)
         j = src.codelocs[i]
-        linerange = src.linetable[j].line : (
-                    j < length(src.linetable) ? src.linetable[j+1].line - 1 : typemax(Int))
+        linerange = src.linetable[j].line + Δline : (
+                    j < length(src.linetable) ? src.linetable[j+1].line - 1  + Δline : typemax(Int))
         for t in targets
             source_line(t) ∈ linerange && push!(mapped, t)
         end
@@ -363,13 +235,54 @@ function map_ssas_to_source(src, rootnode)
                         push!(mapped, target)
                     end
                 end
+                !isempty(stmtmapping) && isempty(mapped) && @warn "no name match for $stmt"
             else
-                @warn "didn't map as call: $stmt"
+                stmt.head != :new && @warn "didn't map as call: $stmt"
                 # Not sure what to do here
                 append!(mapped, stmtmapping)
             end
             sort!(mapped; by=t->t.position)   # since they went into a set
+            if length(mapped) == 1 && isa(stmt, Expr)
+                node = only(mapped)
+                # set up symtyps for this call
+                if stmt.head == :(=)
+                    arg = stmt.args[1]
+                    if isa(arg, SlotNumber)
+                        sym = src.slotnames[arg.id]
+                        for t in symlocs[sym]
+                            if t.parent == node
+                                symtyps[t] = src.ssavaluetypes[i]
+                                break
+                            end
+                        end
+                    end
+                    stmt = stmt.args[2]
+                end
+                if isa(stmt, Expr)
+                    for arg in stmt.args
+                        j = 0
+                        while isa(arg, SSAValue)
+                            j = arg.id
+                            arg = src.ssavaluetypes[j]
+                        end
+                        if isa(arg, SlotNumber)
+                            sym = src.slotnames[arg.id]
+                            for t in symlocs[sym]
+                                if t.parent == node
+                                    symtyps[t] = if j > 0
+                                        src.ssavaluetypes[j]
+                                    else
+                                        j = findfirst(==(sym), src.slotnames)
+                                        src.slottypes[j]
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
-    return mapping
+    return mapping, symtyps
 end
