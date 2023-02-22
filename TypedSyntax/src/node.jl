@@ -38,6 +38,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline=0)
         @assert kind(sig) == K"call"
         i = 1
         for arg in Iterators.drop(children(sig), 1)
+            kind(arg) == K"parameters" && break   # kw args
             @assert kind(arg) == K"Identifier"
             argname = arg.val
             while i <= length(src.slotnames)

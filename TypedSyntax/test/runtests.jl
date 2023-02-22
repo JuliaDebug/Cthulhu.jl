@@ -125,5 +125,30 @@ module TSN end
     @test has_name_typ(child(t, 1), :x, Int)
     @test has_name_typ(child(t, 2), :y, Float64)
 
-
+    # kwfuncs
+    st = """
+    function avoidzero(x; avoid_zero=true)
+        fx = float(x)
+        return iszero(x) ? oftype(fx, NaN) : fx
+    end
+    """
+    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN6.jl")
+    TSN.eval(Expr(rootnode))
+    src, rt = getsrc(TSN.avoidzero, (Int,))
+    # src looks like this:
+    #   %1 = Main.TSN.:(var"#avoidzero#6")(true, #self#, x)::Float64
+    #        return %1
+    # Consequently there is nothing to match, but at least we shouldn't error
+    tsn = TypedSyntaxNode(rootnode, src)
+    @test isa(tsn, TypedSyntaxNode)
+    @test rt === Float64
+    # Try the kwbodyfunc
+    m = which(TSN.avoidzero, (Int,))
+    src, rt = getsrc(Base.bodyfunction(m), (Bool, typeof(TSN.avoidzero), Int,))
+    tsn = TypedSyntaxNode(rootnode, src)
+    sig, body = children(tsn)
+    isz = child(body, 2, 1, 1)
+    @test kind(isz) == K"call" && child(isz, 1).val == :iszero
+    @test isz.typ === Bool
+    @test child(body, 2, 1, 2).typ == Core.Const(NaN)
 end
