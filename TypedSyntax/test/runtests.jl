@@ -17,6 +17,14 @@ for f in (:mysin,)
     end
 end
 
+function summer(list)
+    s = 0                    # deliberately ::Int to test type-changes
+    for x in list
+        s += x
+    end
+    return s
+end
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -170,4 +178,15 @@ end
     sig, body = children(child(tsn, 2))
     @test has_name_typ(child(sig, 2, 1), :x, Int)
     @test has_name_typ(child(body, 1, 1), :xf, Float64)
+
+    # for loops
+    tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :list, Vector{Float64})
+    @test_broken has_name_typ(child(body, 1, 1), :s, Int)
+    @test_broken has_name_typ(child(body, 2, 1, 1), :x, Float64)
+    node = child(body, 2, 2, 1)
+    @test kind(node) == K"+="
+    @test has_name_typ(child(node, 1), :s, Union{Int,Float64})
+    @test has_name_typ(child(node, 2), :x, Float64)
 end

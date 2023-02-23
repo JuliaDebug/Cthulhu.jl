@@ -239,7 +239,7 @@ function map_ssas_to_source(src, rootnode, Δline)
                     empty!(argmapping)
                     continue
                 end
-                @assert isa(stmt, Expr)
+                isa(stmt, Expr) || continue
                 # The right hand side was an expression. Fall through to the generic `call` analysis.
             end
             if stmt.head == :call && is_indexed_iterate(stmt.args[1])
@@ -289,10 +289,10 @@ function map_ssas_to_source(src, rootnode, Δline)
                     sym = src.slotnames[arg.id]
                     if !isempty(string(sym))
                         lhsnode = node
-                        if kind(lhsnode) != K"="
+                        if kind(lhsnode) ∉ KSet"= += -= *= /="
                             lhsnode = lhsnode.parent
                         end
-                        @assert kind(lhsnode) == K"="
+                        @assert kind(lhsnode) ∈ KSet"= += -= *= /="
                         lhsnode = child(lhsnode, 1)
                         if kind(lhsnode) == K"tuple"   # tuple destructuring
                             found = false
