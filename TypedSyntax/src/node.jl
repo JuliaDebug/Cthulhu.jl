@@ -20,13 +20,14 @@ function TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...)
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     src, rt = getsrc(f, t)
     node = TypedSyntaxNode(rootnode, src, lineno - m.line)
-    node.val = rt
+    node.typ = rt
     return node
 end
 
-function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline=0)
-    # Identify candidates mappings for each statement in `src` and for the type of each symbol at all stages of the program
-    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
+    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
+
+function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
@@ -36,12 +37,34 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline=0)
     fnode = get_function_def(trootnode)
     if is_function_def(fnode)
         sig, body = children(fnode)
+        if kind(sig) == K"where"
+            sig = child(sig, 1)
+        end
         @assert kind(sig) == K"call"
         i = 1
         for arg in Iterators.drop(children(sig), 1)
             kind(arg) == K"parameters" && break   # kw args
             if kind(arg) == K"::"
-                arg = child(arg, 1)
+                nchildren = length(children(arg))
+                if nchildren == 1
+                    # unnamed argument
+                    found = false
+                    while i <= length(src.slotnames)
+                        if src.slotnames[i] == Symbol("#unused#")
+                            arg.typ = src.slottypes[i]
+                            i += 1
+                            found = true
+                            break
+                        end
+                        i += 1
+                    end
+                    @assert found
+                    continue
+                elseif nchildren == 2
+                    arg = child(arg, 1)  # extract the name
+                else
+                    error("unexpected number of children: ", children(arg))
+                end
             end
             @assert kind(arg) == K"Identifier"
             argname = arg.val
@@ -145,7 +168,7 @@ end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
-    kind(node) == K"=" && kind(child(node, 1)) == K"call" && return true
+    kind(node) == K"=" && kind(child(node, 1)) ∈ KSet"call where" && return true
     return false
 end
 

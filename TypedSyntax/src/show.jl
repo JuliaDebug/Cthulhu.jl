@@ -43,7 +43,7 @@ end
 function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)
     _lastidx = last_byte(node)
-    if kind(node) == K"Identifier"
+    if kind(node) == K"Identifier" || (kind(node) == K"::" && is_prefix_op_call(node))
         print(io, node.source[lastidx+1:_lastidx])
         maybe_show_annotation(io, node.typ; iswarn, hide_type_stable)
         return _lastidx
@@ -79,6 +79,9 @@ function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool
 end
 
 function maybe_show_annotation(io, @nospecialize(T); iswarn, hide_type_stable)
+    if isa(T, Core.Const)
+        T = typeof(T.val)
+    end
     if isa(T, Type) && (!hide_type_stable || is_type_unstable(T))   # should we print a type-annotation?
         show_annotation(io, T; iswarn)
     end
@@ -97,7 +100,7 @@ function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
     end
     if iswarn
         color = !is_type_unstable(T) ? :cyan :
-                 is_small_union(T) ? :yellow : :red
+                 is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T; color)
     else
         print(io, "::", T)
@@ -115,7 +118,11 @@ function catchup(io::IO, node::TypedSyntaxNode, lastidx::Int)
 end
 
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
-function is_small_union(@nospecialize(T))
+function is_small_union_or_tunion(@nospecialize(T))
+    Base.isvarargtype(T) && return false
+    if T <: Tuple   # is it Tuple{U}
+        return all(is_small_union_or_tunion, Base.unwrap_unionall(T).parameters)
+    end
     isa(T, Union) || return false
     n, isc = countconcrete(T)
     return isc & (n <= 3)

@@ -25,6 +25,8 @@ function summer(list)
     return s
 end
 
+zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -190,10 +192,22 @@ end
     @test has_name_typ(child(node, 1), :s, Union{Int,Float64})
     @test has_name_typ(child(node, 2), :x, Float64)
 
+    # `where` and unnamed arguments
+    tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
+    sig, body = children(tsn)
+    @test child(sig, 1, 2).typ === Vector{Int16}
+    @test body.typ === Core.Const(Int16(0))
+
     # Display
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Any},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
     end
     @test occursin("s\e[31m::Any\e[39m += x\e[31m::Any\e[39m", str)
+    tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
+    str = sprint(tsn; context=:color=>true) do io, obj
+        printstyled(io, obj; iswarn=true, hide_type_stable=false)
+    end
+    @test occursin("AbstractArray{T}\e[36m::Vector{Int16}\e[39m", str)
+    @test occursin("Real\e[36m::Int16\e[39m", str)
 end
