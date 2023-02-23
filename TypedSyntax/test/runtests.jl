@@ -5,7 +5,19 @@ using Test
 hastype(@nospecialize(T)) = isa(T, Type) && T !== NotFound
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 
-module TSN end
+module TSN
+
+# This is taken from the definition of `sin(::Int)` in Base, copied here for testing purposes
+# in case the implementation changes
+for f in (:mysin,)
+    @eval function ($f)(x::Real)
+        xf = float(x)
+        x === xf && throw(MethodError($f, (x,)))
+        return ($f)(xf)
+    end
+end
+
+end
 
 @testset "TypedSyntax.jl" begin
     st = """
@@ -151,4 +163,11 @@ module TSN end
     @test kind(isz) == K"call" && child(isz, 1).val == :iszero
     @test isz.typ === Bool
     @test child(body, 2, 1, 2).typ == Core.Const(NaN)
+
+    # macros in function definition
+    tsn = TypedSyntaxNode(TSN.mysin, (Int,))
+    @test kind(tsn) == K"macrocall"
+    sig, body = children(child(tsn, 2))
+    @test has_name_typ(child(sig, 2, 1), :x, Int)
+    @test has_name_typ(child(body, 1, 1), :xf, Float64)
 end

@@ -33,12 +33,16 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline=0)
     trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data, src, gettyp(node2ssa, rootnode, src)))
     addchildren!(trootnode, rootnode, src, node2ssa, symtyps)
     # Add argtyps to signature
-    if is_function_def(trootnode)
-        sig, body = children(trootnode)
+    fnode = get_function_def(trootnode)
+    if is_function_def(fnode)
+        sig, body = children(fnode)
         @assert kind(sig) == K"call"
         i = 1
         for arg in Iterators.drop(children(sig), 1)
             kind(arg) == K"parameters" && break   # kw args
+            if kind(arg) == K"::"
+                arg = child(arg, 1)
+            end
             @assert kind(arg) == K"Identifier"
             argname = arg.val
             while i <= length(src.slotnames)
@@ -145,6 +149,15 @@ function is_function_def(node)  # this is not `Base.is_function_def`
     return false
 end
 
+function get_function_def(rootnode)
+    while kind(rootnode) == K"macrocall"
+        idx = findlast(node -> is_function_def(node) || kind(node) == K"macrocall", children(rootnode))
+        idx === nothing && break
+        rootnode = child(rootnode, idx)
+    end
+    return rootnode
+end
+
 function collect_symbol_nodes!(symlocs::AbstractDict{Symbol}, node)
     kind(node) == K"->" && return symlocs     # skip inner functions (including `do` blocks below)
     is_function_def(node) && return symlocs
@@ -164,7 +177,8 @@ end
 
 # Find all places in the source code where a symbol is used
 function collect_symbol_nodes(rootnode)
-    kind(rootnode) ∈ KSet"function =" || error("expected function definition, got ", sourcetext(kind(rootnode)))
+    rootnode = get_function_def(rootnode)
+    is_function_def(rootnode) || error("expected function definition, got ", sourcetext(rootnode))
     symlocs = Dict{Symbol,Vector{typeof(rootnode)}}()
     return collect_symbol_nodes!(symlocs, child(rootnode, 2))
 end
