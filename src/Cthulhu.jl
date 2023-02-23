@@ -6,6 +6,8 @@ using CodeTracking: definition, whereis
 using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
+using JuliaSyntax
+using TypedSyntax
 
 import Core: MethodInstance
 const CC = Core.Compiler
@@ -99,7 +101,6 @@ include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 include("backedges.jl")
-include("sourcetext.jl")
 
 export descend, @descend, descend_code_typed, descend_code_warntype, @descend_code_typed, @descend_code_warntype
 export ascend

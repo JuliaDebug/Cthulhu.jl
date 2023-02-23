@@ -116,15 +116,17 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     rettype = ignorelimited(rt)
     lambda_io = IOContext(io, :limit=>true)
 
-    if annotate_source
+    if annotate_source && isa(src, CodeInfo)
         meth = mi.def::Method
         def = definition(String, meth)
         if isnothing(def)
             return @warn "couldn't retrieve source of $meth"
         end
         srctxt, lineno = def
-        rootnode = JuliaSyntax.parse(SyntaxNode, srctxt, filename=String(meth.file))
-        show_annotated(lambda_io, src, Int(lineno), rt, mi, rootnode; iswarn, hide_type_stable)
+        rootnode = JuliaSyntax.parse(JuliaSyntax.SyntaxNode, srctxt, filename=String(meth.file), first_line=lineno)
+        tsn = TypedSyntaxNode(rootnode, src, lineno - meth.line)
+        tsn.typ = rt
+        printstyled(lambda_io, tsn; iswarn, hide_type_stable)
         return nothing
     end
 
