@@ -289,7 +289,7 @@ function map_ssas_to_source(src, rootnode, Δline)
                     sym = src.slotnames[arg.id]
                     if !isempty(string(sym))
                         lhsnode = node
-                        if kind(lhsnode) ∉ KSet"= += -= *= /="
+                        while kind(lhsnode) ∉ KSet"= += -= *= /="
                             lhsnode = lhsnode.parent
                         end
                         @assert kind(lhsnode) ∈ KSet"= += -= *= /="

@@ -25,88 +25,20 @@ end
 
 
 function Base.printstyled(io::IO, rootnode::TypedSyntaxNode; iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
-    k = kind(rootnode)
-    rt = rootnode.val
-    while k == K"macrocall"
-        rootnode = rootnode.val[end]
-        if rt === nothing
-            rt = rootnode.val
-        end
-        k = kind(rootnode)
-    end
+    rt = rootnode.typ
+    rootnode = get_function_def(rootnode)
     lastidx = 0
-    if k == K"=" || k == K"function"
+    if is_function_def(rootnode)
         # We're printing a MethodInstance
-        length(children(rootnode)) == 2 || error("expected sig, body args, got ", length(children(rootnode)), " children")
-        signode = first(children(rootnode))
-        lastidx = show_src_expr(io, signode, lastidx; iswarn, hide_type_stable)
+        @assert length(children(rootnode)) == 2
+        sig, body = children(rootnode)
+        lastidx = show_src_expr(io, sig, lastidx; iswarn, hide_type_stable)
         maybe_show_annotation(io, rt; iswarn, hide_type_stable)
-        rootnode = last(children(rootnode))
+        rootnode = body
     end
     lastidx = show_src_expr(io, rootnode, lastidx; iswarn, hide_type_stable)
     println(io, rootnode.source[lastidx+1:end])
 end
-
-# function show_src_signature(io::IO, signode::TypedSyntaxNode, @nospecialize(rt);
-#                             iswarn::Bool=false, hide_type_stable::Bool=false)
-#     hdtok = untokenize(head(signode))
-#     if hdtok == "where"
-#        signode = signode.val[1]
-#        hdtok = untokenize(head(signode))
-#     end
-#     hdtok == "call" || error("expected call signature, got ", hdtok)
-#     args = signode.val[2:end]
-#     srctxt = signode.source.code
-#     sigT = Base.unwrap_unionall(mi.specTypes)
-#     lastidx = first_byte(first(args))-1
-#     print(io, srctxt[1:lastidx])
-#     for (i, arg) in enumerate(args)
-#         T = sigT.parameters[i+1]
-#         hd = head(arg)
-#         if flags(hd) === EMPTY_FLAGS
-#             _lastidx = last_byte(arg)
-#             print(io, srctxt[lastidx+1:_lastidx])
-#             lastidx = _lastidx
-#             if !hide_type_stable || is_type_unstable(T)
-#                 print(io, "::")
-#                 iswarn && is_type_unstable(T) ? printstyled(io, T; color=:red) : print(io, T)
-#             end
-#         elseif untokenize(hd) == "::-i"
-#             if !is_type_unstable(T) && hide_type_stable
-#                 # Should still print the declared type
-#                 _lastidx = last_byte(arg)
-#                 print(io, srctxt[lastidx+1:_lastidx])
-#                 lastidx = _lastidx
-#             else
-#                 # Print the specialized type
-#                 varname, vartype = arg.val
-#                 _lastidx = last_byte(varname)
-#                 print(io, srctxt[lastidx+1:_lastidx])
-#                 print(io, "::")
-#                 iswarn && is_type_unstable(T) ? printstyled(io, T; color=:red) : print(io, T)
-#                 lastidx = last_byte(arg)
-#             end
-#         else
-#             error("unhandled head ", hd)
-#         end
-#     end
-#     # Print the closing ')' and the return type
-#     l = length(srctxt)
-#     lastidx += 1
-#     while lastidx <= l
-#         c = srctxt[lastidx]
-#         print(io, c)
-#         c == ')' && break
-#         lastidx = nextind(srctxt, lastidx)
-#     end
-#     print(io, "::")
-#     if iswarn
-#         printstyled(io, rt; color = is_type_unstable(rt) ? :red : :cyan)
-#     else
-#         print(io, rt)
-#     end
-#     return lastidx
-# end
 
 function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)

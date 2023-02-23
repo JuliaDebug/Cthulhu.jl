@@ -179,7 +179,7 @@ end
     @test has_name_typ(child(sig, 2, 1), :x, Int)
     @test has_name_typ(child(body, 1, 1), :xf, Float64)
 
-    # for loops
+    # `for` loops
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :list, Vector{Float64})
@@ -189,4 +189,11 @@ end
     @test kind(node) == K"+="
     @test has_name_typ(child(node, 1), :s, Union{Int,Float64})
     @test has_name_typ(child(node, 2), :x, Float64)
+
+    # Display
+    tsn = TypedSyntaxNode(TSN.summer, (Vector{Any},))
+    str = sprint(tsn; context=:color=>true) do io, obj
+        printstyled(io, obj; iswarn=true, hide_type_stable=false)
+    end
+    @test occursin("s\e[31m::Any\e[39m += x\e[31m::Any\e[39m", str)
 end
