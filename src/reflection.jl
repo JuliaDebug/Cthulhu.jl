@@ -20,11 +20,12 @@ end
 
 function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
-                        slottypes::Vector{Any}, optimize::Bool=true)
+                        slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)
     sptypes = sptypes_from_meth_instance(mi)
-    callsites = Callsite[]
+    callsites, sourcenodes = Callsite[], Union{TypedSyntaxNode,Callsite}[]
     stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
     nstmts = length(stmts)
+    _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing) : (nothing, nothing)
 
     for id = 1:nstmts
         stmt = stmts[id]
@@ -93,9 +94,13 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             end
 
             push!(callsites, callsite)
+            if annotate_source
+                mapped = mappings[id]
+                push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+            end
         end
     end
-    return callsites
+    return callsites, sourcenodes
 end
 
 function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),
@@ -330,4 +335,19 @@ function add_sourceline!(locs, CI, stmtidx::Int)
         push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
     end
     return locs
+end
+
+function get_typed_sourcetext(mi, src, rt)
+    meth = mi.def::Method
+    def = definition(String, meth)
+    if isnothing(def)
+        return @warn "couldn't retrieve source of $meth"
+    end
+    srctxt, lineno = def
+    rootnode = JuliaSyntax.parse(JuliaSyntax.SyntaxNode, srctxt, filename=String(meth.file), first_line=lineno)
+    # We need `mappings` for `callsite`s, so construct with lower-level calls
+    mappings, symtyps = TypedSyntax.map_ssas_to_source(src, rootnode, lineno - meth.line)
+    tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)
+    tsn.typ = rt
+    return tsn, mappings
 end

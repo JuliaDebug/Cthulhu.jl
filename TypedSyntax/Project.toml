@@ -9,7 +9,7 @@ JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 
 [compat]
 CodeTracking = "1"
-JuliaSyntax = "0.3"
+JuliaSyntax = "0.3.1"
 julia = "1"
 
 [extras]

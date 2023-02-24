@@ -28,8 +28,8 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
 end
 
 function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, custom_toggles::Vector{CustomToggle};
-    pagesize::Int=10, sub_menu = false, kwargs...)
-    options = vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
+                     pagesize::Int=10, sub_menu = false, kwargs...)
+    options = build_options(callsites, with_effects, optimize, iswarn)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -45,6 +45,35 @@ function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool
     config = TerminalMenus.Config(; kwargs...)
 
     return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
+end
+
+build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool) =
+    vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
+function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool)
+    reduced_displaysize = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
+    nd = nothing
+
+    shown_callsites = map(callsites) do node
+        if isa(node, Callsite)
+            show_as_line(node, with_effects, optimize, iswarn)
+        else
+            if nd === nothing
+                nd = ndigits(node.source.first_line + TypedSyntax.nlines(node.source) - 1)
+                reduced_displaysize -= nd + 1
+            end
+            string(
+                sprint(lpad(TypedSyntax.source_line(node.source, TypedSyntax.first_byte(node)), nd); context=:color=>true) do io, ln
+                    printstyled(io, ln; color=:light_black)
+                end,
+                " ",
+                sprint(node; context=:color=>true) do io, node
+                    printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn)
+                end
+            )
+        end
+    end
+    push!(shown_callsites, "↩")
+    return shown_callsites
 end
 
 TerminalMenus.options(m::CthulhuMenu) = m.options

@@ -186,13 +186,21 @@ function Base.print(io::TextWidthLimiter, s::String)
         io.width += width
         return
     end
+    seen_termchar = in_termchar = false
     for c in graphemes(s)
+        if c == "\e"
+            in_termchar = true
+        end
         cwidth = textwidth(c)
-        if has_space(io, cwidth)
+        if in_termchar || has_space(io, cwidth)
             print(io.io, c)
             io.width += cwidth
         else
-            break
+            seen_termchar || break
+        end
+        if in_termchar && c == "m"
+            in_termchar = false
+            seen_termchar = !seen_termchar
         end
     end
     print(io.io, '…')

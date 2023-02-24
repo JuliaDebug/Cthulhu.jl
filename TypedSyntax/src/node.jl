@@ -32,7 +32,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
     trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data, src, gettyp(node2ssa, rootnode, src)))
-    addchildren!(trootnode, rootnode, src, node2ssa, symtyps)
+    addchildren!(trootnode, rootnode, src, node2ssa, symtyps, mappings)
     # Add argtyps to signature
     fnode = get_function_def(trootnode)
     if is_function_def(fnode)
@@ -81,7 +81,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     return trootnode
 end
 
-function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps)
+function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mappings)
     if haschildren(parent) && tparent.children === nothing
         tparent.children = TypedSyntaxNode[]
     end
@@ -91,11 +91,17 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps)
             tnode.typ = get(symtyps, child, nothing)
         end
         push!(tparent, tnode)
-        addchildren!(tnode, child, src, node2ssa, symtyps)
+        addchildren!(tnode, child, src, node2ssa, symtyps, mappings)
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
     if kind(tparent) == K"return" && haschildren(tparent)
         tparent.typ = only(children(tparent)).typ
+    end
+    # Replace the entry in `mappings` to be the typed node
+    i = get(node2ssa, parent, nothing)
+    if i !== nothing
+        @assert length(mappings[i]) == 1
+        mappings[i][1] = tparent
     end
     return tparent
 end
@@ -218,7 +224,7 @@ function map_ssas_to_source(src, rootnode, Δline)
     # Initialize the type-assignment of each slot at each use location
     symtyps = IdDict{typeof(rootnode),Any}()                     # symtyps = IdDict(node => typ)
     # Initialize the (possibly ambiguous) attributions for each stmt in `src` (`stmt = src.code[i]`)
-    mappings = [typeof(rootnode)[] for _ in eachindex(src.code)]  # mappings[i] = [node1, node2, ...]
+    mappings = [Union{SyntaxNode,TypedSyntaxNode}[] for _ in eachindex(src.code)]  # mappings[i] = [node1, node2, ...]
 
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     function append_targets_for_line!(mapped, i, targets)

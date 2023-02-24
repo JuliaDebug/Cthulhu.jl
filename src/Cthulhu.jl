@@ -492,7 +492,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         else
             @assert length(src.code) == length(infos)
         end
-        callsites = find_callsites(interp, src, infos, mi, slottypes, optimize)
+        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize, annotate_source)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
@@ -538,7 +538,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
         @label show_menu
 
-        menu = CthulhuMenu(callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, custom_toggles; menu_options...)
+        shown_callsites = annotate_source ? sourcenodes : callsites
+        menu = CthulhuMenu(shown_callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, custom_toggles; menu_options...)
         usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle

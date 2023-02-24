@@ -27,7 +27,7 @@ end
 function Base.printstyled(io::IO, rootnode::TypedSyntaxNode; iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
     rt = rootnode.typ
     rootnode = get_function_def(rootnode)
-    lastidx = 0
+    lastidx = first_byte(rootnode) - 1
     if is_function_def(rootnode)
         # We're printing a MethodInstance
         @assert length(children(rootnode)) == 2
@@ -37,14 +37,15 @@ function Base.printstyled(io::IO, rootnode::TypedSyntaxNode; iswarn::Bool=true, 
         rootnode = body
     end
     lastidx = show_src_expr(io, rootnode, lastidx; iswarn, hide_type_stable)
-    println(io, rootnode.source[lastidx+1:end])
+    # println(io, rootnode.source[lastidx+1:end])
+    return nothing
 end
 
 function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)
     _lastidx = last_byte(node)
     if kind(node) == K"Identifier" || (kind(node) == K"::" && is_prefix_op_call(node))
-        print(io, node.source[lastidx+1:_lastidx])
+        print_with_linenumber(io, node, lastidx+1:_lastidx)
         maybe_show_annotation(io, node.typ; iswarn, hide_type_stable)
         return _lastidx
     end
@@ -53,7 +54,7 @@ function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool
         for child in children(node)
             lastidx = show_src_expr(io, child, lastidx; iswarn, hide_type_stable)
         end
-        print(io, node.source[lastidx+1:_lastidx])
+        print_with_linenumber(io, node, lastidx+1:_lastidx)
         return _lastidx
     end
     pre = prepost = post = ""
@@ -111,11 +112,28 @@ function catchup(io::IO, node::TypedSyntaxNode, lastidx::Int)
     # Do any "overdue" printing now. Mostly, this catches whitespace
     firstidx = first_byte(node)
     if lastidx + 1 < firstidx
-        print(io, node.source[lastidx+1:firstidx-1])
+        print_with_linenumber(io, node, lastidx+1:firstidx-1)
         lastidx = firstidx-1
     end
     return lastidx
 end
+
+function print_with_linenumber(io::IO, node::AbstractSyntaxNode, byterange)
+    nd = ndigits(node.source.first_line + nlines(node.source) - 1)
+    offset = first(byterange) - 1
+    if offset == 0
+        # This is the first line, print the line number first
+        printstyled(io, lpad(source_line(node.source, 1), nd), " "; color=:light_black)
+    end
+    for (i, c) in pairs(node.source[byterange])
+        print(io, c)
+        if c == '\n'
+            printstyled(io, lpad(source_line(node.source, i + offset), nd), " "; color=:light_black)
+        end
+    end
+end
+
+nlines(source) = length(source.line_starts)
 
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 function is_small_union_or_tunion(@nospecialize(T))
