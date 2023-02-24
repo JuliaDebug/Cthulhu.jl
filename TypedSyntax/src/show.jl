@@ -24,8 +24,8 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
 end
 
 
-function Base.printstyled(io::IO, rootnode::TypedSyntaxNode; iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
-    rt = rootnode.typ
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
+    rt = gettyp(rootnode)
     rootnode = get_function_def(rootnode)
     lastidx = first_byte(rootnode) - 1
     if is_function_def(rootnode)
@@ -41,12 +41,12 @@ function Base.printstyled(io::IO, rootnode::TypedSyntaxNode; iswarn::Bool=true, 
     return nothing
 end
 
-function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)
     _lastidx = last_byte(node)
     if kind(node) == K"Identifier" || (kind(node) == K"::" && is_prefix_op_call(node))
         print_with_linenumber(io, node, lastidx+1:_lastidx)
-        maybe_show_annotation(io, node.typ; iswarn, hide_type_stable)
+        maybe_show_annotation(io, gettyp(node); iswarn, hide_type_stable)
         return _lastidx
     end
     # We only handle "call" nodes. For anything else, just print the node (recursing into children)
@@ -64,7 +64,7 @@ function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool
     elseif is_prefix_op_call(node) # insert parens after prefix op and before type-annotating
         prepost, post = "(", ")"
     end
-    T = node.typ
+    T = gettyp(node)
     # should we print a type-annotation?
     type_annotate = isa(T, Vector{Int}) || (isa(T, Type) && (!hide_type_stable || is_type_unstable(T)))
     type_annotate && print(io, pre)
@@ -73,13 +73,14 @@ function show_src_expr(io::IO, node::TypedSyntaxNode, lastidx::Int; iswarn::Bool
         lastidx = show_src_expr(io, child, lastidx; iswarn, hide_type_stable)
     end
     print(io, node.source[lastidx+1:_lastidx])
-    if type_annotate
+    if type_annotate && T !== nothing
         show_annotation(io, T, post; iswarn)
     end
     return _lastidx
 end
 
 function maybe_show_annotation(io, @nospecialize(T); iswarn, hide_type_stable)
+    T === nothing && return
     if isa(T, Core.Const)
         T = typeof(T.val)
     end
@@ -108,7 +109,7 @@ function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
     end
 end
 
-function catchup(io::IO, node::TypedSyntaxNode, lastidx::Int)
+function catchup(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int)
     # Do any "overdue" printing now. Mostly, this catches whitespace
     firstidx = first_byte(node)
     if lastidx + 1 < firstidx

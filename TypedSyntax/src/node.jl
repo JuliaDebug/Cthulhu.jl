@@ -5,11 +5,12 @@ mutable struct TypedSyntaxData <: AbstractSyntaxData
     raw::GreenNode{SyntaxHead}
     position::Int
     val::Any
-    typ::Any    # can either be a Type, `nothing`, or a `idxs::Vector{Int}` of *potential* call matches `src.code[idxs]`
+    typ::Any    # can either be a Type or `nothing`
 end
 TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, typ)
 
 const TypedSyntaxNode = TreeNode{TypedSyntaxData}
+const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 
 struct NotFound end
 # struct Unmatched end
@@ -78,6 +79,13 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             end
         end
     end
+    # foreach(mappings) do mapped
+    #     if any(n -> !isa(n, TypedSyntaxNode), mapped)
+    #         display(src.parent)
+    #         display(rootnode)
+    #         error("hoped that all would be typed, got ", mapped)
+    #     end
+    # end
     return trootnode
 end
 
@@ -117,6 +125,12 @@ function gettyp(node2ssa, node, src)
     end
     return src.ssavaluetypes[i]
 end
+
+Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ)
+
+gettyp(node::AbstractSyntaxNode) = gettyp(node.data)
+gettyp(::JuliaSyntax.SyntaxData) = nothing
+gettyp(data::TypedSyntaxData) = data.typ
 
 # function find_codeloc(src, lineno)
 #     clidx = searchsortedfirst(src.linetable, lineno; lt=(linenode, line) -> linenode.line < line)

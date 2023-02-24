@@ -7,6 +7,7 @@ using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax
+using JuliaSyntax: SyntaxNode
 using TypedSyntax
 
 import Core: MethodInstance
@@ -539,7 +540,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         shown_callsites = annotate_source ? sourcenodes : callsites
-        menu = CthulhuMenu(shown_callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, custom_toggles; menu_options...)
+        menu = CthulhuMenu(shown_callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
         usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
@@ -552,10 +553,11 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 interruptexc ? throw(InterruptException()) : break
             end
             callsite = callsites[cid]
+            sourcenode = sourcenodes !== nothing ? sourcenodes[cid] : nothing
 
             info = callsite.info
             if info isa MultiCallInfo
-                sub_callsites = let callsite=callsite
+                show_sub_callsites = sub_callsites = let callsite=callsite
                     map(ci->Callsite(callsite.id, ci, callsite.head), info.callinfos)
                 end
                 if isempty(sub_callsites)
@@ -567,7 +569,23 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     @error "Expected multiple callsites, but found none. Please fill an issue with a reproducing example."
                     continue
                 end
-                menu = CthulhuMenu(sub_callsites, with_effects, optimize, false, custom_toggles; sub_menu=true, menu_options...)
+                if sourcenode !== nothing
+                    show_sub_callsites = let callsite=callsite
+                        map(info.callinfos) do ci
+                            p = Base.unwrap_unionall(get_mi(ci).specTypes).parameters
+                            if length(p) == length(JuliaSyntax.children(sourcenode)) + 1
+                                newnode = copy(sourcenode)
+                                for (i, child) in enumerate(JuliaSyntax.children(newnode))
+                                    child.typ = p[i+1]
+                                end
+                                newnode
+                            else
+                                Callsite(callsite.id, ci, callsite.head)
+                            end
+                        end
+                    end
+                end
+                menu = CthulhuMenu(show_sub_callsites, with_effects, optimize, false, false, custom_toggles; sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue

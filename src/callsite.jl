@@ -217,6 +217,8 @@ function Base.print(io::TextWidthLimiter, c::Char)
     end
     return
 end
+Base.print(io::TextWidthLimiter, sym::Symbol) = print(io, string(sym))
+Base.write(io::TextWidthLimiter, x::UInt8) = print(io, Char(x))
 
 function Base.take!(io::TextWidthLimiter)
     io.width = 0

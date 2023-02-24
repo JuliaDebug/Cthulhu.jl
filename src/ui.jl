@@ -27,9 +27,9 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, custom_toggles::Vector{CustomToggle};
-                     pagesize::Int=10, sub_menu = false, kwargs...)
-    options = build_options(callsites, with_effects, optimize, iswarn)
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
+                     custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
+    options = build_options(callsites, with_effects, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -47,9 +47,9 @@ function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool
     return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
 end
 
-build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool) =
+build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
     vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
-function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool)
+function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
     reduced_displaysize = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
     nd = nothing
 
@@ -67,7 +67,7 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                 end,
                 " ",
                 sprint(node; context=:color=>true) do io, node
-                    printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn)
+                    printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
                 end
             )
         end

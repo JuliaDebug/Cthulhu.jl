@@ -22,7 +22,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                         stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)
     sptypes = sptypes_from_meth_instance(mi)
-    callsites, sourcenodes = Callsite[], Union{TypedSyntaxNode,Callsite}[]
+    callsites, sourcenodes = Callsite[], Union{TypedSyntaxNode,SyntaxNode,Callsite}[]
     stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing) : (nothing, nothing)
