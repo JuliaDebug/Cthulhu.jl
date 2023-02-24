@@ -103,6 +103,12 @@ end
 function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
+    stmt = src.code[i]
+    if isa(stmt, Core.ReturnNode)
+        arg = stmt.val
+        isa(arg, SSAValue) && return src.ssavaluetypes[arg.id]
+        is_slot(arg) && return src.slottypes[arg.id]
+    end
     return src.ssavaluetypes[i]
 end
 
@@ -142,7 +148,7 @@ end
 #         @assert isa(fiter, GlobalRef) && fiter.name == :iterate
 #         f = stmt.args[3]   # get the actual call
 #     end
-#     if isa(f, SlotNumber)
+#     if is_slot(f)
 #         return src.slotnames[f.id]
 #     end
 #     if isa(f, SSAValue)
@@ -226,7 +232,7 @@ function map_ssas_to_source(src, rootnode, Δline)
     end
     # For a call argument `arg`, find all source statements that match
     function append_targets_for_arg!(mapped, i, arg)
-        targets = if isa(arg, SlotNumber)
+        targets = if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
             get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
@@ -241,21 +247,41 @@ function map_ssas_to_source(src, rootnode, Δline)
         return mapped
     end
 
+    argmapping = typeof(rootnode)[]
     for (i, mapped, stmt) in zip(eachindex(mappings), mappings, src.code)
-        argmapping = typeof(rootnode)[]
-        if isa(stmt, SlotNumber) || isa(stmt, SSAValue)
+        empty!(argmapping)
+        if is_slot(stmt) || isa(stmt, SSAValue)
             append_targets_for_arg!(mapped, i, stmt)
+        elseif isa(stmt, Core.ReturnNode)
+            append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
             if stmt.head == :(=)
                 # We defer setting up `symtyps` for the LHS because processing the RHS first might eliminate ambiguities
                 # # Update `symtyps` for this assignment
                 lhs = stmt.args[1]
-                @assert isa(lhs, SlotNumber)
+                @assert is_slot(lhs)
                 # For `mappings` we're interested only in the right hand side of this assignment
                 stmt = stmt.args[2]
-                if isa(stmt, SlotNumber) || isa(stmt, SSAValue)  # can we just look up the answer?
+                if is_slot(stmt) || isa(stmt, SSAValue)  # can we just look up the answer?
                     append_targets_for_arg!(mapped, i, stmt)
+                    length(mapped) > 1 && filter!(mapped) do argnode
+                        if kind(argnode.parent) == K"tuple"
+                            is_prec_assignment(argnode.parent.parent) && any(==(argnode), children(child(argnode.parent.parent, 2)))
+                        else
+                            is_prec_assignment(argnode.parent) && argnode == child(argnode.parent, 2)  # rhs
+                        end
+                    end
+                    if length(mapped) == 1
+                        symtyps[only(mapped)] = is_slot(stmt) ? src.slottypes[stmt.id] : src.ssavaluetypes[stmt.id]
+                    end
                     append_targets_for_arg!(argmapping, i, lhs)
+                    filter!(argmapping) do argnode
+                        if kind(argnode.parent) == K"tuple"
+                            is_prec_assignment(argnode.parent.parent) && any(==(argnode), children(child(argnode.parent.parent, 1)))
+                        else
+                            is_prec_assignment(argnode.parent) && argnode == child(argnode.parent, 1)
+                        end
+                    end
                     if length(argmapping) == 1
                         symtyps[only(argmapping)] = src.ssavaluetypes[i]
                     end
@@ -308,14 +334,13 @@ function map_ssas_to_source(src, rootnode, Δline)
                 if stmt.head == :(=)
                     # Tag the LHS of this expression
                     arg = stmt.args[1]
-                    @assert isa(arg, SlotNumber)
+                    @assert is_slot(arg)
                     sym = src.slotnames[arg.id]
                     if !isempty(string(sym))
                         lhsnode = node
-                        while kind(lhsnode) ∉ KSet"= += -= *= /="
+                        while !is_prec_assignment(lhsnode)
                             lhsnode = lhsnode.parent
                         end
-                        @assert kind(lhsnode) ∈ KSet"= += -= *= /="
                         lhsnode = child(lhsnode, 1)
                         if kind(lhsnode) == K"tuple"   # tuple destructuring
                             found = false
@@ -346,10 +371,11 @@ function map_ssas_to_source(src, rootnode, Δline)
                             j = arg.id
                             arg = src.ssavaluetypes[j]   # keep trying in case it maps back to a slot
                         end
-                        if isa(arg, SlotNumber)
+                        if is_slot(arg)
                             sym = src.slotnames[arg.id]
                             for t in symlocs[sym]
                                 if t.parent == node
+                                    is_prec_assignment(node) && t == child(node, 1) && continue
                                     symtyps[t] = if j > 0
                                         src.ssavaluetypes[j]
                                     else
@@ -374,3 +400,5 @@ function is_indexed_iterate(arg)
     arg.mod == Base || return false
     return arg.name == :indexed_iterate
 end
+
+is_slot(@nospecialize(arg)) = isa(arg, SlotNumber) || isa(arg, TypedSlot)

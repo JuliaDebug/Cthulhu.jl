@@ -7,6 +7,14 @@ has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier"
 
 module TSN
 
+function has2xa(x)
+    x &= x
+end
+function has2xb(x)
+    x -= x
+    return x
+end
+
 # This is taken from the definition of `sin(::Int)` in Base, copied here for testing purposes
 # in case the implementation changes
 for f in (:mysin,)
@@ -73,6 +81,18 @@ end
     @test has_name_typ(child(body, 3, 2, 1), :x, Int)
     pi4 = child(body, 3, 2, 3)
     @test kind(pi4) == K"call" && pi4.typ == Core.Const(π / 4)
+    tsn = TypedSyntaxNode(TSN.has2xa, (Real,))
+    @test tsn.typ === Any
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :x, Real)
+    @test has_name_typ(child(body, 1, 2), :x, Real)
+    @test has_name_typ(child(body, 1, 1), :x, Any)
+    tsn = TypedSyntaxNode(TSN.has2xb, (Real,))
+    @test tsn.typ === Any
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :x, Real)
+    @test has_name_typ(child(body, 1, 2), :x, Real)
+    @test has_name_typ(child(body, 1, 1), :x, Any)
 
     # Target duplication
     st = "math2(x) = sin(x) + sin(x)"
@@ -183,14 +203,16 @@ end
 
     # `for` loops
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
+    @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :list, Vector{Float64})
     @test_broken has_name_typ(child(body, 1, 1), :s, Int)
     @test_broken has_name_typ(child(body, 2, 1, 1), :x, Float64)
     node = child(body, 2, 2, 1)
     @test kind(node) == K"+="
-    @test has_name_typ(child(node, 1), :s, Union{Int,Float64})
+    @test has_name_typ(child(node, 1), :s, Float64)   # if this line runs, the LHS now has type `Float64`
     @test has_name_typ(child(node, 2), :x, Float64)
+    @test has_name_typ(child(body, 3, 1), :s, Union{Float64, Int})
 
     # `where` and unnamed arguments
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
