@@ -16,6 +16,11 @@ end
 
 function empty_func(::Bool) end
 
+function bar346(x::ComplexF64)
+    x = ComplexF64(x.re, 1.0)
+    return sin(x.im)
+end
+
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -46,6 +51,13 @@ function empty_func(::Bool) end
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_nothrow(effects)
         @test Core.Compiler.is_terminates(effects)
+    end
+
+    @static if VERSION >= v"1.9-"
+        callsites = find_callsites_by_ftt(bar346, Tuple{ComplexF64}; optimize=false)
+        @test occursin(r"< semi-concrete eval >", string(callsites[1]))
+        @test Cthulhu.get_remarks(callsites[1].info) === Cthulhu.PC2Remarks()
+        @test Cthulhu.get_effects(callsites[1].info) === Cthulhu.PC2Effects()
     end
 end
 
