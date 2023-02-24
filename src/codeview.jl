@@ -241,16 +241,12 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-VERSION >= v"1.10.0-DEV.552" && import Core.Compiler: VarState
-function sptypes(sparams)
-    return if VERSION>=v"1.10.0-DEV.552"
-        VarState[Core.Compiler.VarState.(sparams, false)...]
-    else
-        Any[sparams...]
-    end
+@static if VERSION >= v"1.10.0-DEV.552"
+    using Core.Compiler: VarState
+    sptypes(sparams) = VarState[VarState.(sparams, false)...]
+else
+    sptypes(sparams) = Any[sparams...]
 end
-
-
 
 function show_variables(io, src, slotnames)
     println(io, "Variables")
