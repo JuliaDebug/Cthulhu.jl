@@ -272,10 +272,6 @@ let # check the performance benefit of semi concrete evaluation
         out
     end
 end
-function bar346(x::ComplexF64)
-    x = ComplexF64(x.re, 1.0)
-    return sin(x.im)
-end
 @static isdefined(Core.Compiler, :SemiConcreteResult) && @testset "SemiConcreteResult" begin
     # constant prop' on all the splits
     let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
@@ -289,7 +285,13 @@ end
         print(io, only(callsites))
         @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
     end
+end
 
+function bar346(x::ComplexF64)
+    x = ComplexF64(x.re, 1.0)
+    return sin(x.im)
+end
+@static VERSION >= v"1.10-" && @testset "issue #346" begin
     let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
         callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
