@@ -135,7 +135,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
-        CC.statement_costs!(cst, code, src, Any[mi.sparam_vals...], false, params)
+        CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), false, params)
         total_cost = sum(cst)
         nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)
@@ -239,6 +239,13 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     show_ir(lambda_io, src, irshow_config)
     return nothing
+end
+
+@static if VERSION >= v"1.10.0-DEV.552"
+    using Core.Compiler: VarState
+    sptypes(sparams) = VarState[VarState.(sparams, false)...]
+else
+    sptypes(sparams) = Any[sparams...]
 end
 
 function show_variables(io, src, slotnames)

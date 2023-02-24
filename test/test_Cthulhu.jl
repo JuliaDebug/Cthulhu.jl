@@ -33,12 +33,12 @@ end
 
     # handle pure
     callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
-    @test occursin("< pure >", string(callsites[1]))
+    @test occursin("::Core.Const((1, 1))", string(callsites[1]))
     @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
     callsites = @eval find_callsites_by_ftt(; optimize=false) do
         length($(QuoteNode(Core.svec(0,1,2))))
     end
-    @test occursin("< pure >", string(callsites[1]))
+    @test occursin(r"< (pure|concrete eval) >", string(callsites[1]))
 
     # Some weird methods get inferred
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
@@ -311,8 +311,8 @@ struct SingletonPureCallable{N} end
     @test occursin("SingletonPureCallable{1}()(::Float64)::Float64", s)
 
     @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(c1) |> Core.Compiler.is_total
-        @test Cthulhu.get_effects(c2) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(c1) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(c2) |> is_foldable_nothrow
     end
 end
 
@@ -346,8 +346,8 @@ end
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
     @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(callinfo1) |> Core.Compiler.is_total
-        @test Cthulhu.get_effects(callinfo2) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(callinfo1) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(callinfo2) |> is_foldable_nothrow
     end
 end
 
@@ -360,7 +360,7 @@ end
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
         @static if Cthulhu.EFFECTS_ENABLED
-            @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
+            @test Cthulhu.get_effects(callinfo) |> !is_foldable_nothrow
             # TODO not sure what these effects are (and neither is Base.infer_effects yet)
         end
         @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
@@ -419,7 +419,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         rt = Core.Compiler.Const(:Integer)
         @test info.ci.rt === rt
         buf = IOBuffer()
@@ -432,7 +432,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 
@@ -443,7 +443,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         inner = info.ci
         rt = Core.Compiler.Const(Any)
         @test Cthulhu.get_rt(info) === rt
