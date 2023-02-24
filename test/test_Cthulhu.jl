@@ -16,11 +16,6 @@ end
 
 function empty_func(::Bool) end
 
-function bar346(x::ComplexF64)
-    x = ComplexF64(x.re, 1.0)
-    return sin(x.im)
-end
-
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -51,13 +46,6 @@ end
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_nothrow(effects)
         @test Core.Compiler.is_terminates(effects)
-    end
-
-    @static if VERSION >= v"1.9-"
-        callsites = find_callsites_by_ftt(bar346, Tuple{ComplexF64}; optimize=false)
-        @test occursin(r"< semi-concrete eval >", string(callsites[1]))
-        @test Cthulhu.get_remarks(callsites[1].info) === Cthulhu.PC2Remarks()
-        @test Cthulhu.get_effects(callsites[1].info) === Cthulhu.PC2Effects()
     end
 end
 
@@ -284,6 +272,10 @@ let # check the performance benefit of semi concrete evaluation
         out
     end
 end
+function bar346(x::ComplexF64)
+    x = ComplexF64(x.re, 1.0)
+    return sin(x.im)
+end
 @static isdefined(Core.Compiler, :SemiConcreteResult) && @testset "SemiConcreteResult" begin
     # constant prop' on all the splits
     let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
@@ -296,6 +288,17 @@ end
         io = IOBuffer()
         print(io, only(callsites))
         @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
+    end
+
+    let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
+        callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
+        @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
+        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
+
+        @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
+
+        @test Cthulhu.get_remarks(interp, callsites[1].info) == Cthulhu.PC2Remarks()
+        @test Cthulhu.get_effects(interp, callsites[1].info) == Cthulhu.PC2Effects()
     end
 end
 
