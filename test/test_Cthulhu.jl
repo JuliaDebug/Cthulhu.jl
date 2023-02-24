@@ -287,6 +287,23 @@ end
     end
 end
 
+function bar346(x::ComplexF64)
+    x = ComplexF64(x.re, 1.0)
+    return sin(x.im)
+end
+@static VERSION >= v"1.10-" && @testset "issue #346" begin
+    let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
+        callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
+        @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
+        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
+
+        @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
+
+        @test Cthulhu.get_remarks(interp, callsites[1].info) == Cthulhu.PC2Remarks()
+        @test Cthulhu.get_effects(interp, callsites[1].info) == Cthulhu.PC2Effects()
+    end
+end
+
 struct SingletonPureCallable{N} end
 
 @testset "PureCallInfo" begin
