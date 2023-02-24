@@ -1,8 +1,13 @@
 import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
+import Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
 import Base.Meta: isexpr
 
-argextype(@nospecialize args...) = argextype(args..., Any[])
+argextype(@nospecialize args...) = Core.Compiler.argextype(args...)
+@static if VERSION >= v"1.10.0-DEV.556"
+    argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, VarState[])
+else
+    argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Any[])
+end
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
@@ -42,5 +47,13 @@ function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
         return val == retval
     else
         return length(code) == 1 && isreturn(code[1])
+    end
+end
+
+@static if Cthulhu.EFFECTS_ENABLED
+    @static if isdefined(Core.Compiler, :is_foldable_nothrow)
+        using Core.Compiler: is_foldable_nothrow
+    else
+        const is_foldable_nothrow = Core.Compiler.is_total
     end
 end
