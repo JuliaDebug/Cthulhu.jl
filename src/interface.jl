@@ -70,11 +70,11 @@ navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_mi(callsit
 
 get_remarks(::AbstractInterpreter, ::Union{MethodInstance,InferenceResult}) = nothing
 get_remarks(interp::CthulhuInterpreter, key::Union{MethodInstance,InferenceResult}) = get(interp.remarks, key, nothing)
-get_remarks(interp::AbstractInterpreter, key::SemiConcreteCallInfo) = PC2Remarks()
+get_remarks(::AbstractInterpreter, ::SemiConcreteCallInfo) = PC2Remarks()
 
 get_effects(::AbstractInterpreter, ::Union{MethodInstance,InferenceResult}) = nothing
 get_effects(interp::CthulhuInterpreter, key::Union{MethodInstance,InferenceResult}) = get(interp.effects, key, nothing)
-get_effects(interp::AbstractInterpreter, key::SemiConcreteCallInfo) = PC2Effects()
+get_effects(::AbstractInterpreter, ::SemiConcreteCallInfo) = PC2Effects()
 
 # This method is optional, but should be implemented if there is
 # a sensible default cursor for a MethodInstance
