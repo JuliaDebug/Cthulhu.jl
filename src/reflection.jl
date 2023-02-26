@@ -351,7 +351,7 @@ function get_typed_sourcetext(mi, src, rt)
     tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     tsn.typ = rt
     # If we're filling in keyword args, just show the signature
-    if meth.name == :kwcall || (meth.nkw == 0 && Base.bodyfunction(meth) !== nothing)
+    if meth.name == :kwcall || (meth.nkw > 0 && Base.bodyfunction(meth) !== nothing)
         sig, body = TypedSyntax.children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw

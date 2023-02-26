@@ -7,35 +7,26 @@
 :warning: The latest stable version is only compatible with Julia v1.7 and higher.
 
 Cthulhu can help you debug type inference issues by recursively showing the
-`code_typed` output until you find the exact point where inference gave up,
-messed up, or did something unexpected. Using the Cthulhu interface you can
+type-inferred code until you find the exact point where inference gave up,
+messed up, or did something unexpected. Using the Cthulhu interface, you can
 debug type inference problems faster.
-
-Looking at type-inferred code can be a bit daunting initially, but you grow more
-comfortable with practice. Consider starting with a [tutorial on "lowered" representation](https://juliadebug.github.io/JuliaInterpreter.jl/stable/ast/),
-which introduces most of the new concepts. Type-inferrred code differs mostly
-by having additional type annotation and (depending on whether you're looking
-at optimized or non-optimized code) may incorporate inlining and other fairly
-significant transformations of the original code as written by the programmer.
 
 Cthulhu's main tool, `descend`, can be invoked like this:
 
 ```julia
-descend(f, tt)     # function and argument types
+descend(f, tt)     # function `f` and Tuple `tt` of argument types
 @descend f(args)   # normal call
 ```
 
-`descend` allows you to interactively explore the output of
-`code_typed` by descending into `invoke` and `call` statements. (`invoke`
-statements correspond to static dispatch, whereas `call` statements correspond
-to dynamic dispatch.) Press enter to select an `invoke` or `call` to descend
-into, select ↩  to ascend, and press q or control-c to quit.
-
-### JuliaCon 2019 Talk and Demo
-[Watch on YouTube](https://www.youtube.com/watch?v=qf9oA09wxXY)  
-[![Click to watch video](https://img.youtube.com/vi/qf9oA09wxXY/0.jpg)](https://www.youtube.com/watch?v=qf9oA09wxXY)
-
-The version of Cthulhu in the demo is a little outdated, without the newest features, but largely it has not changed too much.
+`descend` allows you to interactively explore the type-annotated source
+code by descending into the callees of `f`.
+Press enter to select a call to descend into, select ↩  to ascend,
+and press q or control-c to quit.
+You can also toggle various aspect of the view, for example to suppress
+"type-stable" (concretely inferred) annotations or view non-concrete
+types in red.
+Currently-active options are highlighted with color; press the corresponding
+key to toggle these options.
 
 ## Usage: descend
 
@@ -45,9 +36,44 @@ function foo()
     sum(rand(T, 100))
 end
 
-descend(foo, Tuple{})
-@descend foo()
+descend(foo, Tuple{})     # option 1: specify by function name and argument types
+@descend foo()            # option 2: apply `@descend` to a working execution of the function
 ```
+
+If you do this, you'll see quite a bit of text output. Let's break it down and
+see it section-by-section. At the top, you may see something like this:
+
+![source-section-all](images_readme/descend_source_show_all.png)
+
+This shows your original source code (together with line numbers, which here were in the REPL).
+The cyan annotations are the types of the variables: `Union{Float64, Int64}` means "either a `Float64`
+or an `Int64`".
+Small *concrete* unions (where all the possibilities are known exactly) are generally are not a problem
+for type inference, unless there are so many that Julia stops trying to work
+out all the different combinations (see [this blog post](https://julialang.org/blog/2018/08/union-splitting/)
+for more information).
+
+In the next section you may see something like
+
+![toggles](images_readme/descend_toggles.png)
+
+This section shows you some interactive options you have for controlling the display.
+Normal text inside `[]` generally indicates "off", and color is used for "on" or specific options.
+For example, if you hit `w` to turn on warnings, now you should see something like this:
+
+![warn](images_readme/descend_source_toggles_warn.png)
+
+Now you can see small concrete unions in yellow, and concretely inferred code in cyan.
+Serious forms of poor inferrability are colored in red (of which there are none in this example);
+these generally hurt runtime performance and may make compiled code more vulnerable to being invalidated.
+
+In the final section, you see:
+
+![calls](images_readme/descend_calls.png)
+
+This is a menu of calls that you can further descend into. Move the dot `•` with the up and down
+arrow keys, and hit Enter to descend into a particular call.
+
 
 ## Methods: descend
 
@@ -116,7 +142,7 @@ The calls that appear on the same line separated by `=>` represent inlined metho
 you enter at the final (topmost) call on that line.
 
 By default,
-- `descend` views optimized code without "warn" coloration of types
+- `descend` views non-optimized code without "warn" coloration of types
 - `ascend` views non-optimized code with "warn" coloration
 
 You can toggle between these with `o` and `w`.
@@ -151,29 +177,19 @@ Then invoke:
 Cthulhu.@descend foo(5)
 ```
 
-Now, descend:
+Now, descend into `bar`: move the cursor down (or wrap around by hitting the up arrow) until
+the dot is next to the `bar` call:
 
 ```
-%22  = call bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
+ ⋮
+   4  (4.5 * n::Int64)::Float64
+ • 6 bar(x, y, z)
+   ↩
 ```
 
-which shows (after typing `w`)
+and then hit Enter. Then you will see the code for `bar` with its type annotations.
 
-```
-∘ ── %0 = invoke bar(::Union{Float64, Int64},::Union{Float64, Int64},::Union{Float64, Int64})::String
-Variables
-  #self#::Core.Const(bar)
-  x::Union{Float64, Int64}
-  y::Union{Float64, Int64}
-  z::Union{Float64, Int64}
-[...]
-```
-
-The text of `Union{Float64, Int64}` will be colored in red indicating there are type-instabilities,
-but they are unlikely to be problem in actual execution,
-because `bar` here serves as a ["function barrier"](https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions) and
-`bar` will be called with fully concrete runtime types via dynamic dispatch.
-
+Notice that many variables are annotated as `Union`.
 To give Cthulhu more complete type information, we have to actually run some Julia code. There are many ways to do this. In this example, we use [`Infiltrator.jl`](https://github.com/JuliaDebug/Infiltrator.jl).
 
 Add an `@infiltrate`:
@@ -202,21 +218,35 @@ Infiltrating foo(n::Int64) at ex.jl:10:
 infil>
 ```
 
-Enter `@descend bar(x, y, z)` and type `w`:
+Enter `@descend bar(x, y, z)` you can see that, for `foo(4)`, the types within `bar` are fully inferred.
 
-```
-infil> @descend bar(x, y, z)
+## Viewing the internal representation of Julia code
 
-∘ ── %0 = invoke bar(::Float64,::Float64,::Int64)::String
-Variables
-  #self#::Core.Const(bar)
-  x::Float64
-  y::Float64
-  z::Int64
-[...]
-```
+Anyone using Cthulhu to investigate the behavior of Julia's compiler will
+prefer to examine the
+While Cthulhu tries to place type-annotations on the source code, this obscures
+detail and can occassionally go awry (see details [here](TypedSyntax/README.md)).
+For anyone who needs more direct insight, it can be better to look directly at Julia's
+internal representations of type-inferred code.
+Looking at type-inferred code can be a bit daunting initially, but you grow more
+comfortable with practice. Consider starting with a
+[tutorial on "lowered" representation](https://juliadebug.github.io/JuliaInterpreter.jl/stable/ast/),
+which introduces most of the new concepts. Type-inferrred code differs from
+lowered representation by having additional type annotation.
+Moreover, `call` statements that can be inferred are converted to `invoke`s
+(these correspond to static dispatch), whereas dynamic dispatch is indicated by the
+remaining `call` statements.
+Depending on whether you're looking at optimized or non-optimized code,
+it may also incorporate inlining and other fairly significant transformations
+of the original code as written by the programmer.
 
-You can see that, for `foo(4)`, the types within `bar` are fully inferred.
+This video demonstrates Cthulhu for viewing "raw" type-inferred code:
+[Watch on YouTube](https://www.youtube.com/watch?v=qf9oA09wxXY)
+[![Click to watch video](https://img.youtube.com/vi/qf9oA09wxXY/0.jpg)](https://www.youtube.com/watch?v=qf9oA09wxXY)
+
+The version of Cthulhu in the demo is a little outdated, without the newest features,
+but may still be relevant for users who want to view code at this level of detail.
+
 
 ## Customization
 

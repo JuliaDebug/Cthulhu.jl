@@ -40,7 +40,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; iswarn::Bool=t
         rootnode = body
     end
     lastidx = show_src_expr(io, rootnode, lastidx; iswarn, hide_type_stable)
-    # println(io, rootnode.source[lastidx+1:end])
+    # println(io, rootnode.source[lastidx+1:end])   # FIXME: final `end` can get truncated
     return nothing
 end
 

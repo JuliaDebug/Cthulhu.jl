@@ -207,16 +207,21 @@ function get_function_def(rootnode)
     return rootnode
 end
 
-function collect_symbol_nodes!(symlocs::AbstractDict{Symbol}, node)
+function collect_symbol_nodes!(symlocs::AbstractDict, node)
     kind(node) == K"->" && return symlocs     # skip inner functions (including `do` blocks below)
     is_function_def(node) && return symlocs
-    if kind(node) == K"Identifier"
+    if kind(node) == K"Identifier" || is_operator(node)
         name = node.val
         if isa(name, Symbol)
             locs = get!(Vector{typeof(node)}, symlocs, name)
             push!(locs, node)
         end
-    elseif haschildren(node)
+    end
+    if is_literal(node) && node.val !== nothing    # FIXME: distinguish literal `nothing` from source `nothing`
+        locs = get!(Vector{typeof(node)}, symlocs, node.val)
+        push!(locs, node)
+    end
+    if haschildren(node)
         for c in (kind(node) == K"do" ? (child(node, 1),) : children(node))  # process only `g(args...)` in `g(args...) do ... end`
             collect_symbol_nodes!(symlocs, c)
         end
@@ -228,7 +233,7 @@ end
 function collect_symbol_nodes(rootnode)
     rootnode = get_function_def(rootnode)
     is_function_def(rootnode) || error("expected function definition, got ", sourcetext(rootnode))
-    symlocs = Dict{Symbol,Vector{typeof(rootnode)}}()
+    symlocs = Dict{Any,Vector{typeof(rootnode)}}()
     return collect_symbol_nodes!(symlocs, child(rootnode, 2))
 end
 
@@ -260,6 +265,10 @@ function map_ssas_to_source(src, rootnode, Δline)
         elseif isa(arg, SSAValue)
             # If `arg` is the result from a call, e.g., the `g(x)` in `f(g(x))`
             mappings[arg.id]
+        elseif isa(arg, Core.Const)
+            get(symlocs, arg.val, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
+        elseif is_src_literal(arg)
+            get(symlocs, arg, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
         end
         if targets !== nothing
             append_targets_for_line!(mapped, i, targets)        # select the subset consistent with the line number
@@ -422,3 +431,5 @@ function is_indexed_iterate(arg)
 end
 
 is_slot(@nospecialize(arg)) = isa(arg, SlotNumber) || isa(arg, TypedSlot)
+
+is_src_literal(x) = isa(x, Integer) || isa(x, AbstractFloat) || isa(x, String) || isa(x, Char) || isa(x, Symbol)
