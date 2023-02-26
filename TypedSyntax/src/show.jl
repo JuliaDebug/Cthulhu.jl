@@ -1,12 +1,15 @@
-function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode)
-    println(io, "line:col│ byte_range  │ tree                                   │ type or call idxs")
-    JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "")
+function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_offsets=false)
+    println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ type")
+    JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
 end
 
-function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNode, indent)
+function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNode, indent, show_byte_offsets)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
-    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
+    posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
+    if show_byte_offsets
+        posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
+    end
     val = node.val
     nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
     isa(val, Symbol) ? string(val) : repr(val)
@@ -18,7 +21,7 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
     if haschildren(node)
         new_indent = indent*"  "
         for n in children(node)
-            JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent)
+            JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
         end
     end
 end
