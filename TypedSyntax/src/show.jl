@@ -105,7 +105,7 @@ function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
                  is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T; color)
     else
-        print(io, "::", T)
+        printstyled(io, "::", T; color=:cyan)
     end
 end
 

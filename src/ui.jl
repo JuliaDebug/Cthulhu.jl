@@ -88,7 +88,7 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
+function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
     custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
@@ -118,9 +118,9 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
     print(ioctx, '.')
     println(ioctx)
     println(ioctx, "Show: [",
-        colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
+        colorize(annotate_source, 'S'), "]ource code, [",
         colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
-        colorize(view_cmd === cthulhu_typed, 'T'), "]yped code, [",
+        colorize(!annotate_source && view_cmd === cthulhu_typed, 'T'), "]yped code, [",
         colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
         colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,

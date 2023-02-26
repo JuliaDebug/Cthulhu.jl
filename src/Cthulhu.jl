@@ -52,7 +52,7 @@ Base.@kwdef mutable struct CthulhuConfig
     with_effects::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
-    annotate_source::Bool = false   # incompatible with optimize=true
+    annotate_source::Bool = true   # overrides optimize, although the current setting is preserved
 end
 
 """
@@ -79,7 +79,7 @@ end
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
-- `annotate_source::Bool` Initial state of "Source". Defaults to `false`.
+- `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
 """
 const CONFIG = CthulhuConfig()
 
@@ -433,7 +433,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    is_cached(key::MethodInstance) = can_descend(interp, key, optimize)
+    is_cached(key::MethodInstance) = can_descend(interp, key, optimize & !annotate_source)
 
     menu_options = (; cursor = '•', scroll_wrap = true)
     display_CI = true
@@ -455,9 +455,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     end
     while true
         if isa(override, InferenceResult)
-            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize)
+            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize & !annotate_source)
         elseif isa(override, SemiConcreteCallInfo)
-                (; src, rt, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize)
+                (; src, rt, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize & !annotate_source)
         else
             if optimize && !annotate_source
                 codeinst = get_optimized_codeinst(interp, curs)
@@ -484,16 +484,16 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     end
                 end
             end
-            (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize)
+            (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize & !annotate_source)
         end
         mi = get_mi(curs)
-        src = preprocess_ci!(src, mi, optimize, CONFIG)
-        if optimize || isa(src, IRCode) # optimization might have deleted some statements
+        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
+        if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
             infos = src.stmts.info
         else
             @assert length(src.code) == length(infos)
         end
-        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize, annotate_source)
+        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
@@ -540,8 +540,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         shown_callsites = annotate_source ? sourcenodes : callsites
-        menu = CthulhuMenu(shown_callsites, with_effects, optimize, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
-        usg = usage(view_cmd, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
+        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
+        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -585,7 +585,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         end
                     end
                 end
-                menu = CthulhuMenu(show_sub_callsites, with_effects, optimize, false, false, custom_toggles; sub_menu=true, menu_options...)
+                menu = CthulhuMenu(show_sub_callsites, with_effects, optimize & !annotate_source, false, false, custom_toggles; sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
@@ -691,8 +691,13 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             display_CI = false
         elseif toggle === :typed
             view_cmd = cthulhu_typed
+            annotate_source = false
             display_CI = true
-        elseif toggle === :ast || toggle === :llvm || toggle === :native || toggle === :source
+        elseif toggle === :source
+            view_cmd = cthulhu_typed
+            annotate_source = true
+            display_CI = true
+        elseif toggle === :ast || toggle === :llvm || toggle === :native
             view_cmd = CODEVIEWS[toggle]
             println(iostream)
             view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
@@ -816,7 +821,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
             # warn highlighting is useful.
             interp′ = CthulhuInterpreter(interp)
             do_typeinf!(interp′, mi)
-            browsecodetyped && _descend(term, interp′, mi; iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, interp′, mi; annotate_source=true, iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end

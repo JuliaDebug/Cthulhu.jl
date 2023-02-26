@@ -56,16 +56,6 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, conf
     end
 end
 
-function cthulhu_source(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, config::CthulhuConfig)
-    meth = mi.def::Method
-    def = definition(String, meth)
-    if isnothing(def)
-        return @warn "couldn't retrieve source of $meth"
-    end
-    src, line = def
-    highlight(io, src, "julia", config)
-end
-
 using Base.IRShow: IRShow, _stmt, _type, should_print_ssa_type, IRShowConfig, show_ir
 
 const __debuginfo = merge(IRShow.__debuginfo, Dict(
@@ -273,7 +263,6 @@ const CODEVIEWS = (;
     llvm=cthulhu_llvm,
     native=cthulhu_native,
     ast=cthulhu_ast,
-    source=cthulhu_source,
 )
 
 """
