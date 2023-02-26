@@ -341,7 +341,8 @@ function get_typed_sourcetext(mi, src, rt)
     meth = mi.def::Method
     def = definition(String, meth)
     if isnothing(def)
-        return @warn "couldn't retrieve source of $meth"
+        @warn "couldn't retrieve source of $meth"
+        return nothing, nothing
     end
     srctxt, lineno = def
     rootnode = JuliaSyntax.parse(JuliaSyntax.SyntaxNode, srctxt, filename=String(meth.file), first_line=lineno)
@@ -349,5 +350,17 @@ function get_typed_sourcetext(mi, src, rt)
     mappings, symtyps = TypedSyntax.map_ssas_to_source(src, rootnode, lineno - meth.line)
     tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     tsn.typ = rt
+    # If we're filling in keyword args, just show the signature
+    if meth.name == :kwcall || (meth.nkw == 0 && Base.bodyfunction(meth) !== nothing)
+        sig, body = TypedSyntax.children(tsn)
+        # eliminate the body node
+        raw, bodyraw = tsn.raw, body.raw
+        idx = findfirst(==(bodyraw), raw.args)
+        if idx !== nothing
+            tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, raw.args[1:idx-1]), raw.args[1:idx-1])
+            body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
+            empty!(TypedSyntax.children(body))
+        end
+    end
     return tsn, mappings
 end
