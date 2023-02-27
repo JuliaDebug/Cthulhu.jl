@@ -67,7 +67,7 @@ end
     try
         fake_terminal() do term, in, out
             t = @async begin
-                @with_try_stderr out descend(simplef, Tuple{Float32, Int32}; interruptexc=false, terminal=term)
+                @with_try_stderr out descend(simplef, Tuple{Float32, Int32}; annotate_source=false, interruptexc=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("invoke simplef(::Float32,::Int32)::Float32", lines)
@@ -119,12 +119,7 @@ end
             # Source view
             write(in, 'S')
             lines = cread(out)
-            @test occursin("""
-            \n\nfunction simplef(a, b)
-                z = a*a
-                return z + b
-            end
-            """, lines)
+            @test occursin("z\e[36m::Float32\e[39m = (a\e[36m::Float32\e[39m*a\e[36m::Float32\e[39m)\e[36m::Float32\e[39m", lines)
             @test occursin('[' * colorize(true, 'S') * "]ource", lines)
             # turn on syntax highlighting
             write(in, 's'); cread(out)
@@ -134,7 +129,8 @@ end
             @test occursin("\u001B", first(split(lines, '\n')))
             @test occursin('[' * colorize(true, 's') * "]yntax", lines)
             write(in, 's'); cread(out)  # off again
-            # Toggling 'o' goes back to typed code, make sure it also updates the selector status
+            # Back to typed code
+            write(in, 'T'); cread(out)
             write(in, 'o')
             lines = cread(out)
             @test occursin('[' * colorize(true, 'T') * "]yped", lines)
@@ -192,7 +188,7 @@ end
         # Multicall & iswarn=true
         fake_terminal() do term, in, out
             t = @async begin
-                @with_try_stderr out descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; interruptexc=false, optimize=false, terminal=term)
+                @with_try_stderr out descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("\nBody\e[", lines)
@@ -216,7 +212,7 @@ end
         ftask() = @sync @async show(io, "Hello")
         fake_terminal() do term, in, out
             t = @async begin
-                @with_try_stderr out @descend terminal=term ftask()
+                @with_try_stderr out @descend terminal=term annotate_source=false ftask()
             end
             lines = cread(out)
             @test occursin(r"• %\d\d = task", lines)
@@ -232,7 +228,7 @@ end
         mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
         fake_terminal() do term, in, out
             t = @async begin
-                @with_try_stderr out descend(mi; interruptexc=false, optimize=false, terminal=term)
+                @with_try_stderr out descend(mi; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("fmulti(::Any)", lines)
@@ -241,7 +237,7 @@ end
         end
         fake_terminal() do term, in, out
             t = @async begin
-                @with_try_stderr out descend_code_warntype(mi; interruptexc=false, optimize=false, terminal=term)
+                @with_try_stderr out descend_code_warntype(mi; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
@@ -269,7 +265,6 @@ end
             ln = occursin(r"caller.*inner3", lines[6]) ? 6 :
                  occursin(r"caller.*inner3", lines[8]) ? 8 : error("not found")
             @test occursin("inner2", lines[ln+1])
-            @test any(str -> occursin("Variables", str), lines[ln+2:end])
             write(in, 'q')
             write(in, 'q')
             wait(t)
