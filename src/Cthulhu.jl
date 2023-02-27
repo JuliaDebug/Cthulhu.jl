@@ -553,7 +553,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 interruptexc ? throw(InterruptException()) : break
             end
             callsite = callsites[cid]
-            sourcenode = sourcenodes !== nothing ? sourcenodes[cid] : nothing
+            sourcenode = !isempty(sourcenodes) ? sourcenodes[cid] : nothing
 
             info = callsite.info
             if info isa MultiCallInfo

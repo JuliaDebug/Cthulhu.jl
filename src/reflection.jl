@@ -298,7 +298,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     for optimize in (true, false)
         (; src, rt, infos, slottypes) = lookup(interp′, caller, optimize)
         src = preprocess_ci!(src, caller, optimize, CONFIG)
-        callsites = find_callsites(interp′, src, infos, caller, slottypes, optimize)
+        callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
@@ -351,7 +351,7 @@ function get_typed_sourcetext(mi, src, rt)
     tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     tsn.typ = rt
     # If we're filling in keyword args, just show the signature
-    if meth.name == :kwcall || (meth.nkw > 0 && Base.bodyfunction(meth) !== nothing)
+    if meth.name == :kwcall || !isempty(Base.kwarg_decl(meth))
         sig, body = TypedSyntax.children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw
