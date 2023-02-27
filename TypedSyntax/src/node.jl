@@ -403,6 +403,7 @@ function map_ssas_to_source(src, rootnode, Δline)
                         if is_slot(arg)
                             sym = src.slotnames[arg.id]
                             for t in symlocs[sym]
+                                haskey(symtyps, t) && continue
                                 if t.parent == node
                                     is_prec_assignment(node) && t == child(node, 1) && continue
                                     symtyps[t] = if j > 0

@@ -35,6 +35,12 @@ end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
 
+# with two uses of the same slot in the same call
+function simplef(a, b)
+    z = a * a
+    return z + b + y
+end
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -103,6 +109,10 @@ end
     sig, body = children(tsn)
     @test body.typ === Float64
     @test_broken child(body, 1).typ === Float64
+    tsn = TypedSyntaxNode(TSN.simplef, Tuple{Float32, Int32})
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1, 2, 1), :a, Float32)
+    @test has_name_typ(child(body, 1, 2, 3), :a, Float32)
 
     # Inner functions
     for (st, idxsinner, idxsouter) in (
