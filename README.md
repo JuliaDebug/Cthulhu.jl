@@ -26,7 +26,8 @@ You can also toggle various aspect of the view, for example to suppress
 "type-stable" (concretely inferred) annotations or view non-concrete
 types in red.
 Currently-active options are highlighted with color; press the corresponding
-key to toggle these options.
+key to toggle these options. Below we walk through a simple example of
+these interactive features.
 
 ## Usage: descend
 
