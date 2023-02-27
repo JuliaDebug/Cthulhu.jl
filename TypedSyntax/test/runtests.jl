@@ -235,7 +235,13 @@ end
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
     end
+    @test occursin("summer(list\e[36m::Vector{Any}\e[39m)\e[31m::Any", str)
     @test occursin("s\e[31m::Any\e[39m += x\e[31m::Any\e[39m", str)
+    str = sprint(tsn; context=:color=>true) do io, obj
+        printstyled(io, obj; type_annotations=false)
+    end
+    @test occursin("summer(list)", str)
+    @test occursin("s += x", str)
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)

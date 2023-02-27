@@ -27,7 +27,7 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
 end
 
 
-function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
     rt = gettyp(rootnode)
     rootnode = get_function_def(rootnode)
     lastidx = first_byte(rootnode) - 1
@@ -35,27 +35,27 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; iswarn::Bool=t
         # We're printing a MethodInstance
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
-        lastidx = show_src_expr(io, sig, lastidx; iswarn, hide_type_stable)
-        maybe_show_annotation(io, rt; iswarn, hide_type_stable)
+        lastidx = show_src_expr(io, sig, lastidx; type_annotations, iswarn, hide_type_stable)
+        type_annotations && maybe_show_annotation(io, rt; iswarn, hide_type_stable)
         rootnode = body
     end
-    lastidx = show_src_expr(io, rootnode, lastidx; iswarn, hide_type_stable)
+    lastidx = show_src_expr(io, rootnode, lastidx; type_annotations, iswarn, hide_type_stable)
     # println(io, rootnode.source[lastidx+1:end])   # FIXME: final `end` can get truncated
     return nothing
 end
 
-function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; iswarn::Bool=false, hide_type_stable::Bool=false)
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)
     _lastidx = last_byte(node)
     if kind(node) == K"Identifier" || (kind(node) == K"::" && is_prefix_op_call(node))
         print_with_linenumber(io, node, lastidx+1:_lastidx)
-        maybe_show_annotation(io, gettyp(node); iswarn, hide_type_stable)
+        type_annotations && maybe_show_annotation(io, gettyp(node); iswarn, hide_type_stable)
         return _lastidx
     end
     # We only handle "call" nodes. For anything else, just print the node (recursing into children)
     if kind(node) != K"call"
         for child in children(node)
-            lastidx = show_src_expr(io, child, lastidx; iswarn, hide_type_stable)
+            lastidx = show_src_expr(io, child, lastidx; type_annotations, iswarn, hide_type_stable)
         end
         print_with_linenumber(io, node, lastidx+1:_lastidx)
         return _lastidx
@@ -69,11 +69,11 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; iswarn:
     end
     T = gettyp(node)
     # should we print a type-annotation?
-    type_annotate = isa(T, Vector{Int}) || (isa(T, Type) && (!hide_type_stable || is_type_unstable(T)))
+    type_annotate = type_annotations & (isa(T, Vector{Int}) || (isa(T, Type) && (!hide_type_stable || is_type_unstable(T))))
     type_annotate && print(io, pre)
     for (childid, child) in enumerate(children(node))
         childid == 2 && type_annotate && print(io, prepost)
-        lastidx = show_src_expr(io, child, lastidx; iswarn, hide_type_stable)
+        lastidx = show_src_expr(io, child, lastidx; type_annotations, iswarn, hide_type_stable)
     end
     print(io, node.source[lastidx+1:_lastidx])
     if type_annotate && T !== nothing
