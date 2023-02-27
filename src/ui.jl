@@ -99,17 +99,20 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
 
     println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
     print(ioctx, "Toggles: [",
-        colorize(optimize, 'o'), "]ptimize, [",
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
-        stringify() do io
-            printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
-        end, "]ebuginfo, [",
-        colorize(remarks, 'r'), "]emarks, [",
-        colorize(with_effects, 'e'), "]ffects, [",
-        colorize(inline_cost, 'i'), "]nlining costs, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
         colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+    if !annotate_source
+        print(ioctx, ", [",
+            colorize(optimize, 'o'), "]ptimize, [",
+            stringify() do io
+                printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
+            end, "]ebuginfo, [",
+            colorize(remarks, 'r'), "]emarks, [",
+            colorize(with_effects, 'e'), "]ffects, [",
+            colorize(inline_cost, 'i'), "]nlining costs")
+    end
     for i = 1:length(custom_toggles)
         ct = custom_toggles[i]
         print(ioctx, ", [", colorize(ct.onoff, Char(ct.key)), ']', ct.description)
