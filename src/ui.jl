@@ -128,8 +128,12 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
         colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
     """
-    Actions: [E]dit source code, [R]evise and redisplay
-    Advanced: dump [P]arams cache.""")
+    Actions: [E]dit source code, [R]evise and redisplay""")
+    if !annotate_source
+        print(ioctx,
+        """
+        Advanced: dump [P]arams cache.""")
+    end
     return String(take!(io))
 end
 
