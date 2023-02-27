@@ -53,7 +53,7 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; type_an
         return _lastidx
     end
     # We only handle "call" nodes. For anything else, just print the node (recursing into children)
-    if kind(node) != K"call"
+    if kind(node) ∉ KSet"call ref"
         for child in children(node)
             lastidx = show_src_expr(io, child, lastidx; type_annotations, iswarn, hide_type_stable)
         end

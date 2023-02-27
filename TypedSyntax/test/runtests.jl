@@ -41,6 +41,8 @@ function simplef(a, b)
     return z + b + y
 end
 
+add2(x) = x[1] + x[2]
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -248,4 +250,10 @@ end
     end
     @test occursin("AbstractArray{T}\e[36m::Vector{Int16}\e[39m", str)
     @test occursin("Real\e[36m::Int16\e[39m", str)
+    tsn = TypedSyntaxNode(TSN.add2, (Vector{Float32},))
+    str = sprint(tsn; context=:color=>true) do io, obj
+        printstyled(io, obj; iswarn=true, hide_type_stable=false)
+    end
+    @test occursin("[1]\e[36m::Float32\e[39m", str)
+    @test occursin("[2]\e[36m::Float32\e[39m", str)
 end
