@@ -140,7 +140,8 @@ function gettyp(node2ssa, node, src)
         isa(arg, SSAValue) && return src.ssavaluetypes[arg.id]
         is_slot(arg) && return src.slottypes[arg.id]
     end
-    return src.ssavaluetypes[i]
+    T = src.ssavaluetypes[i]
+    return isa(T, Core.Const) ? typeof(T.val) : T
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ)
@@ -289,17 +290,22 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 @assert is_slot(lhs)
                 # For `mappings` we're interested only in the right hand side of this assignment
                 stmt = stmt.args[2]
-                if is_slot(stmt) || isa(stmt, SSAValue)  # generic calls are handled below. Here, can we just look up the answer?
+                if is_slot(stmt) || isa(stmt, SSAValue) || is_src_literal(stmt) # generic calls are handled below. Here, can we just look up the answer?
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = is_slot(stmt) ? src.slottypes[stmt.id] : src.ssavaluetypes[stmt.id]
+                        symtyps[only(mapped)] = is_slot(stmt) ? src.slottypes[stmt.id] :
+                                                isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        symtyps[only(argmapping)] = src.ssavaluetypes[i]
+                        T = src.ssavaluetypes[i]
+                        if isa(T, Core.Const)
+                            T = typeof(T.val)
+                        end
+                        symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
                     continue

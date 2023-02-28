@@ -89,7 +89,7 @@ end
     @test has_name_typ(child(body, 1), :x, Int)
     @test has_name_typ(child(body, 3, 2, 1), :x, Int)
     pi4 = child(body, 3, 2, 3)
-    @test kind(pi4) == K"call" && pi4.typ == Core.Const(π / 4)
+    @test kind(pi4) == K"call" && pi4.typ == typeof(π / 4)
     tsn = TypedSyntaxNode(TSN.has2xa, (Real,))
     @test tsn.typ === Any
     sig, body = children(tsn)
@@ -219,7 +219,7 @@ end
     @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :list, Vector{Float64})
-    @test_broken has_name_typ(child(body, 1, 1), :s, Int)
+    @test has_name_typ(child(body, 1, 1), :s, Int)
     @test_broken has_name_typ(child(body, 2, 1, 1), :x, Float64)
     node = child(body, 2, 2, 1)
     @test kind(node) == K"+="
