@@ -10,7 +10,6 @@ julia> using TypedSyntax
 julia> f(x, y, z) = x + y * z;
 
 julia> node = TypedSyntaxNode(f, (Float64, Int, Float32))
-julia> node = TypedSyntaxNode(f, (Float64, Int, Float32))
 line:col│ tree                                   │ type
    1:1  │[=]                                     │Float64
    1:1  │  [call]
