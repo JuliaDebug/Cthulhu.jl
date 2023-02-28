@@ -25,7 +25,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
     callsites, sourcenodes = Callsite[], Union{TypedSyntaxNode,SyntaxNode,Callsite}[]
     stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
     nstmts = length(stmts)
-    _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing) : (nothing, nothing)
+    _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
     for id = 1:nstmts
         stmt = stmts[id]
@@ -95,8 +95,12 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
 
             push!(callsites, callsite)
             if annotate_source
-                mapped = mappings[id]
-                push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+                if mappings !== nothing
+                    mapped = mappings[id]
+                    push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+                else
+                    push!(sourcenodes, callsite)
+                end
             end
         end
     end
@@ -337,15 +341,19 @@ function add_sourceline!(locs, CI, stmtidx::Int)
     return locs
 end
 
-function get_typed_sourcetext(mi, src, rt)
+function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
     meth = mi.def::Method
     def = definition(String, meth)
     if isnothing(def)
-        @warn "couldn't retrieve source of $meth"
+        warn && @warn "couldn't retrieve source of $meth"
         return nothing, nothing
     end
     srctxt, lineno = def
     rootnode = JuliaSyntax.parse(JuliaSyntax.SyntaxNode, srctxt, filename=String(meth.file), first_line=lineno)
+    if !TypedSyntax.is_function_def(rootnode)
+        warn && @warn "couldn't retrieve source of $meth"
+        return nothing, nothing
+    end
     # We need `mappings` for `callsite`s, so construct with lower-level calls
     mappings, symtyps = TypedSyntax.map_ssas_to_source(src, rootnode, lineno - meth.line)
     tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)

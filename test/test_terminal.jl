@@ -45,8 +45,8 @@ end
     end
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
-    fn = tempname()
-    open(fn, "w") do io
+    revisedfile = tempname()
+    open(revisedfile, "w") do io
         println(io,
         """
         function simplef(a, b)
@@ -55,7 +55,7 @@ end
         end
         """)
     end
-    includet(@__MODULE__, fn)
+    includet(@__MODULE__, revisedfile)
 
     # Copy the user's current settings and set up the defaults
     CONFIG = deepcopy(Cthulhu.CONFIG)
@@ -65,7 +65,7 @@ end
     end
 
     try
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out descend(simplef, Tuple{Float32, Int32}; annotate_source=false, interruptexc=false, terminal=term)
             end
@@ -167,7 +167,7 @@ end
             @test occursin(r"\(z \+ b\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
             @test occursin('[' * colorize(true, 'T') * "]yped", lines)
             # Revise
-            open(fn, "w") do io
+            open(revisedfile, "w") do io
                 println(io,
                 """
                 function simplef(a, b)
@@ -186,7 +186,7 @@ end
             wait(t)
         end
         # Multicall & iswarn=true
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
@@ -210,7 +210,7 @@ end
         end
         # Tasks (see the special handling in `_descend`)
         ftask() = @sync @async show(io, "Hello")
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out @descend terminal=term annotate_source=false ftask()
             end
@@ -226,7 +226,7 @@ end
         end
         # descend with MethodInstances
         mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out descend(mi; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
@@ -235,13 +235,31 @@ end
             write(in, 'q')
             wait(t)
         end
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out descend_code_warntype(mi; annotate_source=false, interruptexc=false, optimize=false, terminal=term)
             end
             lines = cread(out)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
             write(in, 'q')
+            wait(t)
+        end
+        # Fallback to typed code
+        fake_terminal() do term, in, out, err
+            t = @async @with_try_stderr out begin
+                redirect_stderr(err) do
+                    descend((Int,); annotate_source=true, interruptexc=false, optimize=false, terminal=term) do x
+                        [x]
+                    end
+                end
+            end
+            lines = cread1(out)
+            wlines = readuntil(err, '\n')
+            @test occursin("couldn't retrieve source", wlines)
+            @test occursin("%1 = Base.vect(x)", lines)
+            @test occursin("(::$Int)::Vector{$Int}", lines)
+            write(in, 'q')
+            readuntil(err, '\n')   # Clear out any extra output
             wait(t)
         end
 
@@ -251,7 +269,7 @@ end
                   inner1(x) = -1*inner2(x)
         inner1(0x0123)
         mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
-        fake_terminal() do term, in, out
+        fake_terminal() do term, in, out, _
             t = @async begin
                 @with_try_stderr out ascend(term, mi)
             end
@@ -274,7 +292,7 @@ end
         for fn in fieldnames(Cthulhu.CthulhuConfig)
             setfield!(Cthulhu.CONFIG, fn, getfield(CONFIG, fn))
         end
-        rm(fn)
+        rm(revisedfile)
     end
 end
 

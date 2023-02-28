@@ -108,9 +108,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if annotate_source && isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, rt)
-        printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable)
-        println(lambda_io)
-        return nothing
+        if tsn !== nothing
+            printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable)
+            println(lambda_io)
+            return nothing
+        end
     end
 
     if isa(src, CodeInfo)
