@@ -43,6 +43,8 @@ end
 
 add2(x) = x[1] + x[2]
 
+likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -231,6 +233,13 @@ end
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Core.Const(Int16(0))
+
+    # varargs
+    tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
+    sig, body = children(tsn)
+    nodeva = child(sig, 1, 2)
+    @test kind(nodeva) == K"..."
+    @test has_name_typ(child(nodeva, 1, 1), :X, Tuple{Int,Int})
 
     # Display
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Any},))

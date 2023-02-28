@@ -43,6 +43,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; type_annotatio
     # println(io, rootnode.source[lastidx+1:end])   # FIXME: final `end` can get truncated
     return nothing
 end
+Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false)
     lastidx = catchup(io, node, lastidx)

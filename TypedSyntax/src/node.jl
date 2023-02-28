@@ -45,6 +45,9 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
         i = 1
         for arg in Iterators.drop(children(sig), 1)
             kind(arg) == K"parameters" && break   # kw args
+            if kind(arg) == K"..."
+                arg = only(children(arg))
+            end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1
@@ -402,6 +405,7 @@ function map_ssas_to_source(src, rootnode, Δline)
                         end
                         if is_slot(arg)
                             sym = src.slotnames[arg.id]
+                            sym == Symbol("") && continue
                             for t in symlocs[sym]
                                 haskey(symtyps, t) && continue
                                 if t.parent == node
