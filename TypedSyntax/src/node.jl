@@ -15,15 +15,35 @@ const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 struct NotFound end
 # struct Unmatched end
 
-function TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...)
+function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     m = which(f, t)
-    sourcetext, lineno = definition(String, m)
-    rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     src, rt = getsrc(f, t)
-    node = TypedSyntaxNode(rootnode, src, lineno - m.line)
-    node.typ = rt
-    return node
+    tsn_and_mappings(m, src, rt; kwargs...)
 end
+
+function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    def = definition(String, m)
+    if isnothing(def)
+        warn && @warn "couldn't retrieve source of $m"
+        return nothing, nothing
+    end
+    sourcetext, lineno = def
+    rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
+    if strip_macros
+        rootnode = get_function_def(rootnode)
+        if !is_function_def(rootnode)
+            warn && @warn "couldn't retrieve source of $m"
+            return nothing, nothing
+        end
+    end
+    Δline = lineno - m.line   # offset from original line number (Revise)
+    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+    node = TypedSyntaxNode(rootnode, src, mappings, symtyps)
+    node.typ = rt
+    return node, mappings
+end
+
+TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
 
 TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
     TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)

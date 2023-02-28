@@ -343,29 +343,16 @@ end
 
 function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
     meth = mi.def::Method
-    def = definition(String, meth)
-    if isnothing(def)
-        warn && @warn "couldn't retrieve source of $meth"
-        return nothing, nothing
-    end
-    srctxt, lineno = def
-    rootnode = JuliaSyntax.parse(JuliaSyntax.SyntaxNode, srctxt, filename=String(meth.file), first_line=lineno)
-    if !TypedSyntax.is_function_def(rootnode)
-        warn && @warn "couldn't retrieve source of $meth"
-        return nothing, nothing
-    end
-    # We need `mappings` for `callsite`s, so construct with lower-level calls
-    mappings, symtyps = TypedSyntax.map_ssas_to_source(src, rootnode, lineno - meth.line)
-    tsn = TypedSyntaxNode(rootnode, src, mappings, symtyps)
-    tsn.typ = rt
+    tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
     # If we're filling in keyword args, just show the signature
     if meth.name == :kwcall || !isempty(Base.kwarg_decl(meth))
-        sig, body = TypedSyntax.children(tsn)
+        _, body = TypedSyntax.children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw
         idx = findfirst(==(bodyraw), raw.args)
         if idx !== nothing
-            tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, raw.args[1:idx-1]), raw.args[1:idx-1])
+            rawargs = raw.args[1:idx-1]
+            tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, rawargs), rawargs)
             body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
             empty!(TypedSyntax.children(body))
         end
