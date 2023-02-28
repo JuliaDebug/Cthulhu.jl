@@ -43,6 +43,9 @@ jobs:
         with:
           check_bounds: 'auto'
           coverage: 'false'
+      - name: TypedSyntax     # run the tests of TypedSyntax (a subdir package)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: julia --project=TypedSyntax -e 'using Pkg; Pkg.test(coverage=true)'
       # - name: Coverage off  # `empty_func` test doesn't work as intended with `coverage=true`
       #   if: ${{ matrix.os == 'ubuntu-latest' }}
       #   run: julia --project -e 'using Pkg; Pkg.test("Cthulhu"; coverage=false)'
