@@ -66,9 +66,9 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                     printstyled(io, ln; color=:light_black)
                 end,
                 " ",
-                sprint(node; context=:color=>true) do io, node
+                chomp(sprint(node; context=:color=>true) do io, node
                     printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
-                end
+                end)
             )
         end
     end

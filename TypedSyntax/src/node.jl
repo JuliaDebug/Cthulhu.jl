@@ -15,6 +15,8 @@ const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 struct NotFound end
 # struct Unmatched end
 
+# Call these if you want both the TypedSyntaxNode and the `mappings` list,
+# where `mappings[i]` corresponds to `(src::CodeInfo).code[i]`.
 function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     m = which(f, t)
     src, rt = getsrc(f, t)
@@ -361,13 +363,20 @@ function map_ssas_to_source(src, rootnode, Δline)
             # so when it works you know you are correct.
             stmtmapping = Set{typeof(rootnode)}()
             for arg in stmt.args
+                # Collect all source-nodes that use this argument
                 append_targets_for_arg!(argmapping, i, arg)
                 if !isempty(argmapping)
                     if isempty(stmtmapping)
+                        # First matched argument
+                        # For each candidate source-node, push its parent-node into `stmtmapping`.
+                        # The true call-node should be among these.
                         foreach(argmapping) do t
                             push!(stmtmapping, t.parent)
                         end
                     else
+                        # Second or later matched argument
+                        # The matching caller needs to be used by all `stmt.args`,
+                        # so we `intersect` to find nodes that use all args
                         intersect!(stmtmapping, map(t->t.parent, argmapping))
                     end
                 end
@@ -377,12 +386,12 @@ function map_ssas_to_source(src, rootnode, Δline)
             sort!(mapped; by=t->t.position)   # since they went into a set, best to order them within the source
             stmt = src.code[i]   # re-get the statement so we process slot-assignment
             if length(mapped) == 1 && isa(stmt, Expr)
-                # We've mapped the call uniquely.
+                # We've mapped the call uniquely (i.e., we found the right match)
+                node = only(mapped)
                 # Final step: set up symtyps for all the user-visible variables
                 # Because lowering can build methods that take a different number of arguments than appear in the
                 # source text, don't try to count arguments. Instead, find a symbol that is part of
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
-                node = only(mapped)
                 if stmt.head == :(=)
                     # Tag the LHS of this expression
                     arg = stmt.args[1]

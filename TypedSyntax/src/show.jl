@@ -27,20 +27,22 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
 end
 
 
-function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode; type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true, kwargs...)
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
+                          type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
+                          idxend = last_byte(rootnode), kwargs...)
     rt = gettyp(rootnode)
     rootnode = get_function_def(rootnode)
-    lastidx = first_byte(rootnode) - 1
+    position = first_byte(rootnode) - 1
     if is_function_def(rootnode)
         # We're printing a MethodInstance
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
-        lastidx = show_src_expr(io, sig, lastidx; type_annotations, iswarn, hide_type_stable)
+        position = show_src_expr(io, sig, position; type_annotations, iswarn, hide_type_stable)
         type_annotations && maybe_show_annotation(io, rt; iswarn, hide_type_stable)
         rootnode = body
     end
-    lastidx = show_src_expr(io, rootnode, lastidx; type_annotations, iswarn, hide_type_stable)
-    # println(io, rootnode.source[lastidx+1:end])   # FIXME: final `end` can get truncated
+    position = show_src_expr(io, rootnode, position; type_annotations, iswarn, hide_type_stable)
+    println(io, rootnode.source[position+1:idxend])
     return nothing
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
@@ -133,7 +135,7 @@ function print_with_linenumber(io::IO, node::AbstractSyntaxNode, byterange)
     for (i, c) in pairs(node.source[byterange])
         print(io, c)
         if c == '\n'
-            printstyled(io, lpad(source_line(node.source, i + offset), nd), " "; color=:light_black)
+            printstyled(io, lpad(source_line(node.source, i + offset + 1), nd), " "; color=:light_black)
         end
     end
 end
