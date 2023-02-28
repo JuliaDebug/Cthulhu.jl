@@ -422,7 +422,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     with_effects::Bool                       = CONFIG.with_effects,                  # default is false
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
-    annotate_source::Bool                    = CONFIG.annotate_source,               # default is false
+    annotate_source::Bool                    = CONFIG.annotate_source,               # default is true
     )
 
     if isnothing(hide_type_stable)
