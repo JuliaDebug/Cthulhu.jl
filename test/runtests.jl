@@ -12,7 +12,7 @@ using Test, PerformanceTestTools
     # TODO enable this test on nightly
     @static if VERSION < v"1.9.0-DEV.1295"
         @testset "test_irshow.jl" begin
-            PerformanceTestTools.@include("test_irshow.jl")
+            include("test_irshow.jl")
         end
     else
         @info "skipped test_irshow.jl"

@@ -16,8 +16,6 @@ end
 
 function empty_func(::Bool) end
 
-isordered(::Type{T}) where {T<:AbstractDict} = false
-
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -30,12 +28,12 @@ isordered(::Type{T}) where {T<:AbstractDict} = false
 
     # handle pure
     callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
-    @test occursin("< pure >", string(callsites[1]))
-    @test occursin(r"< constprop > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
+    @test occursin("::Core.Const((1, 1))", string(callsites[1]))
+    @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
     callsites = @eval find_callsites_by_ftt(; optimize=false) do
         length($(QuoteNode(Core.svec(0,1,2))))
     end
-    @test occursin("< pure >", string(callsites[1]))
+    @test occursin(r"< (pure|concrete eval) >", string(callsites[1]))
 
     # Some weird methods get inferred
     callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
@@ -104,32 +102,28 @@ let callsites = find_callsites_by_ftt(call_by_apply, Tuple{Tuple{Int}}; optimize
     @test length(callsites) == 1
 end
 
-# # TODO run this testset in a separate process
-# # julia --check-bounds=auto --code-coverage=none
-# @testset "DCE & boundscheck" begin
-#     M = Module()
-#     @eval M begin
-#         Base.@propagate_inbounds function f(x)
-#             @boundscheck error()
-#         end
-#         g(x) = @inbounds f(x)
-#         h(x) = f(x)
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-#         @test all(src.stmts.inst) do stmt
-#             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
-#         end
-#     end
-#
-#     let
-#         (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
-#         @test count(!isnothing, src.stmts.inst) == 2
-#         stmt = src.stmts.inst[end]
-#         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
-#     end
-# end
+@testset "DCE & boundscheck" begin
+    M = Module()
+    @eval M begin
+        Base.@propagate_inbounds function f(x)
+            @boundscheck error()
+        end
+        g(x) = @inbounds f(x)
+        h(x) = f(x)
+    end
+
+    let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
+        @test all(src.stmts.inst) do stmt
+            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+        end
+    end
+
+    let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
+        @test count(!isnothing, src.stmts.inst) == 2
+        stmt = src.stmts.inst[end]
+        @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+    end
+end
 
 # Something with many methods, but enough to be under the match limit
 g_matches(a::Int, b::Int) = a+b
@@ -219,7 +213,7 @@ end
             callinfos = callinfo.callinfos
             @test length(callinfos) == 2
             @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1        # getindex(::Vector{Any}, ::Const(1))
-            @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo) || isa(ci, Cthulhu.SemiConcreteCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
         end
 
         let callsites = (@eval Module() begin
@@ -293,6 +287,23 @@ end
     end
 end
 
+function bar346(x::ComplexF64)
+    x = ComplexF64(x.re, 1.0)
+    return sin(x.im)
+end
+@static VERSION >= v"1.10-" && @testset "issue #346" begin
+    let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
+        callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
+        @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
+        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
+
+        @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
+
+        @test Cthulhu.get_remarks(interp, callsites[1].info) == Cthulhu.PC2Remarks()
+        @test Cthulhu.get_effects(interp, callsites[1].info) == Cthulhu.PC2Effects()
+    end
+end
+
 struct SingletonPureCallable{N} end
 
 @testset "PureCallInfo" begin
@@ -305,8 +316,8 @@ struct SingletonPureCallable{N} end
     @test occursin("SingletonPureCallable{1}()(::Float64)::Float64", s)
 
     @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(c1) |> Core.Compiler.is_total
-        @test Cthulhu.get_effects(c2) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(c1) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(c2) |> is_foldable_nothrow
     end
 end
 
@@ -340,8 +351,8 @@ end
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
     @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(callinfo1) |> Core.Compiler.is_total
-        @test Cthulhu.get_effects(callinfo2) |> Core.Compiler.is_total
+        @test Cthulhu.get_effects(callinfo1) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(callinfo2) |> is_foldable_nothrow
     end
 end
 
@@ -354,7 +365,7 @@ end
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
         @static if Cthulhu.EFFECTS_ENABLED
-            @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_total
+            @test Cthulhu.get_effects(callinfo) |> !is_foldable_nothrow
             # TODO not sure what these effects are (and neither is Base.infer_effects yet)
         end
         @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
@@ -374,11 +385,12 @@ end
             oc = Base.Experimental.@opaque Base.@constprop :aggressive b -> sin(b)
             oc(42)
         end
+
         @test length(callsites) == 1
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
         inner = callinfo.ci
-        @test inner isa Cthulhu.ConstPropCallInfo
+        @test inner isa Cthulhu.ConstPropCallInfo || inner isa Cthulhu.SemiConcreteCallInfo
 
         buf = IOBuffer()
         Cthulhu.show_callinfo(buf, callinfo.ci)
@@ -412,7 +424,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         rt = Core.Compiler.Const(:Integer)
         @test info.ci.rt === rt
         buf = IOBuffer()
@@ -425,7 +437,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 
@@ -436,7 +448,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> Core.Compiler.is_total
+        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
         inner = info.ci
         rt = Core.Compiler.Const(Any)
         @test Cthulhu.get_rt(info) === rt
@@ -587,17 +599,6 @@ end
     cs = find_callsites_by_ftt(undef, Tuple{Bool})[end]
     @test cs.head === :invoke
     @test cs.info.mi.def == which(string, (String,String))
-end
-
-like_cat(dims, xs::AbstractArray{T}...) where T = like_cat_t(T, xs...; dims=dims)
-like_cat_t(::Type{T}, xs...; dims) where T = T
-
-let callsites = find_callsites_by_ftt(like_cat, Tuple{Val{3}, Vararg{Matrix{Float32}}})
-    @test length(callsites) == 1
-    cs = callsites[1]
-    @test cs isa Cthulhu.Callsite
-    mi = cs.info.mi
-    @test mi.specTypes.parameters[4] === Type{Float32}
 end
 
 @testset "warntype variables" begin

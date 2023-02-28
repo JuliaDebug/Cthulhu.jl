@@ -479,7 +479,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         Inference discarded the source for this call because of recursion:
                         Cthulhu nevertheless is trying to retrieve the source for further inspection.
                         """
-                        additional_descend(mi)
+                        additional_descend(get_mi(curs))
                         break
                     end
                 end
