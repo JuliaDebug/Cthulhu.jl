@@ -613,6 +613,11 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 """
                 additional_descend(get_mi(info)::MethodInstance)
                 continue
+            elseif info isa RTCallInfo
+                @info """
+                This is a runtime call. You cannot descend into it.
+                """
+                @goto show_menu
             end
 
             # recurse
