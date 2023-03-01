@@ -42,9 +42,9 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                     args = (ignorelhs(stmt)::Expr).args
                 end
                 argtypes = mapany(function (@nospecialize(arg),)
-                                        t = argextype(arg, CI, sptypes, slottypes)
-                                        return ignorelimited(t)
-                                    end, args)
+                                      t = argextype(arg, CI, sptypes, slottypes)
+                                      return ignorelimited(t)
+                                  end, args)
                 callinfos = process_info(interp, info, argtypes, rt, optimize)
                 isempty(callinfos) && continue
                 callsite = let
