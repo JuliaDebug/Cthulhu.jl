@@ -33,26 +33,28 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
         callsite = nothing
         if stmt_infos !== nothing && is_call_expr(stmt, optimize)
             info = stmt_infos[id]
-            rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
-            # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
-            # so extract rhs for such an case
-            local args = stmt.args
-            if !optimize
-                args = (ignorelhs(stmt)::Expr).args
-            end
-            argtypes = mapany(function (@nospecialize(arg),)
-                                    t = argextype(arg, CI, sptypes, slottypes)
-                                    return ignorelimited(t)
-                                end, args)
-            callinfos = process_info(interp, info, argtypes, rt, optimize)
-            isempty(callinfos) && continue
-            callsite = let
-                if length(callinfos) == 1
-                    callinfo = callinfos[1]
-                else
-                    callinfo = MultiCallInfo(argtypes_to_type(argtypes), rt, callinfos)
+            if info !== nothing
+                rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
+                # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
+                # so extract rhs for such an case
+                local args = stmt.args
+                if !optimize
+                    args = (ignorelhs(stmt)::Expr).args
                 end
-                Callsite(id, callinfo, stmt.head)
+                argtypes = mapany(function (@nospecialize(arg),)
+                                        t = argextype(arg, CI, sptypes, slottypes)
+                                        return ignorelimited(t)
+                                    end, args)
+                callinfos = process_info(interp, info, argtypes, rt, optimize)
+                isempty(callinfos) && continue
+                callsite = let
+                    if length(callinfos) == 1
+                        callinfo = callinfos[1]
+                    else
+                        callinfo = MultiCallInfo(argtypes_to_type(argtypes), rt, callinfos)
+                    end
+                    Callsite(id, callinfo, stmt.head)
+                end
             end
         end
 
@@ -218,11 +220,11 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             vmi = FailedCallInfo(sig, Union{})
         end
         return Any[ReturnTypeCallInfo(vmi)]
-    elseif info == NoCallInfo()
+    elseif info == NoCallInfo() && info !== nothing
         f = unwrapconst(argtypes[1])
         isa(f, Core.Builtin) && return []
         return [RTCallInfo(f, argtypes[2:end], rt)]
-    elseif info === false
+    elseif info === nothing || info === false
         return []
     else
         @eval Main begin
