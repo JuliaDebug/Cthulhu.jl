@@ -256,8 +256,12 @@ end
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
     end
-    @test occursin("AbstractArray{T}\e[36m::Vector{Int16}\e[39m", str)
-    @test occursin("Real\e[36m::Int16\e[39m", str)
+    @test occursin("(::AbstractArray{T})\e[36m::Vector{Int16}\e[39m", str)
+    @test occursin("where T<:Real)\e[36m::Int16\e[39m", str)
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; iswarn=true, hide_type_stable=false)
+    end
+    @test occursin("(zerowhere((::AbstractArray{T})::Vector{Int16}) where T<:Real)::Int16", str)
     tsn = TypedSyntaxNode(TSN.add2, (Vector{Float32},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)

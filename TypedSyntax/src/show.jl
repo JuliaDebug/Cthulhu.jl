@@ -1,3 +1,5 @@
+## Extensions of JuliaSyntax to cover TypedSyntaxNode
+
 function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_offsets=false)
     println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ type")
     JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
@@ -26,86 +28,74 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
     end
 end
 
+## Custom printing via `printstyled`
 
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
                           idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
+    nd = ndigits(rootnode.source.first_line + nlines(rootnode.source, idxend))
     rootnode = get_function_def(rootnode)
     position = first_byte(rootnode) - 1
     if is_function_def(rootnode)
         # We're printing a MethodInstance
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
-        position = show_src_expr(io, sig, position; type_annotations, iswarn, hide_type_stable)
-        type_annotations && maybe_show_annotation(io, rt; iswarn, hide_type_stable)
+        type_annotate, pre, pre2, post = type_annotation_mode(sig, rt; type_annotations, hide_type_stable)
+        position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd)
+        type_annotate && show_annotation(io, rt, post; iswarn)
         rootnode = body
     end
-    position = show_src_expr(io, rootnode, position; type_annotations, iswarn, hide_type_stable)
-    println(io, rootnode.source[position+1:idxend])
+    position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
+    print(io, rootnode.source[position+1:idxend])   # finish the node
     return nothing
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
-function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false)
-    lastidx = catchup(io, node, lastidx)
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
-    if kind(node) == K"Identifier" || (kind(node) == K"::" && is_prefix_op_call(node))
-        print_with_linenumber(io, node, lastidx+1:_lastidx)
-        type_annotations && maybe_show_annotation(io, gettyp(node); iswarn, hide_type_stable)
-        return _lastidx
+    position = catchup(io, node, position, nd)
+    print(io, pre)
+    if haschildren(node)
+        position = catchup(io, first(children(node)), position, nd)
     end
-    # We only handle "call" nodes. For anything else, just print the node (recursing into children)
-    if kind(node) ∉ KSet"call ref"
-        for child in children(node)
-            lastidx = show_src_expr(io, child, lastidx; type_annotations, iswarn, hide_type_stable)
-        end
-        print_with_linenumber(io, node, lastidx+1:_lastidx)
-        return _lastidx
+    for (i, child) in enumerate(children(node))
+        i == 2 && print(io, pre2)
+        cT = gettyp(child)
+        ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
+        position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
+        ctype_annotate && show_annotation(io, cT, cpost; iswarn)
     end
-    pre = prepost = post = ""
-    if is_infix_op_call(node)   # wrap infix calls in parens before type-annotating
-        pre, post = "(", ")"
-        lastidx = catchup(io, first(children(node)), lastidx)
-    elseif is_prefix_op_call(node) # insert parens after prefix op and before type-annotating
-        prepost, post = "(", ")"
-    end
-    T = gettyp(node)
-    # should we print a type-annotation?
-    type_annotate = type_annotations & (isa(T, Vector{Int}) || (isa(T, Type) && (!hide_type_stable || is_type_unstable(T))))
-    type_annotate && print(io, pre)
-    for (childid, child) in enumerate(children(node))
-        childid == 2 && type_annotate && print(io, prepost)
-        lastidx = show_src_expr(io, child, lastidx; type_annotations, iswarn, hide_type_stable)
-    end
-    print(io, node.source[lastidx+1:_lastidx])
-    if type_annotate && T !== nothing
-        show_annotation(io, T, post; iswarn)
-    end
+    print(io, node.source[position+1:_lastidx])
     return _lastidx
 end
 
-function maybe_show_annotation(io, @nospecialize(T); iswarn, hide_type_stable)
-    T === nothing && return
+# should we print a type-annotation?
+function is_show_annotation(@nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
+    type_annotations || return false
     if isa(T, Core.Const)
         T = typeof(T.val)
     end
-    if isa(T, Type) && (!hide_type_stable || is_type_unstable(T))   # should we print a type-annotation?
-        show_annotation(io, T; iswarn)
+    isa(T, Type) || return false
+    hide_type_stable || return true
+    return isa(T, Type) && is_type_unstable(T)
+end
+
+function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
+    type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
+    pre = pre2 = post = ""
+    if type_annotate
+        if kind(node) ∈ KSet":: where" || is_infix_op_call(node)
+            pre, post = "(", ")"
+        elseif is_prefix_op_call(node) # insert parens after prefix op and before type-annotating
+            pre2, post = "(", ")"
+        end
     end
+    return type_annotate, pre, pre2, post
 end
 
 function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
     print(io, post)
-    if isa(T, Vector{Int})
-        isempty(T) && return
-        if iswarn
-            printstyled(io, "::NF"; color=:yellow)
-        else
-            print(io, "::NF")
-        end
-        return
-    end
     if iswarn
         color = !is_type_unstable(T) ? :cyan :
                  is_small_union_or_tunion(T) ? :yellow : :red
@@ -115,32 +105,27 @@ function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
     end
 end
 
-function catchup(io::IO, node::MaybeTypedSyntaxNode, lastidx::Int)
+print_linenumber(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int) =
+    print_linenumber(io, source_line(node.source, position), nd)
+print_linenumber(io::IO, ln::Int, nd::Int) = printstyled(io, lpad(ln, nd), " "; color=:light_black)
+
+function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int)
     # Do any "overdue" printing now. Mostly, this catches whitespace
     firstidx = first_byte(node)
-    if lastidx + 1 < firstidx
-        print_with_linenumber(io, node, lastidx+1:firstidx-1)
-        lastidx = firstidx-1
-    end
-    return lastidx
-end
-
-function print_with_linenumber(io::IO, node::AbstractSyntaxNode, byterange)
-    nd = ndigits(node.source.first_line + nlines(node.source) - 1)
-    offset = first(byterange) - 1
-    if offset == 0
-        # This is the first line, print the line number first
-        printstyled(io, lpad(source_line(node.source, 1), nd), " "; color=:light_black)
-    end
-    for (i, c) in pairs(node.source[byterange])
-        print(io, c)
-        if c == '\n'
-            printstyled(io, lpad(source_line(node.source, i + offset + 1), nd), " "; color=:light_black)
+    if position + 1 < firstidx
+        for (i, c) in pairs(node.source[position+1:firstidx-1])
+            print(io, c)
+            if c == '\n'
+                print_linenumber(io, node, position + i, nd)
+            end
         end
+        position = firstidx-1
     end
+    return position
 end
 
-nlines(source) = length(source.line_starts)
+nlines(source, idxend) = searchsortedfirst(source.line_starts, idxend)
+nlines(source) = length(source.line_starts) - 1
 
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 function is_small_union_or_tunion(@nospecialize(T))
