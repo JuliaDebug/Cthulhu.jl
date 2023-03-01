@@ -29,7 +29,7 @@ end
 
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
-                          idxend = last_byte(rootnode), kwargs...)
+                          idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
     rootnode = get_function_def(rootnode)
     position = first_byte(rootnode) - 1

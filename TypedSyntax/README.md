@@ -81,7 +81,7 @@ julia> function summer(list)
        end;
 ```
 then (on Julia 1.9)
-```
+```julia
 julia> tsn, mappings = TypedSyntax.tsn_and_mappings(summer, (Vector{Float64},));
 
 julia> hcat(tsn.typedsource.code, mappings)
