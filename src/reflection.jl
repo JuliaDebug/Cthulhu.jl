@@ -220,11 +220,11 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             vmi = FailedCallInfo(sig, Union{})
         end
         return Any[ReturnTypeCallInfo(vmi)]
-    elseif info == NoCallInfo() && info !== nothing
+    elseif info == NoCallInfo()
         f = unwrapconst(argtypes[1])
         isa(f, Core.Builtin) && return []
         return [RTCallInfo(f, argtypes[2:end], rt)]
-    elseif info === nothing || info === false
+    elseif info === false
         return []
     else
         @eval Main begin
