@@ -45,6 +45,12 @@ end
 
 TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
 
+function TypedSyntaxNode(mi::MethodInstance; kwargs...)
+    m = mi.def::Method
+    src, rt = getsrc(mi)
+    tsn_and_mappings(m, src, rt; kwargs...)[1]
+end
+
 TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
     TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
 
@@ -131,7 +137,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     return tparent
 end
 
-unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? typeof(T.val) : T
+unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? Core.Typeof(T.val) : T
 function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
@@ -163,6 +169,14 @@ end
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
     return only(srcrts)
+end
+
+function getsrc(mi::MethodInstance)
+    cis = Base.code_typed_by_type(mi.specTypes; debuginfo=:source, optimize=false)
+    isempty(cis) && error("no applicable type-inferred code found for ", mi)
+    length(cis) == 1 || error("got $(length(cis)) possible type-inferred results for ", mi,
+                              ", you may need a more specialized signature")
+    return cis[1]::Pair{CodeInfo}
 end
 
 function is_function_def(node)  # this is not `Base.is_function_def`

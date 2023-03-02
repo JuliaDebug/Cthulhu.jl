@@ -20,11 +20,12 @@ end
 
 function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
-                        slottypes::Vector{Any}, optimize::Bool=true)
+                        slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)
     sptypes = sptypes_from_meth_instance(mi)
-    callsites = Callsite[]
+    callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
     stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
     nstmts = length(stmts)
+    _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
     for id = 1:nstmts
         stmt = stmts[id]
@@ -93,9 +94,17 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             end
 
             push!(callsites, callsite)
+            if annotate_source
+                if mappings !== nothing
+                    mapped = mappings[id]
+                    push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+                else
+                    push!(sourcenodes, callsite)
+                end
+            end
         end
     end
-    return callsites
+    return callsites, sourcenodes
 end
 
 function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),
@@ -293,7 +302,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     for optimize in (true, false)
         (; src, rt, infos, slottypes) = lookup(interp′, caller, optimize)
         src = preprocess_ci!(src, caller, optimize, CONFIG)
-        callsites = find_callsites(interp′, src, infos, caller, slottypes, optimize)
+        callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
@@ -330,4 +339,23 @@ function add_sourceline!(locs, CI, stmtidx::Int)
         push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
     end
     return locs
+end
+
+function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
+    meth = mi.def::Method
+    tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
+    # If we're filling in keyword args, just show the signature
+    if meth.name == :kwcall || !isempty(Base.kwarg_decl(meth))
+        _, body = children(tsn)
+        # eliminate the body node
+        raw, bodyraw = tsn.raw, body.raw
+        idx = findfirst(==(bodyraw), raw.args)
+        if idx !== nothing
+            rawargs = raw.args[1:idx-1]
+            tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, rawargs), rawargs)
+            body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
+            empty!(children(body))
+        end
+    end
+    return tsn, mappings
 end

@@ -47,6 +47,8 @@ myabs(x) = x < 0 ? -x : x
 
 likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
+myoftype(ref, val) = typeof(ref)(val)
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -243,6 +245,19 @@ end
     nodeva = child(sig, 1, 2)
     @test kind(nodeva) == K"..."
     @test has_name_typ(child(nodeva, 1, 1), :X, Tuple{Int,Int})
+
+    # DataTypes
+    tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
+    sig, body = children(tsn)
+    node = child(body, 1)
+    @test node.typ === Type{Float64}
+
+    # Construction from MethodInstance
+    src, rt = TypedSyntax.getsrc(TSN.myoftype, (Float64, Int))
+    tsn = TypedSyntaxNode(src.parent)
+    sig, body = children(tsn)
+    node = child(body, 1)
+    @test node.typ === Type{Float64}
 
     # Display
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))

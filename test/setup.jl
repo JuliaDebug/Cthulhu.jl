@@ -12,7 +12,7 @@ end
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
     (; interp, src, infos, mi, slottypes) = cthulhu_info(f, TT; optimize)
     src === nothing && return Cthulhu.Callsite[]
-    callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, optimize)
+    callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, optimize)
     @test all(c -> Cthulhu.get_effects(c) isa Cthulhu.Effects, callsites)
     return callsites
 end

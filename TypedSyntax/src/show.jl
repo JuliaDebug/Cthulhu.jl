@@ -6,7 +6,6 @@ function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_
 end
 
 function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNode, indent, show_byte_offsets)
-    fname = node.source.filename
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
     if show_byte_offsets
@@ -34,7 +33,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
                           idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
-    nd = ndigits(rootnode.source.first_line + nlines(rootnode.source, idxend))
+    nd = ndigits_linenumbers(rootnode, idxend)
     rootnode = get_function_def(rootnode)
     position = first_byte(rootnode) - 1
     print_linenumber(io, rootnode, position + 1, nd)
@@ -53,11 +52,16 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
+ndigits_linenumbers(node, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend))
+
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
     if haschildren(node)
-        position = catchup(io, first(children(node)), position, nd)
+        cs = children(node)
+        if !isempty(cs)   # `haschildren(node)` returns `true` as long as the node has the *capacity* to store children
+            position = catchup(io, first(children(node)), position, nd)
+        end
     end
     print(io, pre)
     for (i, child) in enumerate(children(node))

@@ -27,9 +27,9 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, custom_toggles::Vector{CustomToggle};
-    pagesize::Int=10, sub_menu = false, kwargs...)
-    options = vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
+                     custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
+    options = build_options(callsites, with_effects, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -47,6 +47,29 @@ function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool
     return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
 end
 
+build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
+    vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
+function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
+    reduced_displaysize = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
+    nd = nothing
+
+    shown_callsites = map(callsites) do node
+        if isa(node, Callsite)
+            show_as_line(node, with_effects, optimize, iswarn)
+        else
+            if nd === nothing
+                nd = TypedSyntax.ndigits_linenumbers(node)
+                reduced_displaysize -= nd + 1
+            end
+            string(chomp(sprint(node; context=:color=>true) do io, node
+                            printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
+                         end))
+        end
+    end
+    push!(shown_callsites, "↩")
+    return shown_callsites
+end
+
 TerminalMenus.options(m::CthulhuMenu) = m.options
 TerminalMenus.cancel(m::CthulhuMenu) = m.selected = -1
 
@@ -59,7 +82,7 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
+function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
     custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
@@ -70,17 +93,20 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
 
     println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
     print(ioctx, "Toggles: [",
-        colorize(optimize, 'o'), "]ptimize, [",
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
-        stringify() do io
-            printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
-        end, "]ebuginfo, [",
-        colorize(remarks, 'r'), "]emarks, [",
-        colorize(with_effects, 'e'), "]ffects, [",
-        colorize(inline_cost, 'i'), "]nlining costs, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
         colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+    if !annotate_source
+        print(ioctx, ", [",
+            colorize(optimize, 'o'), "]ptimize, [",
+            stringify() do io
+                printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
+            end, "]ebuginfo, [",
+            colorize(remarks, 'r'), "]emarks, [",
+            colorize(with_effects, 'e'), "]ffects, [",
+            colorize(inline_cost, 'i'), "]nlining costs")
+    end
     for i = 1:length(custom_toggles)
         ct = custom_toggles[i]
         print(ioctx, ", [", colorize(ct.onoff, Char(ct.key)), ']', ct.description)
@@ -89,15 +115,19 @@ function usage(@nospecialize(view_cmd), optimize, iswarn, hide_type_stable, debu
     print(ioctx, '.')
     println(ioctx)
     println(ioctx, "Show: [",
-        colorize(view_cmd === cthulhu_source, 'S'), "]ource code, [",
+        colorize(annotate_source, 'S'), "]ource code, [",
         colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
-        colorize(view_cmd === cthulhu_typed, 'T'), "]yped code, [",
+        colorize(!annotate_source && view_cmd === cthulhu_typed, 'T'), "]yped code, [",
         colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
         colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
     """
-    Actions: [E]dit source code, [R]evise and redisplay
-    Advanced: dump [P]arams cache.""")
+    Actions: [E]dit source code, [R]evise and redisplay""")
+    if !annotate_source
+        print(ioctx,
+        """
+        Advanced: dump [P]arams cache.""")
+    end
     return String(take!(io))
 end
 
