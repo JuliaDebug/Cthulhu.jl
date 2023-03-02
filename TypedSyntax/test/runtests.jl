@@ -235,6 +235,7 @@ end
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Int16
+    @test has_name_typ(child(body, 2), :T, Type{Int16})
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
@@ -280,6 +281,7 @@ end
     # One could either have `(::AbstractArray{T})` or `::(AbstractArray{T})`
     # The latter is more consistent with how we want `-x` to print.
     @test occursin("(zerowhere(::(AbstractArray{T})::Vector{Int16}) where T<:Real)::Int16", str)
+    @test occursin("zero(T::Type{Int16})", str)
     tsn = TypedSyntaxNode(TSN.add2, (Vector{Float32},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)

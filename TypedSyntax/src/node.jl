@@ -150,15 +150,15 @@ gettyp(node::AbstractSyntaxNode) = gettyp(node.data)
 gettyp(::JuliaSyntax.SyntaxData) = nothing
 gettyp(data::TypedSyntaxData) = data.typ
 
-# function sparam_name(mi::MethodInstance, i::Int)
-#     sig = (mi.def::Method).sig::UnionAll
-#     while true
-#         i == 1 && break
-#         sig = sig.body::UnionAll
-#         i -= 1
-#     end
-#     return sig.var.name
-# end
+function sparam_name(mi::MethodInstance, i::Int)
+    sig = (mi.def::Method).sig::UnionAll
+    while true
+        i == 1 && break
+        sig = sig.body::UnionAll
+        i -= 1
+    end
+    return sig.var.name
+end
 
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
@@ -218,6 +218,7 @@ end
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
 function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
+    mi = src.parent
     # Find all leaf-nodes for a given symbol
     symlocs = collect_symbol_nodes(rootnode)      # symlocs = Dict(:name => [node1, node2, ...])
     # Initialize the type-assignment of each slot at each use location
@@ -257,6 +258,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             get(symlocs, arg.val, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
         elseif is_src_literal(arg)
             get(symlocs, arg, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
+        elseif isexpr(arg, :static_parameter)
+            name = sparam_name(mi, arg.args[1])
+            get(symlocs, name, nothing)
         else
             nothing
         end
@@ -413,6 +417,12 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     end
                                     break
                                 end
+                            end
+                        elseif isexpr(arg, :static_parameter)
+                            id = arg.args[1]
+                            name = sparam_name(mi, id)
+                            for t in symlocs[name]
+                                symtyps[t] = Type{mi.sparam_vals[id]}
                             end
                         end
                     end
