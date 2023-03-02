@@ -208,7 +208,7 @@ end
     isz = child(body, 2, 1, 1)
     @test kind(isz) == K"call" && child(isz, 1).val == :iszero
     @test isz.typ === Bool
-    @test child(body, 2, 1, 2).typ == Core.Const(NaN)
+    @test child(body, 2, 1, 2).typ == Float64
 
     # macros in function definition
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
@@ -234,7 +234,7 @@ end
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Vector{Int16}
-    @test body.typ === Core.Const(Int16(0))
+    @test body.typ === Int16
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))

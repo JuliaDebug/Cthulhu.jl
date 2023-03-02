@@ -131,17 +131,17 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     return tparent
 end
 
+unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? typeof(T.val) : T
 function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
     stmt = src.code[i]
     if isa(stmt, Core.ReturnNode)
         arg = stmt.val
-        isa(arg, SSAValue) && return src.ssavaluetypes[arg.id]
-        is_slot(arg) && return src.slottypes[arg.id]
+        isa(arg, SSAValue) && return unwrapconst(src.ssavaluetypes[arg.id])
+        is_slot(arg) && return unwrapconst(src.slottypes[arg.id])
     end
-    T = src.ssavaluetypes[i]
-    return isa(T, Core.Const) ? typeof(T.val) : T
+    return unwrapconst(src.ssavaluetypes[i])
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ)
@@ -301,10 +301,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        T = src.ssavaluetypes[i]
-                        if isa(T, Core.Const)
-                            T = typeof(T.val)
-                        end
+                        T = unwrapconst(src.ssavaluetypes[i])
                         symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
