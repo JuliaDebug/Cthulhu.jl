@@ -269,6 +269,13 @@ end
     end
     @test occursin("summer(list)", str)
     @test occursin("s += x", str)
+    tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test   occursin("s::$Int = 0::$Int", str)
+    @test !occursin("(s::$Int = 0::$Int)", str)
+    @test occursin("(s::Float64 += x::Float64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
