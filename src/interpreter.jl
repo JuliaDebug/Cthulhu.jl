@@ -92,6 +92,7 @@ function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effec
 end
 end
 
+@static if VERSION ≤ v"1.10.0-DEV.221"
 function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_optimizer::Bool)
     changemap = @invoke CC.type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
     changemap === nothing && return nothing
@@ -131,6 +132,7 @@ function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_o
         end
     end
     return changemap
+end
 end
 
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
