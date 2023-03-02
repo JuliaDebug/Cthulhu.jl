@@ -6,6 +6,12 @@ has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier"
 
 module TSN
 
+# with two uses of the same slot in the same call. Must start on line 10 (or update test below)
+function simplef(a, b)
+    z = a * a
+    return z + b
+end
+
 function has2xa(x)
     x &= x
 end
@@ -23,6 +29,7 @@ for f in (:mysin,)
         return ($f)(xf)
     end
 end
+mysin(x::AbstractFloat) = sin(x)
 
 function summer(list)
     s = 0                    # deliberately ::Int to test type-changes
@@ -34,13 +41,9 @@ end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
 
-# with two uses of the same slot in the same call
-function simplef(a, b)
-    z = a * a
-    return z + b + y
-end
-
 add2(x) = x[1] + x[2]
+
+myabs(x) = x < 0 ? -x : x
 
 likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
@@ -241,6 +244,19 @@ end
     @test has_name_typ(child(nodeva, 1, 1), :X, Tuple{Int,Int})
 
     # Display
+    tsn = TypedSyntaxNode(TSN.mysin, (Int,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    # There are several potential valid ways to print the signature.
+    # Here we allow them all (some tests below may not be as flexible).
+    # Arguably the first seems best, as it has the inferred type
+    # bound more tightly to the object than the type-assertion in the signature,
+    # and is valid syntax that is a bit more sparing in its use of ().
+    @test occursin("function (\$f)(x::Int64::Real)::Float64", str) ||
+          occursin("function (\$f)((x::Int64)::Real)::Float64", str) ||
+          occursin("function (\$f)(x::Real::Int64)::Float64", str) ||
+          occursin("function (\$f)((x::Real)::Int64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Any},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
@@ -256,16 +272,32 @@ end
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
     end
-    @test occursin("(::AbstractArray{T})\e[36m::Vector{Int16}\e[39m", str)
+    @test occursin("AbstractArray{T})\e[36m::Vector{Int16}\e[39m", str)
     @test occursin("where T<:Real)\e[36m::Int16\e[39m", str)
     str = sprint(tsn; context=:color=>false) do io, obj
-        printstyled(io, obj; iswarn=true, hide_type_stable=false)
+        printstyled(io, obj; hide_type_stable=false)
     end
-    @test occursin("(zerowhere((::AbstractArray{T})::Vector{Int16}) where T<:Real)::Int16", str)
+    # One could either have `(::AbstractArray{T})` or `::(AbstractArray{T})`
+    # The latter is more consistent with how we want `-x` to print.
+    @test occursin("(zerowhere(::(AbstractArray{T})::Vector{Int16}) where T<:Real)::Int16", str)
     tsn = TypedSyntaxNode(TSN.add2, (Vector{Float32},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
     end
     @test occursin("[1]\e[36m::Float32\e[39m", str)
     @test occursin("[2]\e[36m::Float32\e[39m", str)
+    tsn = TypedSyntaxNode(TSN.simplef, (Int, Float64))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test str === """
+        10 function simplef(a::Int64, b::Float64)::Float64
+        11     z::Int64 = (a::Int64 * a::Int64)::Int64
+        12     return (z::Int64 + b::Float64)::Float64
+        13 end"""
+    tsn = TypedSyntaxNode(TSN.myabs, (Float64,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test occursin("-(x::Float64)::Float64", str)
 end
