@@ -51,6 +51,8 @@ cbva(a, i...) = checkbounds(Bool, a, i...)
 
 myoftype(ref, val) = typeof(ref)(val)
 
+defaultarg(x, y=2) = x + y
+
 charset1 = 'a':'z'
 getchar1(idx) = charset1[idx]
 const charset2 = 'a':'z'
@@ -235,6 +237,18 @@ end
     @test kind(isz) == K"call" && child(isz, 1).val == :iszero
     @test isz.typ === Bool
     @test child(body, 2, 1, 2).typ == Float64
+
+    # default positional arguments
+    tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :x, Float32)
+    # there is no argument 2 in tsn.typedsource
+    tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,Int))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :x, Float32)
+    nodearg = child(sig, 3)
+    @test kind(nodearg) == K"="
+    @test has_name_typ(child(nodearg, 1), :y, Int)
 
     # macros in function definition
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))

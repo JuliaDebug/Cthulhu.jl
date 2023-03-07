@@ -74,6 +74,9 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             if kind(arg) == K"..."
                 arg = only(children(arg))
             end
+            if kind(arg) == K"="
+                arg = first(children(arg))
+            end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1
@@ -96,6 +99,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     error("unexpected number of children: ", children(arg))
                 end
             end
+            kind(arg) == K"Identifier" || @show sig arg
             @assert kind(arg) == K"Identifier"
             argname = arg.val
             while i <= length(src.slotnames)
