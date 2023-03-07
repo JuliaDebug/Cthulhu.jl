@@ -270,6 +270,8 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             mappings[arg.id]
         elseif isa(arg, Core.Const)
             get(symlocs, arg.val, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
+        elseif isa(arg, QuoteNode)
+            get(symlocs, arg.value, nothing)
         elseif is_src_literal(arg)
             get(symlocs, arg, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
         elseif isexpr(arg, :static_parameter)
@@ -345,25 +347,36 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             # The advantage of this approach is precision: we don't depend on ordering of statements,
             # so when it works you know you are correct.
             stmtmapping = Set{typeof(rootnode)}()
-            for arg in stmt.args
-                # Collect all source-nodes that use this argument
-                append_targets_for_arg!(argmapping, i, arg)
-                if !isempty(argmapping)
-                    if isempty(stmtmapping)
-                        # First matched argument
-                        # For each candidate source-node, push its parent-node into `stmtmapping`.
-                        # The true call-node should be among these.
-                        foreach(argmapping) do t
-                            push!(stmtmapping, skip_va_parent(t))
-                        end
-                    else
-                        # Second or later matched argument
-                        # A matching caller node needs to use all `stmt.args`,
-                        # so we `intersect` to find the common node(s)
-                        intersect!(stmtmapping, map(t->skip_va_parent(t), argmapping))
-                    end
+            for (iarg, _arg) in enumerate(stmt.args)
+                args = if is_apply_iterate(stmt) && iarg == 4
+                    # Split the non-va types in the call to _apply_iterate
+                    _, j = follow_back(src, _arg)
+                    tuplestmt = src.code[j]
+                    @assert is_tuple_stmt(tuplestmt)
+                    first.(map(arg -> follow_back(src, arg), tuplestmt.args[2:end]))
+                else
+                    Any[_arg]
                 end
-                empty!(argmapping)
+                for arg in args
+                    # Collect all source-nodes that use this argument
+                    append_targets_for_arg!(argmapping, i, arg)
+                    if !isempty(argmapping)
+                        if isempty(stmtmapping)
+                            # First matched argument
+                            # For each candidate source-node, push its parent-node into `stmtmapping`.
+                            # The true call-node should be among these.
+                            foreach(argmapping) do t
+                                push!(stmtmapping, skipped_parent(t))
+                            end
+                        else
+                            # Second or later matched argument
+                            # A matching caller node needs to use all `stmt.args`,
+                            # so we `intersect` to find the common node(s)
+                            intersect!(stmtmapping, map(t->skipped_parent(t), argmapping))
+                        end
+                    end
+                    empty!(argmapping)
+                end
             end
             # Varargs require special handling because lowering modifies the call sequence heavily
             # Wait to map them until we get to the _apply_iterate statement
@@ -432,7 +445,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                 sym == Symbol("") && continue
                                 for t in symlocs[sym]
                                     haskey(symtyps, t) && continue
-                                    if skip_va_parent(t) == node
+                                    if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
                                         symtyps[t] = if j > 0
                                             src.ssavaluetypes[j]
@@ -502,10 +515,12 @@ function is_va_call(node::SyntaxNode)
     return false
 end
 
-function skip_va_parent(node::SyntaxNode)
+function skipped_parent(node::SyntaxNode)
     pnode = node.parent
-    if kind(pnode) == K"..." && pnode.parent !== nothing
-        pnode = pnode.parent
+    if pnode.parent !== nothing
+        if kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+            pnode = pnode.parent
+        end
     end
     return pnode
 end

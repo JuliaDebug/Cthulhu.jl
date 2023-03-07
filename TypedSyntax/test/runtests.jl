@@ -56,6 +56,15 @@ getchar1(idx) = charset1[idx]
 const charset2 = 'a':'z'
 getchar2(idx) = charset2[idx]
 
+# Implementation of a struct & interface
+struct DefaultArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+    parentarray::A
+    defaultvalue::T
+end
+DefaultArray(parentarray, defaultvalue) = DefaultArray{ndims(parentarray)}(parentarray, defaultvalue)
+Base.getindex(a::DefaultArray{T,N}, i::Vararg{Int,N}) where {T,N} = checkbounds(Bool, a, i...) ? a.parentarray[i...] : a.defaultvalue
+Base.size(a::DefaultArray) = size(a.parentarray)
+
 end
 
 @testset "TypedSyntax.jl" begin
@@ -277,6 +286,19 @@ end
     sig, body = children(tsn)
     node = child(body, 1)
     @test node.typ === Type{Float64}
+
+    # Field access & a more complex example
+    tsn = TypedSyntaxNode(Base.getindex, (TSN.DefaultArray{Float64,2,Matrix{Float64}}, Int, Int))
+    @test tsn.typ === Float64
+    sig, body = children(tsn)
+    @test kind(body) == K"?"
+    @test child(body, 1).typ === Bool
+    nodeidx = child(body, 2)
+    @test_broken nodeidx.typ === Float64
+    @test child(nodeidx, 1).typ === Matrix{Float64}
+    default = child(body, 3)
+    @test default.typ === Float64
+    @test child(default, 1).typ === TSN.DefaultArray{Float64,2,Matrix{Float64}}
 
     # Construction from MethodInstance
     src, rt = TypedSyntax.getsrc(TSN.myoftype, (Float64, Int))
