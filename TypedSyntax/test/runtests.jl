@@ -40,14 +40,21 @@ function summer(list)
 end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
+cb(a, i) = checkbounds(Bool, a, i)
 
 add2(x) = x[1] + x[2]
 
 myabs(x) = x < 0 ? -x : x
 
 likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
+cbva(a, i...) = checkbounds(Bool, a, i...)
 
 myoftype(ref, val) = typeof(ref)(val)
+
+charset1 = 'a':'z'
+getchar1(idx) = charset1[idx]
+const charset2 = 'a':'z'
+getchar2(idx) = charset2[idx]
 
 end
 
@@ -185,6 +192,14 @@ end
     @test has_name_typ(child(t, 1), :x, Int)
     @test has_name_typ(child(t, 2), :y, Float64)
 
+    # GlobalRefs
+    tsn = TypedSyntaxNode(TSN.getchar1, (Int,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1), :charset1, Any)
+    tsn = TypedSyntaxNode(TSN.getchar2, (Int,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1), :charset2, typeof(TSN.charset2))
+
     # kwfuncs
     st = """
     function avoidzero(x; avoid_zero=true)
@@ -232,12 +247,15 @@ end
     @test has_name_typ(child(node, 2), :x, Float64)
     @test has_name_typ(child(body, 3, 1), :s, Union{Float64, Int})
 
-    # `where` and unnamed arguments
+    # `where`, unnamed arguments, and types-as-arguments
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Int16
     @test has_name_typ(child(body, 2), :T, Type{Int16})
+    tsn = TypedSyntaxNode(TSN.cb, (Vector{Int16}, Int))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 2), :Bool, Type{Bool})
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
@@ -245,6 +263,14 @@ end
     nodeva = child(sig, 1, 2)
     @test kind(nodeva) == K"..."
     @test has_name_typ(child(nodeva, 1, 1), :X, Tuple{Int,Int})
+    tsn = TypedSyntaxNode(TSN.cbva, (Matrix{Float32}, Int, Int))
+    sig, body = children(tsn)
+    @test body.typ === Bool
+    @test has_name_typ(child(body, 2), :Bool, Type{Bool})
+    @test has_name_typ(child(body, 3), :a, Matrix{Float32})
+    nodeva = child(body, 4)
+    @test kind(nodeva) == K"..."
+    @test has_name_typ(child(nodeva, 1), :i, Tuple{Int,Int})
 
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
