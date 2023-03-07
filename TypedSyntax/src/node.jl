@@ -442,7 +442,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         for (arg, j) in argjs
                             if is_slot(arg)
                                 sym = src.slotnames[arg.id]
-                                sym == Symbol("") && continue
+                                (sym == Symbol("") || sym == Symbol("#self#")) && continue
                                 for t in symlocs[sym]
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
