@@ -74,7 +74,10 @@ In the final section, you see:
 ![calls](images_readme/descend_calls.png)
 
 This is a menu of calls that you can further descend into. Move the dot `•` with the up and down
-arrow keys, and hit Enter to descend into a particular call.
+arrow keys, and hit Enter to descend into a particular call. Calls that start with `%nn = ...`
+are in Julia's internal [Abstract Syntax Tree (AST)](https://docs.julialang.org/en/v1/devdocs/ast/) form;
+for these calls, Cthulhu and/or [TypedSyntax](TypedSyntax/README.md) (a sub-package living inside the Cthulhu repository) failed to "map" the call back to the original source code. See details about why this can
+be hard in the TypedSyntax README, but also consider filing issues for (and/or making pull requests to fix) any failures you observe.
 
 
 ## Methods: descend
