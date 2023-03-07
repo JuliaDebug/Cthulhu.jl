@@ -81,7 +81,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     found = false
                     while i <= length(src.slotnames)
                         if src.slotnames[i] == Symbol("#unused#")
-                            arg.typ = src.slottypes[i]
+                            arg.typ = unwrapconst(src.slottypes[i])
                             i += 1
                             found = true
                             break
@@ -100,7 +100,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
-                    arg.typ = src.slottypes[i]
+                    arg.typ = unwrapconst(src.slottypes[i])
                     i += 1
                     break
                 end
@@ -314,8 +314,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = is_slot(stmt) ? src.slottypes[stmt.id] :
+                        symtyps[only(mapped)] = unwrapconst(
+                                                is_slot(stmt) ? src.slottypes[stmt.id] :
                                                 isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
+                        )
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
@@ -447,13 +449,13 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
-                                        symtyps[t] = if j > 0
+                                        symtyps[t] = unwrapconst(if j > 0
                                             src.ssavaluetypes[j]
                                         else
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
                                             j = findfirst(==(sym), src.slotnames)
                                             src.slottypes[j]
-                                        end
+                                        end)
                                         break
                                     end
                                 end
