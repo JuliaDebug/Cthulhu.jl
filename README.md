@@ -55,6 +55,9 @@ for type inference, unless there are so many that Julia stops trying to work
 out all the different combinations (see [this blog post](https://julialang.org/blog/2018/08/union-splitting/)
 for more information).
 
+**Note**: if the function is a keyword-argument function, you'll only see the signature of the function.
+Internally, Julia splits keyword functions into "keyword-filling" and "body" methods. If you're descending into kwarg-function `foo`, then the "body" function might be called something like `#foo#123`. You can select that in the "call" menu described below.
+
 In the next section you may see something like
 
 ![toggles](images_readme/descend_toggles.png)
@@ -65,6 +68,7 @@ For example, if you hit `w` to turn on warnings, now you should see something li
 
 ![warn](images_readme/descend_source_toggles_warn.png)
 
+Note that `w` is now shown in cyan, indicating that it is "on."
 Now you can see small concrete unions in yellow, and concretely inferred code in cyan.
 Serious forms of poor inferrability are colored in red (of which there are none in this example);
 these generally hurt runtime performance and may make compiled code more vulnerable to being invalidated.
@@ -76,8 +80,9 @@ In the final section, you see:
 This is a menu of calls that you can further descend into. Move the dot `•` with the up and down
 arrow keys, and hit Enter to descend into a particular call. Calls that start with `%nn = ...`
 are in Julia's internal [Abstract Syntax Tree (AST)](https://docs.julialang.org/en/v1/devdocs/ast/) form;
-for these calls, Cthulhu and/or [TypedSyntax](TypedSyntax/README.md) (a sub-package living inside the Cthulhu repository) failed to "map" the call back to the original source code. See details about why this can
-be hard in the TypedSyntax README, but also consider filing issues for (and/or making pull requests to fix) any failures you observe.
+for these calls, Cthulhu and/or [TypedSyntax](TypedSyntax/README.md) (a sub-package living inside the Cthulhu repository) failed to "map" the call back to the original source code.
+
+As a word of warning, **mapping type inference results back to the source is hard, and there may be errors or omissions in this mapping**. See the [TypedSyntax README](TypedSyntax/README.md) for further details about the challenges. When you think there are reasons to doubt what you're seeing, a reliable but harder-to-interpret strategy is to directly view in ["Typed" mode](viewing-the-internal-representation-of-julia-code). Also, please consider filing issues for (and/or making pull requests to fix) any failures you observe. See [CONTRIBUTING.md](CONTRIBUTING.md) for tips on filing effective bug reports.
 
 
 ## Methods: descend
