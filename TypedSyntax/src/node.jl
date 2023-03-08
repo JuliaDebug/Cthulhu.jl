@@ -354,14 +354,13 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             # so when it works you know you are correct.
             stmtmapping = Set{typeof(rootnode)}()
             for (iarg, _arg) in enumerate(stmt.args)
-                args = if is_apply_iterate(stmt) && iarg == 4
-                    # Split the non-va types in the call to _apply_iterate
-                    _, j = follow_back(src, _arg)
-                    tuplestmt = src.code[j]
-                    @assert is_tuple_stmt(tuplestmt)
-                    first.(map(arg -> follow_back(src, arg), tuplestmt.args[2:end]))
+                args = if is_apply_iterate(stmt) && iarg >= 4 && isa(_arg, SSAValue) && is_tuple_stmt(src.code[_arg.id])
+                    # In vararg (_apply_iterate) calls, any non-`...` args are bundled in a tuple.
+                    # Split the tuple to extract the complete argument list.
+                    tuplestmt = src.code[_arg.id]
+                    tuplestmt.args[2:end]
                 else
-                    Any[_arg]
+                    (_arg,)
                 end
                 for arg in args
                     # Collect all source-nodes that use this argument
@@ -386,9 +385,13 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             end
             # Varargs require special handling because lowering modifies the call sequence heavily
             # Wait to map them until we get to the _apply_iterate statement
-            if !isempty(stmtmapping) && all(is_va_call, stmtmapping)
-                if !is_apply_iterate(stmt)
-                    empty!(stmtmapping)
+            if is_tuple_stmt(stmt)
+                ii = i
+                while ii < length(src.code) && is_tuple_stmt(src.code[ii+1])
+                    ii += 1    # _apply_iterate can have multiple preceeding tuple statements
+                end
+                if ii < length(src.code) && is_apply_iterate(src.code[ii+1])
+                    empty!(stmtmapping)   # block any possibility of matching
                 end
             end
             append!(mapped, stmtmapping)
@@ -437,11 +440,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         # (We're not assigning type to node, we're assigning nodes to ssavalues.)
                         # Arguments can locally be SSAValues but ultimately map back to slots
                         _arg, j = follow_back(src, _arg)
-                        argjs = if is_apply_iterate(stmt) && iarg == 4
+                        argjs = if is_apply_iterate(stmt) && iarg >= 4 && j > 0 && is_tuple_stmt(src.code[j])
                             # Split the non-va types in the call to _apply_iterate
                             tuplestmt = src.code[j]
-                            @assert is_tuple_stmt(tuplestmt)
-                            map(arg -> follow_back(src, arg), tuplestmt.args[2:end])
+                            Tuple{Any,Int}[follow_back(src, arg) for arg in tuplestmt.args[2:end]]
                         else
                             Tuple{Any,Int}[(_arg, j)]
                         end
@@ -503,6 +505,16 @@ function follow_back(src, arg)
     return arg, j
 end
 
+function follow_back(src, arg, mappings)
+    # Follow SSAValue backward to see if it maps back to a slot
+    j = 0
+    while isa(arg, SSAValue)
+        j = arg.id
+        arg = src.ssavaluetypes[j]
+    end
+    return arg, j
+end
+
 function is_indexed_iterate(arg)
     isa(arg, GlobalRef) || return false
     arg.mod == Base || return false
@@ -531,13 +543,13 @@ function skipped_parent(node::SyntaxNode)
     return pnode
 end
 
-function is_apply_iterate(stmt::Expr)
+function is_apply_iterate(@nospecialize(stmt))
     isexpr(stmt, :call) || return false
     f = stmt.args[1]
     return isa(f, GlobalRef) && f.mod === Core && f.name == :_apply_iterate
 end
 
-function is_tuple_stmt(stmt::Expr)
+function is_tuple_stmt(@nospecialize(stmt))
     isexpr(stmt, :call) || return false
     f = stmt.args[1]
     return isa(f, GlobalRef) && f.mod === Core && f.name == :tuple

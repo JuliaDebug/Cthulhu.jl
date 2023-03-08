@@ -48,6 +48,7 @@ myabs(x) = x < 0 ? -x : x
 
 likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 cbva(a, i...) = checkbounds(Bool, a, i...)
+splats(x, y) = vcat(x..., y...)
 
 myoftype(ref, val) = typeof(ref)(val)
 
@@ -294,6 +295,11 @@ end
     nodeva = child(body, 4)
     @test kind(nodeva) == K"..."
     @test has_name_typ(child(nodeva, 1), :i, Tuple{Int,Int})
+    tsn = TypedSyntaxNode(TSN.splats, (Tuple{Int,Int}, Tuple{Int}))
+    sig, body = children(tsn)
+    @test body.typ === Vector{Int}
+    @test has_name_typ(child(body, 2, 1), :x, Tuple{Int,Int})
+    @test has_name_typ(child(body, 3, 1), :y, Tuple{Int})
 
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
@@ -308,7 +314,7 @@ end
     @test kind(body) == K"?"
     @test child(body, 1).typ === Bool
     nodeidx = child(body, 2)
-    @test_broken nodeidx.typ === Float64
+    @test nodeidx.typ === Float64
     @test child(nodeidx, 1).typ === Matrix{Float64}
     default = child(body, 3)
     @test default.typ === Float64
