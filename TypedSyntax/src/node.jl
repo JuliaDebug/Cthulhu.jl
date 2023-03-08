@@ -259,6 +259,21 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # Initialize the (possibly ambiguous) attributions for each stmt in `src` (`stmt = src.code[i]`)
     mappings = [MaybeTypedSyntaxNode[] for _ in eachindex(src.code)]  # mappings[i] = [node1, node2, ...]
 
+    used = BitSet()
+    for (i, stmt) in enumerate(src.code)
+        Core.Compiler.scan_ssa_use!(push!, used, stmt)
+        if isa(stmt, Core.ReturnNode)
+            val = stmt.val
+            if isa(val, SSAValue)
+                push!(used, val.id)
+            elseif isa(val, SlotNumber)
+                push!(used, i)
+            end
+        elseif isexpr(stmt, :(=))
+            push!(used, i)
+        end
+    end
+
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
@@ -505,6 +520,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 end
             end
         end
+        i ∈ used || empty!(mappings[i])   # if the result of the call is not used, don't attach a type to it
     end
     return mappings, symtyps
 end

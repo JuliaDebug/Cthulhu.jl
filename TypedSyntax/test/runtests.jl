@@ -60,6 +60,12 @@ getchar1(idx) = charset1[idx]
 const charset2 = 'a':'z'
 getchar2(idx) = charset2[idx]
 
+# unused statements
+function mycheckbounds(A, i)
+    checkbounds(Bool, A, i) || Base.throw_boundserror(A, i)
+    return nothing
+end
+
 # Implementation of a struct & interface
 struct DefaultArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     parentarray::A
@@ -311,6 +317,17 @@ end
     @test body.typ === Vector{Int}
     @test has_name_typ(child(body, 2, 1), :x, Tuple{Int,Int})
     @test has_name_typ(child(body, 3, 1), :y, Tuple{Int})
+
+    # Unused statements
+    tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
+    @test tsn.typ === Nothing
+    sig, body = children(tsn)
+    errnode = child(body, 1, 2)
+    errf = child(errnode, 1)
+    @test errnode.typ === nothing && errf.typ === typeof(Base.throw_boundserror)
+    retnode = child(body, 2)
+    @test kind(retnode) == K"return"
+    @test retnode.typ === nothing || retnode.typ === Nothing
 
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
