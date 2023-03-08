@@ -53,6 +53,7 @@ splats(x, y) = vcat(x..., y...)
 myoftype(ref, val) = typeof(ref)(val)
 
 defaultarg(x, y=2) = x + y
+hasdefaulttypearg(::Type{T}=Rational{Int}) where T = zero(T)
 
 charset1 = 'a':'z'
 getchar1(idx) = charset1[idx]
@@ -243,6 +244,7 @@ end
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,))
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :x, Float32)
+    @test has_name_typ(child(sig, 3, 1), :y, Int)
     # there is no argument 2 in tsn.typedsource
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,Int))
     sig, body = children(tsn)
@@ -250,6 +252,15 @@ end
     nodearg = child(sig, 3)
     @test kind(nodearg) == K"="
     @test has_name_typ(child(nodearg, 1), :y, Int)
+    # default position args that are types
+    tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, (Type{Float32},))
+    sig, body = children(tsn)
+    arg = child(sig, 1, 2, 1)
+    @test kind(arg) == K"::" && arg.typ === Type{Float32}
+    tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, ())
+    sig, body = children(tsn)
+    arg = child(sig, 1, 2, 1)
+    @test kind(arg) == K"::" && arg.typ === Type{Rational{Int}}
 
     # macros in function definition
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
