@@ -167,6 +167,9 @@ end
             @test occursin(r"\(z \+ b\)\u001B\[\d\dm::Float32\u001B\[39m", lines)
             @test occursin('[' * colorize(true, 'T') * "]yped", lines)
             # Revise
+            # Use delays to ensure unambiguous differences in time stamps
+            # (macOS is particularly sensitive) and execution of @async processes
+            sleep(0.5)
             open(revisedfile, "w") do io
                 println(io,
                 """
@@ -176,8 +179,9 @@ end
                 end
                 """)
             end
-            sleep(0.3)
+            sleep(0.5)
             write(in, 'R')
+            sleep(0.5)
             lines = cread(out)
             write(in, 'T')
             lines = cread(out)
