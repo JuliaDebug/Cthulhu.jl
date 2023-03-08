@@ -204,8 +204,14 @@ end
                 Base.text_colors[Base.error_color()]
             end
             @test occursin("$(warncolor)%\e[39m2 = call → fmulti(::Any)::Union{Float32, Int64}", lines)
-            write(in, keydict[:enter])
-            lines = cread1(out)
+            if isdefined(Core.Compiler, :NoCallInfo)
+                write(in, keydict[:down])
+                write(in, keydict[:enter])
+                lines = cread(out)
+            else
+                write(in, keydict[:enter])
+                lines = cread1(out)
+            end
             @test occursin("%2 = fmulti(::Int32)::Union{Float32, $Int}", lines)
             @test occursin("%2 = fmulti(::Float32)::Union{Float32, $Int}", lines)
             @test occursin("%2 = fmulti(::Char)::Union{Float32, $Int}", lines)

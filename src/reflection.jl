@@ -33,7 +33,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
         callsite = nothing
         if stmt_infos !== nothing && is_call_expr(stmt, optimize)
             info = stmt_infos[id]
-            if info !== NoCallInfo()
+            if info !== nothing
                 rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
@@ -97,7 +97,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             if annotate_source
                 if mappings !== nothing
                     mapped = mappings[id]
-                    push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+                    push!(sourcenodes, length(mapped) == 1 ? tag_runtime(mapped[1], callsite.info) : callsite)
                 else
                     push!(sourcenodes, callsite)
                 end
@@ -220,7 +220,11 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             vmi = FailedCallInfo(sig, Union{})
         end
         return Any[ReturnTypeCallInfo(vmi)]
-    elseif info == NoCallInfo() || info === false
+    elseif info == NoCallInfo()
+        f = unwrapconst(argtypes[1])
+        isa(f, Core.Builtin) && return []
+        return [RTCallInfo(f, argtypes[2:end], rt)]
+    elseif info === false
         return []
     else
         @eval Main begin
@@ -359,3 +363,9 @@ function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
     end
     return tsn, mappings
 end
+
+function tag_runtime(node::TypedSyntaxNode, info)
+    node.runtime = isa(info, RTCallInfo)
+    return node
+end
+tag_runtime(node, info) = node

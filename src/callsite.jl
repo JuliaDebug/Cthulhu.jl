@@ -33,6 +33,15 @@ struct LimitedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
 end
 
+# Runtime CallInfo
+struct RTCallInfo <: CallInfo
+    f
+    argtyps
+    rt
+end
+get_mi(ci::RTCallInfo) = nothing
+get_effects(ci::RTCallInfo) = Effects()
+
 # uncached callsite, we can't recurse into this call
 struct UncachedCallInfo <: WrappedCallInfo
     wrapped::CallInfo
@@ -319,6 +328,8 @@ function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, Generat
     __show_limited(limiter, name::String, tt, get_rt(ci), get_effects(ci))
 end
 
+show_callinfo(limiter, ci::RTCallInfo) = __show_limited(limiter, "$(ci.f)", ci.argtyps, get_rt(ci), get_effects(ci))
+
 function show_callinfo(limiter, pci::PureCallInfo)
     ft, tt... = pci.argtypes
     f = CC.singleton_type(ft)
@@ -374,6 +385,12 @@ end
 function print_callsite_info(limiter::IO, info::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
     print(limiter, "call ")
     show_callinfo(limiter, info)
+end
+
+function print_callsite_info(limiter::IO, info::RTCallInfo)
+    print(limiter, "runtime < ")
+    show_callinfo(limiter, info)
+    print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::TaskCallInfo)

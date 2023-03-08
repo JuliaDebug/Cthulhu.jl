@@ -78,8 +78,17 @@ In the final section, you see:
 ![calls](images_readme/descend_calls.png)
 
 This is a menu of calls that you can further descend into. Move the dot `•` with the up and down
-arrow keys, and hit Enter to descend into a particular call. Calls that start with `%nn = ...`
-are in Julia's internal [Abstract Syntax Tree (AST)](https://docs.julialang.org/en/v1/devdocs/ast/) form;
+arrow keys, and hit Enter to descend into a particular call. Any calls that are made at runtime ([dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)) cannot be descended into;
+if you select one, you'll see
+
+```
+[ Info: This is a runtime call. You cannot descend into it.
+```
+
+and the call menu will be printed again.
+
+Calls that start with `%nn = ...` are in Julia's internal
+[Abstract Syntax Tree (AST)](https://docs.julialang.org/en/v1/devdocs/ast/) form;
 for these calls, Cthulhu and/or [TypedSyntax](TypedSyntax/README.md) (a sub-package living inside the Cthulhu repository) failed to "map" the call back to the original source code.
 
 As a word of warning, **mapping type inference results back to the source is hard, and there may be errors or omissions in this mapping**. See the [TypedSyntax README](TypedSyntax/README.md) for further details about the challenges. When you think there are reasons to doubt what you're seeing, a reliable but harder-to-interpret strategy is to directly view the [`[T]yped code`](#viewing-the-internal-representation-of-julia-code) rather than the `[S]ource code`.
