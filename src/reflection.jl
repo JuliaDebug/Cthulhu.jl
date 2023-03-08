@@ -97,7 +97,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             if annotate_source
                 if mappings !== nothing
                     mapped = mappings[id]
-                    push!(sourcenodes, length(mapped) == 1 ? mapped[1] : callsite)
+                    push!(sourcenodes, length(mapped) == 1 ? tag_runtime(mapped[1], callsite.info) : callsite)
                 else
                     push!(sourcenodes, callsite)
                 end
@@ -363,3 +363,9 @@ function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
     end
     return tsn, mappings
 end
+
+function tag_runtime(node::TypedSyntaxNode, info)
+    node.runtime = isa(info, RTCallInfo)
+    return node
+end
+tag_runtime(node, info) = node

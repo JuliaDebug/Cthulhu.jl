@@ -61,9 +61,17 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                 nd = TypedSyntax.ndigits_linenumbers(node)
                 reduced_displaysize -= nd + 1
             end
-            string(chomp(sprint(node; context=:color=>true) do io, node
-                            printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
-                         end))
+            string(chomp(
+                sprint(node; context=:color=>true) do io, node
+                    if TypedSyntax.is_runtime(node)
+                        if iswarn
+                            printstyled(io, "runtime "; color=:red)
+                        else
+                            print(io, "runtime ")
+                        end
+                    end
+                    printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
+                end))
         end
     end
     push!(shown_callsites, "↩")

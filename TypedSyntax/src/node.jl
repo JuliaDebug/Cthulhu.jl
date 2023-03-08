@@ -5,9 +5,10 @@ mutable struct TypedSyntaxData <: AbstractSyntaxData
     raw::GreenNode{SyntaxHead}
     position::Int
     val::Any
-    typ::Any    # can either be a Type or `nothing`
+    typ::Any        # can either be a Type or `nothing`
+    runtime::Bool   # true if this represents a call made by runtime dispatch (Cthulhu callsite annotation)
 end
-TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, typ)
+TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, typ, false)
 
 const TypedSyntaxNode = TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
@@ -554,3 +555,6 @@ function is_tuple_stmt(@nospecialize(stmt))
     f = stmt.args[1]
     return isa(f, GlobalRef) && f.mod === Core && f.name == :tuple
 end
+
+is_runtime(node::TypedSyntaxNode) = node.runtime
+is_runtime(::AbstractSyntaxNode) = false
