@@ -45,6 +45,12 @@ end
 
 TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
 
+function TypedSyntaxNode(mi::MethodInstance; kwargs...)
+    m = mi.def::Method
+    src, rt = getsrc(mi)
+    tsn_and_mappings(m, src, rt; kwargs...)[1]
+end
+
 TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
     TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
 
@@ -68,6 +74,9 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             if kind(arg) == K"..."
                 arg = only(children(arg))
             end
+            if kind(arg) == K"="
+                arg = first(children(arg))
+            end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1
@@ -75,7 +84,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     found = false
                     while i <= length(src.slotnames)
                         if src.slotnames[i] == Symbol("#unused#")
-                            arg.typ = src.slottypes[i]
+                            arg.typ = unwrapconst(src.slottypes[i])
                             i += 1
                             found = true
                             break
@@ -90,11 +99,12 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     error("unexpected number of children: ", children(arg))
                 end
             end
+            kind(arg) == K"Identifier" || @show sig arg
             @assert kind(arg) == K"Identifier"
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
-                    arg.typ = src.slottypes[i]
+                    arg.typ = unwrapconst(src.slottypes[i])
                     i += 1
                     break
                 end
@@ -131,7 +141,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     return tparent
 end
 
-unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? typeof(T.val) : T
+unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? Core.Typeof(T.val) : T
 function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
@@ -163,6 +173,14 @@ end
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
     return only(srcrts)
+end
+
+function getsrc(mi::MethodInstance)
+    cis = Base.code_typed_by_type(mi.specTypes; debuginfo=:source, optimize=false)
+    isempty(cis) && error("no applicable type-inferred code found for ", mi)
+    length(cis) == 1 || error("got $(length(cis)) possible type-inferred results for ", mi,
+                              ", you may need a more specialized signature")
+    return cis[1]::Pair{CodeInfo}
 end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
@@ -256,6 +274,8 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             mappings[arg.id]
         elseif isa(arg, Core.Const)
             get(symlocs, arg.val, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
+        elseif isa(arg, QuoteNode)
+            get(symlocs, arg.value, nothing)
         elseif is_src_literal(arg)
             get(symlocs, arg, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
         elseif isexpr(arg, :static_parameter)
@@ -298,8 +318,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = is_slot(stmt) ? src.slottypes[stmt.id] :
+                        symtyps[only(mapped)] = unwrapconst(
+                                                is_slot(stmt) ? src.slottypes[stmt.id] :
                                                 isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
+                        )
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
@@ -331,25 +353,46 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             # The advantage of this approach is precision: we don't depend on ordering of statements,
             # so when it works you know you are correct.
             stmtmapping = Set{typeof(rootnode)}()
-            for arg in stmt.args
-                # Collect all source-nodes that use this argument
-                append_targets_for_arg!(argmapping, i, arg)
-                if !isempty(argmapping)
-                    if isempty(stmtmapping)
-                        # First matched argument
-                        # For each candidate source-node, push its parent-node into `stmtmapping`.
-                        # The true call-node should be among these.
-                        foreach(argmapping) do t
-                            push!(stmtmapping, t.parent)
-                        end
-                    else
-                        # Second or later matched argument
-                        # A matching caller node needs to use all `stmt.args`,
-                        # so we `intersect` to find the common node(s)
-                        intersect!(stmtmapping, map(t->t.parent, argmapping))
-                    end
+            for (iarg, _arg) in enumerate(stmt.args)
+                args = if is_apply_iterate(stmt) && iarg >= 4 && isa(_arg, SSAValue) && is_tuple_stmt(src.code[_arg.id])
+                    # In vararg (_apply_iterate) calls, any non-`...` args are bundled in a tuple.
+                    # Split the tuple to extract the complete argument list.
+                    tuplestmt = src.code[_arg.id]
+                    tuplestmt.args[2:end]
+                else
+                    (_arg,)
                 end
-                empty!(argmapping)
+                for arg in args
+                    # Collect all source-nodes that use this argument
+                    append_targets_for_arg!(argmapping, i, arg)
+                    if !isempty(argmapping)
+                        if isempty(stmtmapping)
+                            # First matched argument
+                            # For each candidate source-node, push its parent-node into `stmtmapping`.
+                            # The true call-node should be among these.
+                            foreach(argmapping) do t
+                                push!(stmtmapping, skipped_parent(t))
+                            end
+                        else
+                            # Second or later matched argument
+                            # A matching caller node needs to use all `stmt.args`,
+                            # so we `intersect` to find the common node(s)
+                            intersect!(stmtmapping, map(t->skipped_parent(t), argmapping))
+                        end
+                    end
+                    empty!(argmapping)
+                end
+            end
+            # Varargs require special handling because lowering modifies the call sequence heavily
+            # Wait to map them until we get to the _apply_iterate statement
+            if is_tuple_stmt(stmt)
+                ii = i
+                while ii < length(src.code) && is_tuple_stmt(src.code[ii+1])
+                    ii += 1    # _apply_iterate can have multiple preceeding tuple statements
+                end
+                if ii < length(src.code) && is_apply_iterate(src.code[ii+1])
+                    empty!(stmtmapping)   # block any possibility of matching
+                end
             end
             append!(mapped, stmtmapping)
             sort!(mapped; by=t->t.position)   # since they went into a set, best to order them within the source
@@ -392,37 +435,55 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 end
                 # Process the call expr
                 if isa(stmt, Expr)
-                    for arg in stmt.args
+                    for (iarg, _arg) in enumerate(stmt.args)
                         # For arguments that are slots, follow them backwards.
                         # (We're not assigning type to node, we're assigning nodes to ssavalues.)
                         # Arguments can locally be SSAValues but ultimately map back to slots
-                        j = 0
-                        while isa(arg, SSAValue)
-                            j = arg.id
-                            arg = src.ssavaluetypes[j]   # keep trying in case it maps back to a slot
+                        _arg, j = follow_back(src, _arg)
+                        argjs = if is_apply_iterate(stmt) && iarg >= 4 && j > 0 && is_tuple_stmt(src.code[j])
+                            # Split the non-va types in the call to _apply_iterate
+                            tuplestmt = src.code[j]
+                            Tuple{Any,Int}[follow_back(src, arg) for arg in tuplestmt.args[2:end]]
+                        else
+                            Tuple{Any,Int}[(_arg, j)]
                         end
-                        if is_slot(arg)
-                            sym = src.slotnames[arg.id]
-                            sym == Symbol("") && continue
-                            for t in symlocs[sym]
-                                haskey(symtyps, t) && continue
-                                if t.parent == node
-                                    is_prec_assignment(node) && t == child(node, 1) && continue
-                                    symtyps[t] = if j > 0
-                                        src.ssavaluetypes[j]
-                                    else
-                                        # We failed to find it as an SSAValue, it must have type assigned at function entry
-                                        j = findfirst(==(sym), src.slotnames)
-                                        src.slottypes[j]
+                        for (arg, j) in argjs
+                            if is_slot(arg)
+                                sym = src.slotnames[arg.id]
+                                (sym == Symbol("") || sym == Symbol("#self#")) && continue
+                                for t in symlocs[sym]
+                                    haskey(symtyps, t) && continue
+                                    if skipped_parent(t) == node
+                                        is_prec_assignment(node) && t == child(node, 1) && continue
+                                        symtyps[t] = unwrapconst(if j > 0
+                                            src.ssavaluetypes[j]
+                                        else
+                                            # We failed to find it as an SSAValue, it must have type assigned at function entry
+                                            j = findfirst(==(sym), src.slotnames)
+                                            src.slottypes[j]
+                                        end)
+                                        break
                                     end
-                                    break
                                 end
-                            end
-                        elseif isexpr(arg, :static_parameter)
-                            id = arg.args[1]
-                            name = sparam_name(mi, id)
-                            for t in symlocs[name]
-                                symtyps[t] = Type{mi.sparam_vals[id]}
+                            elseif isexpr(arg, :static_parameter)
+                                id = arg.args[1]
+                                name = sparam_name(mi, id)
+                                for t in symlocs[name]
+                                    symtyps[t] = Type{mi.sparam_vals[id]}
+                                end
+                            elseif isa(arg, GlobalRef)
+                                T = nothing
+                                if isconst(arg.mod, arg.name)
+                                    T = Core.Typeof(getfield(arg.mod, arg.name))
+                                    if T <: Function
+                                        continue # it's confusing to annotate `zero(x)` as `zero::typeof(zero)(...)`
+                                    end
+                                else
+                                    T = Any
+                                end
+                                for t in get(symlocs, arg.name, ())
+                                    symtyps[t] = T
+                                end
                             end
                         end
                     end
@@ -434,6 +495,26 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
 end
 map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, rootnode, Int(Δline))
 
+function follow_back(src, arg)
+    # Follow SSAValue backward to see if it maps back to a slot
+    j = 0
+    while isa(arg, SSAValue)
+        j = arg.id
+        arg = src.ssavaluetypes[j]
+    end
+    return arg, j
+end
+
+function follow_back(src, arg, mappings)
+    # Follow SSAValue backward to see if it maps back to a slot
+    j = 0
+    while isa(arg, SSAValue)
+        j = arg.id
+        arg = src.ssavaluetypes[j]
+    end
+    return arg, j
+end
+
 function is_indexed_iterate(arg)
     isa(arg, GlobalRef) || return false
     arg.mod == Base || return false
@@ -443,3 +524,33 @@ end
 is_slot(@nospecialize(arg)) = isa(arg, SlotNumber) || isa(arg, TypedSlot)
 
 is_src_literal(x) = isa(x, Integer) || isa(x, AbstractFloat) || isa(x, String) || isa(x, Char) || isa(x, Symbol)
+
+function is_va_call(node::SyntaxNode)
+    kind(node) == K"call" || return false
+    for arg in children(node)
+        kind(arg) == K"..." && return true
+    end
+    return false
+end
+
+function skipped_parent(node::SyntaxNode)
+    pnode = node.parent
+    if pnode.parent !== nothing
+        if kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+            pnode = pnode.parent
+        end
+    end
+    return pnode
+end
+
+function is_apply_iterate(@nospecialize(stmt))
+    isexpr(stmt, :call) || return false
+    f = stmt.args[1]
+    return isa(f, GlobalRef) && f.mod === Core && f.name == :_apply_iterate
+end
+
+function is_tuple_stmt(@nospecialize(stmt))
+    isexpr(stmt, :call) || return false
+    f = stmt.args[1]
+    return isa(f, GlobalRef) && f.mod === Core && f.name == :tuple
+end

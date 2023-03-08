@@ -56,16 +56,6 @@ function cthulhu_ast(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, conf
     end
 end
 
-function cthulhu_source(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, config::CthulhuConfig)
-    meth = mi.def::Method
-    def = definition(String, meth)
-    if isnothing(def)
-        return @warn "couldn't retrieve source of $meth"
-    end
-    src, line = def
-    highlight(io, src, "julia", config)
-end
-
 using Base.IRShow: IRShow, _stmt, _type, should_print_ssa_type, IRShowConfig, show_ir
 
 const __debuginfo = merge(IRShow.__debuginfo, Dict(
@@ -108,13 +98,25 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
-    inline_cost::Bool=false, type_annotations::Bool=true,
+    inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
     lambda_io = IOContext(io, :limit=>true)
+
+    if annotate_source && isa(src, CodeInfo)
+        tsn, _ = get_typed_sourcetext(mi, src, rt)
+        if tsn !== nothing
+            sig, body = children(tsn)
+            # We empty the body when filling kwargs
+            idxend = isempty(children(body)) ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+            printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+            println(lambda_io)
+            return nothing
+        end
+    end
 
     if isa(src, CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
@@ -273,7 +275,6 @@ const CODEVIEWS = (;
     llvm=cthulhu_llvm,
     native=cthulhu_native,
     ast=cthulhu_ast,
-    source=cthulhu_source,
 )
 
 """

@@ -39,6 +39,9 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
+      - name: dev TypedSyntax
+        shell: julia --color=yes --project=. {0}    # this is necessary for the next command to work on Windows
+        run: 'using Pkg; Pkg.develop(path=joinpath(pwd(), "TypedSyntax"))'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:

@@ -295,7 +295,7 @@ function bar346(x::ComplexF64)
 end
 @static VERSION >= v"1.10-" && @testset "issue #346" begin
     let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
-        callsites = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
 
