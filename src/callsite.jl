@@ -388,8 +388,9 @@ function print_callsite_info(limiter::IO, info::Union{MultiCallInfo, FailedCallI
 end
 
 function print_callsite_info(limiter::IO, info::RTCallInfo)
-    print(limiter, "RT call ")
+    print(limiter, "runtime < ")
     show_callinfo(limiter, info)
+    print(limiter, " >")
 end
 
 function print_callsite_info(limiter::IO, info::TaskCallInfo)
