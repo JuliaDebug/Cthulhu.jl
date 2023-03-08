@@ -35,6 +35,7 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "with_effects" => config.with_effects,
         "inline_cost" => config.inline_cost,
         "type_annotations" => config.type_annotations,
+        "annotate_source" => config.annotate_source,
     )
 end
 
@@ -51,4 +52,5 @@ function read_config!(config::CthulhuConfig)
     config.with_effects = @load_preference("with_effects", config.with_effects)
     config.inline_cost = @load_preference("inline_cost", config.inline_cost)
     config.type_annotations = @load_preference("type_annotations", config.type_annotations)
+    config.annotate_source = @load_preference("annotate_source", config.annotate_source)
 end
