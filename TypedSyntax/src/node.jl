@@ -13,6 +13,9 @@ TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd
 const TypedSyntaxNode = TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 
+struct NoDefaultValue end
+const no_default_value = NoDefaultValue()
+
 # These are TypedSyntaxNode constructor helpers
 # Call these directly if you want both the TypedSyntaxNode and the `mappings` list,
 # where `mappings[i]` corresponds to the list of nodes matching `(src::CodeInfo).code[i]`.
@@ -69,22 +72,25 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             sig = child(sig, 1)
         end
         @assert kind(sig) == K"call"
-        i = 1
+        i = j = 1
         for arg in Iterators.drop(children(sig), 1)
             kind(arg) == K"parameters" && break   # kw args
             if kind(arg) == K"..."
                 arg = only(children(arg))
             end
+            defaultval = no_default_value
             if kind(arg) == K"="
-                arg = first(children(arg))
+                defaultval = child(arg, 2)
+                arg = child(arg, 1)
             end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1
                     # unnamed argument
+                    argc = child(arg, 1)
                     found = false
                     while i <= length(src.slotnames)
-                        if src.slotnames[i] == Symbol("#unused#")
+                        if src.slotnames[i] == Symbol("#unused#") || (defaultval != no_default_value && kind(argc) == K"curly" && src.slotnames[i] == Symbol(""))
                             arg.typ = unwrapconst(src.slottypes[i])
                             i += 1
                             found = true
@@ -92,7 +98,10 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                         end
                         i += 1
                     end
-                    @assert found
+                    found && continue
+                    @assert kind(argc) == K"curly"
+                    arg.typ = unwrapconst(src.ssavaluetypes[j])
+                    j += 1
                     continue
                 elseif nchildren == 2
                     arg = child(arg, 1)  # extract the name
@@ -102,6 +111,11 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             end
             kind(arg) == K"Identifier" || @show sig arg
             @assert kind(arg) == K"Identifier"
+            if i > length(src.slotnames)
+                @assert defaultval != no_default_value
+                arg.typ = Core.Typeof(unwrapconst(defaultval.val))
+                continue
+            end
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
