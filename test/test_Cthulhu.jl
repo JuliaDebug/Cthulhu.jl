@@ -17,6 +17,7 @@ end
 function empty_func(::Bool) end
 
 anykwargs(a; kwargs...) = println(a, " keyword args: ", kwargs...)
+hasdefaultargs(a, b=2) = a + b
 
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
@@ -59,6 +60,23 @@ anykwargs(a; kwargs...) = println(a, " keyword args: ", kwargs...)
         @test occursin("anykwargs", str) && occursin("kwargs...", str) && !occursin("println", str)
         @test isempty(mappings)
     end
+    # Likewise for methods that fill in default positional arguments
+    m = @which hasdefaultargs(1)
+    mi = m.specializations[1]
+    src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+    tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
+    str = sprint(printstyled, tsn)
+    @test occursin("hasdefaultargs(a, b=2)", str)
+    @test !occursin("a + b", str)
+    @test isempty(mappings)
+    m = @which hasdefaultargs(1, 5)
+    mi = m.specializations[1]
+    src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+    tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
+    str = sprint(printstyled, tsn)
+    @test occursin("hasdefaultargs(a, b=2)", str)
+    @test occursin("a + b", str)
+    @test !isempty(mappings)
 end
 
 @testset "Expr heads" begin

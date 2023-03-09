@@ -214,6 +214,15 @@ function get_function_def(rootnode)
     return rootnode
 end
 
+function num_positional_args(tsn::AbstractSyntaxNode)
+    TypedSyntax.is_function_def(tsn) || return 0
+    sig, _ = children(tsn)
+    for (i, node) in enumerate(children(sig))
+        kind(node) == K"parameters" && return i-1
+    end
+    return length(children(sig))
+end
+
 # Recursively traverse `rootnode` and its children, and put all the instances in which
 # a given symbol appears into `symlocs[val]`.
 # This includes function names, operators, and literal values (like `1`, `"hello"`, etc.)

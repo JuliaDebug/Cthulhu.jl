@@ -55,8 +55,9 @@ for type inference, unless there are so many that Julia stops trying to work
 out all the different combinations (see [this blog post](https://julialang.org/blog/2018/08/union-splitting/)
 for more information).
 
-**Note**: if the function is a keyword-argument function, you'll only see the signature of the function.
-Internally, Julia splits keyword functions into "keyword-filling" and "body" methods. If you're descending into kwarg-function `foo`, then the "body" function might be called something like `#foo#123`. You can select that in the "call" menu described below.
+**Note**: if the function has default positional or keyword arguments, you may see only the signature
+of the function. Internally, Julia creates additional methods to fill in default arguments, which in turn call the "body" method that appears in the source text. If you're descending into one of these "default-filling" functions,
+you won't be able to see types on variables that appear in the body method, so to reduce confusing the entire body is eliminated. You'll have an opportunity to descend further into the "body" method in the "call menu" described below.
 
 In the next section you may see something like
 
@@ -78,7 +79,11 @@ In the final section, you see:
 ![calls](images_readme/descend_calls.png)
 
 This is a menu of calls that you can further descend into. Move the dot `•` with the up and down
-arrow keys, and hit Enter to descend into a particular call. Any calls that are made at runtime ([dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)) cannot be descended into;
+arrow keys, and hit Enter to descend into a particular call. Note that the naming of calls can sometimes
+vary from what you see in the source-text; for example, if you're descending into kwarg-function `foo`,
+then the "body" function might be called something like `#foo#123`.
+
+Any calls that are made at runtime ([dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)) cannot be descended into;
 if you select one, you'll see
 
 ```
@@ -90,6 +95,8 @@ and the call menu will be printed again.
 Calls that start with `%nn = ...` are in Julia's internal
 [Abstract Syntax Tree (AST)](https://docs.julialang.org/en/v1/devdocs/ast/) form;
 for these calls, Cthulhu and/or [TypedSyntax](TypedSyntax/README.md) (a sub-package living inside the Cthulhu repository) failed to "map" the call back to the original source code.
+
+## Caveats
 
 As a word of warning, **mapping type inference results back to the source is hard, and there may be errors or omissions in this mapping**. See the [TypedSyntax README](TypedSyntax/README.md) for further details about the challenges. When you think there are reasons to doubt what you're seeing, a reliable but harder-to-interpret strategy is to directly view the [`[T]yped code`](#viewing-the-internal-representation-of-julia-code) rather than the `[S]ource code`.
 

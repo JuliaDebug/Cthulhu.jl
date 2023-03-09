@@ -349,7 +349,7 @@ function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(r
     meth = mi.def::Method
     tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
     # If we're filling in keyword args, just show the signature
-    if is_kw_dispatch(meth)
+    if tsn !== nothing && (is_kw_dispatch(meth) || meth.nargs < TypedSyntax.num_positional_args(tsn))
         _, body = children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw

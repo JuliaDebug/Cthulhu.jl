@@ -7,7 +7,7 @@ using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax
-using JuliaSyntax: SyntaxNode, child, children
+using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
 
 import Core: MethodInstance

@@ -1,7 +1,7 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
-version = "2.8.1"
+version = "2.8.2"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
@@ -21,7 +21,7 @@ FoldingTrees = "1"
 JuliaSyntax = "0.3.2"
 Preferences = "1"
 SnoopPrecompile = "1"
-TypedSyntax = "1.0.2"
+TypedSyntax = "1.0.6"
 julia = "1.7"
 
 [extras]
