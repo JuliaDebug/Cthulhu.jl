@@ -348,8 +348,19 @@ end
 function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true)
     meth = mi.def::Method
     tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
-    # If we're filling in keyword args, just show the signature
-    if tsn !== nothing && (is_kw_dispatch(meth) || meth.nargs < TypedSyntax.num_positional_args(tsn))
+    return truncate_if_defaultargs!(tsn, mappings, meth)
+    return tsn, mappings
+end
+
+function get_typed_sourcetext(mi::MethodInstance, ::IRCode, @nospecialize(rt); kwargs...)
+    src, rt = TypedSyntax.getsrc(mi)
+    return get_typed_sourcetext(mi, src, rt; kwargs...)
+end
+
+# If we're filling in keyword args, just show the signature
+truncate_if_defaultargs!(::Nothing, mappings, meth) = nothing, mappings
+function truncate_if_defaultargs!(tsn, mappings, meth)
+    if (is_kw_dispatch(meth) || meth.nargs < TypedSyntax.num_positional_args(tsn))
         _, body = children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw
