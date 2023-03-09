@@ -509,7 +509,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
-                        cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
+                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;
                                       iswarn, hide_type_stable,
                                       pc2remarks, pc2effects,
                                       inline_cost, type_annotations, annotate_source,
