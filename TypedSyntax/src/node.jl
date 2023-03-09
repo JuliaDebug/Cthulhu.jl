@@ -441,7 +441,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     arg = stmt.args[1]
                     @assert is_slot(arg)
                     sym = src.slotnames[arg.id]
-                    if sym != Symbol("")
+                    if !is_gensym(sym)
                         lhsnode = node
                         while !is_prec_assignment(lhsnode)
                             lhsnode = lhsnode.parent
