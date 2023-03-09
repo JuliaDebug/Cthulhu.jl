@@ -493,7 +493,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         else
             @assert length(src.code) == length(infos)
         end
-        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
+        callsites, sourcenodes = find_callsites(interp, annotate_source ? codeinf : src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
