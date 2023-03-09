@@ -296,7 +296,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     function get_targets(@nospecialize(arg))
         return if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
-            get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
+            name = src.slotnames[arg.id]
+            is_gensym(name) ? nothing : symlocs[symloc_key(name)]
+            # get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
             get(symlocs, arg.name, nothing)  # find all places this name is used
         elseif isa(arg, SSAValue)
@@ -481,7 +483,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                             if is_slot(arg)
                                 sym = src.slotnames[arg.id]
                                 (sym == Symbol("") || sym == Symbol("#self#")) && continue
-                                for t in symlocs[sym]
+                                for t in symlocs[symloc_key(sym)]
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
@@ -586,5 +588,13 @@ function is_tuple_stmt(@nospecialize(stmt))
     return isa(f, GlobalRef) && f.mod === Core && f.name == :tuple
 end
 
+is_gensym(name::Symbol) = name == Symbol("") || string(name)[1] == '#'
+
 is_runtime(node::TypedSyntaxNode) = node.runtime
 is_runtime(::AbstractSyntaxNode) = false
+
+function symloc_key(sym::Symbol)
+    ssym = string(sym)
+    endswith(ssym, "...") && return Symbol(ssym[1:end-3])
+    return sym
+end
