@@ -1,6 +1,6 @@
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
 using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc
-using Test
+using InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 
