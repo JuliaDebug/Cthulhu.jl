@@ -349,7 +349,7 @@ function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(r
     meth = mi.def::Method
     tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
     # If we're filling in keyword args, just show the signature
-    if meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
+    if is_kw_dispatch(meth)
         _, body = children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw
@@ -363,6 +363,12 @@ function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(r
         empty!(mappings)
     end
     return tsn, mappings
+end
+
+if isdefined(Core, :kwcall)
+    is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
+else
+    is_kw_dispatch(meth::Method) = endswith(string(meth.name), "##kw") || !isempty(Base.kwarg_decl(meth))
 end
 
 function tag_runtime(node::TypedSyntaxNode, info)
