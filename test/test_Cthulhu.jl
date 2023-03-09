@@ -16,6 +16,8 @@ end
 
 function empty_func(::Bool) end
 
+anykwargs(a; kwargs...) = println(a, " keyword args: ", kwargs...)
+
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -46,6 +48,16 @@ function empty_func(::Bool) end
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_nothrow(effects)
         @test Core.Compiler.is_terminates(effects)
+    end
+
+    # Callsite handling in source-view mode: for kwarg functions, strip the body, and use "typed" callsites
+    for m in (@which(anykwargs("animals")), @which(anykwargs("animals"; cat=1, dog=2)))
+        mi = m.specializations[1]
+        src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+        tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
+        str = sprint(printstyled, tsn)
+        @test occursin("anykwargs", str) && occursin("kwargs...", str) && !occursin("println", str)
+        @test isempty(mappings)
     end
 end
 
