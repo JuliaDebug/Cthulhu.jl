@@ -95,7 +95,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
 
             push!(callsites, callsite)
             if annotate_source
-                if mappings !== nothing
+                if mappings !== nothing && checkbounds(Bool, mappings, id)
                     mapped = mappings[id]
                     push!(sourcenodes, length(mapped) == 1 ? tag_runtime(mapped[1], callsite.info) : callsite)
                 else
@@ -345,11 +345,11 @@ function add_sourceline!(locs, CI, stmtidx::Int)
     return locs
 end
 
-function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
+function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true)
     meth = mi.def::Method
     tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
     # If we're filling in keyword args, just show the signature
-    if meth.name == :kwcall || !isempty(Base.kwarg_decl(meth))
+    if meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
         _, body = children(tsn)
         # eliminate the body node
         raw, bodyraw = tsn.raw, body.raw
@@ -360,6 +360,7 @@ function get_typed_sourcetext(mi, src, rt; warn::Bool=true)
             body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
             empty!(children(body))
         end
+        empty!(mappings)
     end
     return tsn, mappings
 end
