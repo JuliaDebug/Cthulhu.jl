@@ -1,6 +1,6 @@
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
 using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc
-using Test
+using InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 
@@ -48,6 +48,7 @@ myabs(x) = x < 0 ? -x : x
 
 likevect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 cbva(a, i...) = checkbounds(Bool, a, i...)
+anykwargs(; kwargs...) = println(kwargs...)
 splats(x, y) = vcat(x..., y...)
 
 myoftype(ref, val) = typeof(ref)(val)
@@ -317,6 +318,14 @@ end
     @test body.typ === Vector{Int}
     @test has_name_typ(child(body, 2, 1), :x, Tuple{Int,Int})
     @test has_name_typ(child(body, 3, 1), :y, Tuple{Int})
+    m = @which TSN.anykwargs(; cat=1, dog=2)
+    mi = m.specializations[1]
+    tsn = TypedSyntaxNode(mi)
+    src = tsn.typedsource
+    @test Symbol("kwargs...") ∈ src.slotnames
+    sig, body = children(tsn)
+    @test child(body, 2, 1).typ <: Base.Pairs
+
 
     # Unused statements
     tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
