@@ -134,7 +134,7 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
     if !annotate_source
         print(ioctx,
         """
-        Advanced: dump [P]arams cache.""")
+        \nAdvanced: dump [P]arams cache.""")
     end
     return String(take!(io))
 end

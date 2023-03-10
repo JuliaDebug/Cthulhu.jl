@@ -111,9 +111,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
-            idxend = isempty(children(body)) ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+            istruncated = isempty(children(body))
+            idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
             printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             println(lambda_io)
+            istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
         end
     end
