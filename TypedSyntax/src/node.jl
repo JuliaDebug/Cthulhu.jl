@@ -140,7 +140,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     end
     for child in children(parent)
         tnode = TreeNode(tparent, nothing, TypedSyntaxData(child.data, src, gettyp(node2ssa, child, src)))
-        if tnode.typ === nothing && kind(child) == K"Identifier"
+        if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
             tnode.typ = get(symtyps, child, nothing)
         end
         push!(tparent, tnode)
@@ -583,6 +583,15 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             end
         end
         i ∈ used || empty!(mappings[i])   # if the result of the call is not used, don't attach a type to it
+    end
+    # Annotate literals
+    for (item, nodes) in symlocs
+        if is_src_literal(item)
+            for node in nodes
+                is_literal(node) || continue
+                symtyps[node] = Core.Typeof(item)
+            end
+        end
     end
     return mappings, symtyps
 end
