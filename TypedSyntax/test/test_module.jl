@@ -93,5 +93,8 @@ function boxedgenerator368(x)
     end
     [y + i for i in 1:4]
 end
+nestedgenerators(j, k) = (a^2 for a = 1:j for _ = 1:k)
+nestedgenerators(j) = (a^2 for a = 1:j for _ = 1:j)
+nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 
 end
