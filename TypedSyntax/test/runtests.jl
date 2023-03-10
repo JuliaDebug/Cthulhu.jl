@@ -146,6 +146,11 @@ include("test_module.jl")
     @test has_name_typ(child(t, 1), :x, Int)
     @test has_name_typ(child(t, 2), :y, Float64)
 
+    g = Base.Generator(identity, 1.0:4.0)
+    tsn = TypedSyntaxNode(TSN.typeof_first_item, (typeof(g),))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 3, 1, 1), :val, Float64)
+
     # GlobalRefs
     tsn = TypedSyntaxNode(TSN.getchar1, (Int,))
     sig, body = children(tsn)

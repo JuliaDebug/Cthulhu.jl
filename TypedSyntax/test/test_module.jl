@@ -76,4 +76,12 @@ function hasmacro(t, x)
     convert(Base.@default_eltype(t), x)
 end
 
+# This has a TypedSlot in an indexed_iterate call
+function typeof_first_item(g::Base.Generator)
+    y = iterate(g)
+    y === nothing && return Nothing
+    val, s = y
+    return typeof(val)
+end
+
 end

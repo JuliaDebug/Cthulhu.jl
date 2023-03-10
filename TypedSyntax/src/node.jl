@@ -384,9 +384,13 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             end
             if stmt.head == :call && is_indexed_iterate(stmt.args[1])
                 id = stmt.args[2]
-                @assert isa(id, SSAValue)
-                append!(mapped, mappings[id.id])
-                continue
+                if isa(id, SSAValue)
+                    append!(mapped, mappings[id.id])
+                    continue
+                elseif is_slot(id)
+                    append!(mapped, symlocs[src.slotnames[id.id]])
+                    continue
+                end
             end
             # When analyzing calls, we start with the symbols. For any that have been attributed to one or more
             # nodes in the source, we make a consistency argument: which *parent* nodes take all of these as arguments?
