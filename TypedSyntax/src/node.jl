@@ -25,6 +25,8 @@ function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     tsn_and_mappings(m, src, rt; kwargs...)
 end
 
+const tam_args = Ref{Any}()
+
 function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
     def = definition(String, m)
     if isnothing(def)
@@ -32,6 +34,7 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
         return nothing, nothing
     end
     sourcetext, lineno = def
+    tam_args[] = m, src, sourcetext
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
@@ -287,8 +290,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = src.codelocs[i]
-        linerange = src.linetable[j].line + Δline : (
-                    j < length(src.linetable) ? src.linetable[j+1].line - 1  + Δline : typemax(Int))
+        lt = src.linetable
+        start = getline(lt, j)
+        stop = getnextline(lt, j) - 1
+        linerange = start + Δline : stop + Δline
         for t in targets
             source_line(t) ∈ linerange && push!(mapped, t)
         end
@@ -306,7 +311,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
         return if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
             name = src.slotnames[arg.id]
-            is_gensym(name) ? nothing : symlocs[symloc_key(name)]
+            is_gensym(name) ? nothing : get(symlocs, symloc_key(name), nothing)
             # get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
             get(symlocs, arg.name, nothing)  # find all places this name is used
@@ -452,7 +457,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node
-                        while !is_prec_assignment(lhsnode)
+                        while !is_prec_assignment(lhsnode) && lhsnode.parent !== nothing
                             lhsnode = lhsnode.parent
                         end
                         lhsnode = child(lhsnode, 1)
@@ -606,4 +611,22 @@ function symloc_key(sym::Symbol)
     ssym = string(sym)
     endswith(ssym, "...") && return Symbol(ssym[1:end-3])
     return sym
+end
+
+function getline(lt, j)
+    linfo = lt[j]
+    linfo.inlined_at == 0 && return linfo.line
+    @assert linfo.method == Symbol("macro expansion")
+    linfo = lt[linfo.inlined_at]
+    return linfo.line
+end
+
+function getnextline(lt, j)
+    j += 1
+    while j <= length(lt)
+        linfo = lt[j]
+        linfo.inlined_at == 0 && return linfo.line
+        j += 1
+    end
+    return typemax(Int)
 end
