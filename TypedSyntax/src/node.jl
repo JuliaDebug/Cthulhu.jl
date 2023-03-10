@@ -403,6 +403,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             # The advantage of this approach is precision: we don't depend on ordering of statements,
             # so when it works you know you are correct.
             stmtmapping = Set{typeof(rootnode)}()
+            is_generator_call = false
             for (iarg, _arg) in enumerate(stmt.args)
                 args = if is_apply_iterate(stmt) && iarg >= 4 && isa(_arg, SSAValue) && is_tuple_stmt(src.code[_arg.id])
                     # In vararg (_apply_iterate) calls, any non-`...` args are bundled in a tuple.
@@ -431,6 +432,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         end
                     end
                     empty!(argmapping)
+                    # Handle special cases
+                    if isa(arg, GlobalRef) && arg.mod == Base && arg.name == :Generator
+                        is_generator_call = true
+                    end
                 end
             end
             # Varargs require special handling because lowering modifies the call sequence heavily
@@ -450,6 +455,12 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             if length(mapped) == 1 && isa(stmt, Expr)
                 # We've mapped the call uniquely (i.e., we found the right match)
                 node = only(mapped)
+                if is_generator_call
+                    pnode = node.parent
+                    if pnode !== nothing && kind(pnode) == K"generator"
+                        mapped[1] = node = pnode
+                    end
+                end
                 # Final step: set up symtyps for all the user-visible variables
                 # Because lowering can build methods that take a different number of arguments than appear in the
                 # source text, don't try to count arguments. Instead, find a symbol that is part of

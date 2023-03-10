@@ -84,4 +84,14 @@ function typeof_first_item(g::Base.Generator)
     return typeof(val)
 end
 
+# Generators (issue #368)
+function boxedgenerator368(x)
+    if x > 1
+        y = 3
+    else
+        y = 4
+    end
+    [y + i for i in 1:4]
+end
+
 end
