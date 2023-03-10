@@ -243,12 +243,17 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :list, Vector{Float64})
     @test has_name_typ(child(body, 1, 1), :s, Int)
-    @test_broken has_name_typ(child(body, 2, 1, 1), :x, Float64)
+    @test has_name_typ(child(body, 2, 1, 1), :x, Float64)
     node = child(body, 2, 2, 1)
     @test kind(node) == K"+="
     @test has_name_typ(child(node, 1), :s, Float64)   # if this line runs, the LHS now has type `Float64`
     @test has_name_typ(child(node, 2), :x, Float64)
     @test has_name_typ(child(body, 3, 1), :s, Union{Float64, Int})
+    tsn = TypedSyntaxNode(TSN.summer_iterate, (Vector{Float64},))
+    @test tsn.typ == Union{Int,Float64}
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 2, 1), :ret, Union{Nothing, Tuple{Float64, Int64}})
+    @test has_name_typ(child(body, 3, 2, 1, 1, 1), :x, Float64)
 
     # `where`, unnamed arguments, and types-as-arguments
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))

@@ -84,29 +84,29 @@ then (on Julia 1.9)
 ```julia
 julia> tsn, mappings = TypedSyntax.tsn_and_mappings(summer, (Vector{Float64},));
 
-julia> hcat(tsn.typedsource.code, mappings)
-16×2 Matrix{Any}:
- :(_4 = 0)                     Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(_2)                         Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[list]
- :(_3 = Base.iterate(%2))      Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[(= x list)]
- :(_3 === nothing)             Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(Base.not_int(%4))           Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(goto %16 if not %5)         Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(_3::Tuple{Float64, Int64})  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(_5 = Core.getfield(%7, 1))  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(Core.getfield(%7, 2))       Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(_4 = _4 + _5)               Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[(+= s x)]
- :(_3 = Base.iterate(%2, %9))  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(_3 === nothing)             Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(Base.not_int(%12))          Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(goto %16 if not %13)        Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(goto %7)                    Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
- :(return _4)                  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[s]
+julia> hcat(1:length(mappings), tsn.typedsource.code, mappings)
+16×3 Matrix{Any}:
+  1  :(_4 = 0)                     Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[0]
+  2  :(_2)                         Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[list]
+  3  :(_3 = Base.iterate(%2))      Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[(= x list)]
+  4  :(_3 === nothing)             Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+  5  :(Base.not_int(%4))           Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+  6  :(goto %16 if not %5)         Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+  7  :(_3::Tuple{Float64, Int64})  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+  8  :(_5 = Core.getfield(%7, 1))  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[x]
+  9  :(Core.getfield(%7, 2))       Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 10  :(_4 = _4 + _5)               Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[(+= s x)]
+ 11  :(_3 = Base.iterate(%2, %9))  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 12  :(_3 === nothing)             Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 13  :(Base.not_int(%12))          Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 14  :(goto %16 if not %13)        Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 15  :(goto %7)                    Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[]
+ 16  :(return _4)                  Union{TreeNode{SyntaxData}, TreeNode{TypedSyntaxData}}[s]
 ```
 The left column contains the statements of the type-inferred code, the right column the mappings back to the source.
 You can see that the majority of these mappings are empty, indicating either no good match or that there were multiple possible matches. This is because lowering changes the implementation so significantly that there are few calls that relate directly to the source.
 
-Nevertheless, many statements in the source can be annotated:
+Nevertheless, most of the statements in the source can be annotated:
 
 ```julia
 julia> tsn
@@ -117,11 +117,11 @@ line:col│ tree                                   │ type
    1:17 │    list                                │Vector{Float64}
    1:22 │  [block]
    2:5  │    [=]
-   2:5  │      s
-   2:9  │      0
+   2:5  │      s                                 │Int64
+   2:9  │      0                                 │Int64
    3:5  │    [for]
    3:8  │      [=]                               │Union{Nothing, Tuple{Float64, Int64}}
-   3:9  │        x
+   3:9  │        x                               │Float64
    3:14 │        list                            │Vector{Float64}
    3:18 │      [block]
    4:9  │        [+=]                            │Float64

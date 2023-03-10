@@ -559,6 +559,16 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         end
                     end
                 end
+            elseif isempty(mapped) && isexpr(stmt, :(=))
+                lhs = stmt.args[1]
+                if is_slot(lhs)
+                    empty!(argmapping)
+                    append_targets_for_arg!(argmapping, i, lhs)
+                    if length(argmapping) == 1
+                        node = only(argmapping)
+                        mappings[i] = [node]
+                    end
+                end
             end
         end
         i ∈ used || empty!(mappings[i])   # if the result of the call is not used, don't attach a type to it
