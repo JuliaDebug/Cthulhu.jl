@@ -199,6 +199,25 @@ include("test_module.jl")
     @test kind(node) == K"generator"
     @test node.typ <: Base.Generator
 
+    # Broadcasting
+    tsn = TypedSyntaxNode(TSN.fbroadcast, (Vector{Int},))
+    sig, body = children(tsn)
+    @test body.typ === Float64
+    cnode = child(body, 2)
+    @test kind(cnode) == K"dotcall"
+    @test cnode.typ == Vector{Float64}
+    tsn = TypedSyntaxNode(TSN.fbroadcast_explicit, (Vector{Int},))
+    sig, body = children(tsn)
+    @test body.typ === Float64
+    cnode = child(body, 2)
+    cnodef = child(cnode, 1, 2, 1)
+    @test kind(cnodef) == K"Identifier" && cnodef.val == :materialize
+    @test cnode.typ === Vector{Float64}
+    cnode = child(body, 2, 2)
+    cnodef = child(cnode, 1, 2, 1)
+    @test kind(cnodef) == K"Identifier" && cnodef.val == :broadcasted
+    @test cnode.typ <: Broadcast.Broadcasted
+
     # kwfuncs
     st = """
     function avoidzero(x; avoid_zero=true)
