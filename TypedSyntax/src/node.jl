@@ -83,6 +83,9 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                 defaultval = child(arg, 2)
                 arg = child(arg, 1)
             end
+            if kind(arg) == K"macrocall"
+                arg = last(children(arg))    # FIXME: is the variable always the final argument?
+            end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1

@@ -109,4 +109,8 @@ nestedgenerators(j, k) = (a^2 for a = 1:j for _ = 1:k)
 nestedgenerators(j) = (a^2 for a = 1:j for _ = 1:j)
 nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 
+# Argument annotations
+nospec(@nospecialize(x)) = 2x
+nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
+
 end

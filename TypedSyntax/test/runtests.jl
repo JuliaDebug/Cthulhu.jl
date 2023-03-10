@@ -101,6 +101,24 @@ include("test_module.jl")
     @test has_name_typ(child(body, 2, 2, 2), :t, Tuple{Int,Int})
     @test has_name_typ(child(body, 2, 3), :x, Char)
 
+    # signature macros
+    tsn = TypedSyntaxNode(TSN.nospec, (Any,))
+    sig, body = children(tsn)
+    node = child(sig, 2)
+    @test kind(node) == K"macrocall"
+    @test child(node, 1).val == Symbol("@nospecialize")
+    @test has_name_typ(child(node, 2), :x, Any)
+    @test body.typ === Any
+    tsn = TypedSyntaxNode(TSN.nospec2, (AbstractVecOrMat,))
+    sig, body = children(tsn)
+    node = child(sig, 2)
+    @test kind(node) == K"macrocall"
+    @test child(node, 1).val == Symbol("@nospecialize")
+    arg = child(node, 2)
+    @test kind(arg) == K"::"
+    @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
+    @test body.typ === Any
+
     # `ref` indexing
     st = """
         function setlist!(listset, listget, i, j)
