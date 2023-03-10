@@ -94,7 +94,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     found = false
                     while i <= length(src.slotnames)
                         if src.slotnames[i] == Symbol("#unused#") || (defaultval != no_default_value && kind(argc) == K"curly" && src.slotnames[i] == Symbol(""))
-                            arg.typ = unwrapconst(src.slottypes[i])
+                            arg.typ = unwrapinternal(src.slottypes[i])
                             i += 1
                             found = true
                             break
@@ -103,7 +103,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     end
                     found && continue
                     @assert kind(argc) == K"curly"
-                    arg.typ = unwrapconst(src.ssavaluetypes[j])
+                    arg.typ = unwrapinternal(src.ssavaluetypes[j])
                     j += 1
                     continue
                 elseif nchildren == 2
@@ -116,13 +116,13 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
             @assert kind(arg) == K"Identifier"
             if i > length(src.slotnames)
                 @assert defaultval != no_default_value
-                arg.typ = Core.Typeof(unwrapconst(defaultval.val))
+                arg.typ = Core.Typeof(unwrapinternal(defaultval.val))
                 continue
             end
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
-                    arg.typ = unwrapconst(src.slottypes[i])
+                    arg.typ = unwrapinternal(src.slottypes[i])
                     i += 1
                     break
                 end
@@ -159,17 +159,21 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     return tparent
 end
 
-unwrapconst(@nospecialize(T)) = isa(T, Core.Const) ? Core.Typeof(T.val) : T
+function unwrapinternal(@nospecialize(T))
+    isa(T, Core.Const) && return Core.Typeof(T.val)
+    isa(T, Core.PartialStruct) && return T.typ
+    return T
+end
 function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
     stmt = src.code[i]
     if isa(stmt, Core.ReturnNode)
         arg = stmt.val
-        isa(arg, SSAValue) && return unwrapconst(src.ssavaluetypes[arg.id])
-        is_slot(arg) && return unwrapconst(src.slottypes[arg.id])
+        isa(arg, SSAValue) && return unwrapinternal(src.ssavaluetypes[arg.id])
+        is_slot(arg) && return unwrapinternal(src.slottypes[arg.id])
     end
-    return unwrapconst(src.ssavaluetypes[i])
+    return unwrapinternal(src.ssavaluetypes[i])
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ)
@@ -252,8 +256,17 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
         push!(locs, node)
     end
     if haschildren(node)
-        for c in (kind(node) == K"do" ? (child(node, 1),) : children(node))  # process only `g(args...)` in `g(args...) do ... end`
-            collect_symbol_nodes!(symlocs, c)
+        if kind(node) == K"do"
+            # process only `g(args...)` in `g(args...) do ... end`
+            collect_symbol_nodes!(symlocs, child(node, 1))
+        elseif kind(node) == K"generator"
+            for c in Iterators.drop(children(node), 1)
+                collect_symbol_nodes!(symlocs, c)
+            end
+        else
+            for c in children(node)
+                collect_symbol_nodes!(symlocs, c)
+            end
         end
     end
     return symlocs
@@ -364,7 +377,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = unwrapconst(
+                        symtyps[only(mapped)] = unwrapinternal(
                                                 is_slot(stmt) ? src.slottypes[stmt.id] :
                                                 isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
                         )
@@ -373,7 +386,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        T = unwrapconst(src.ssavaluetypes[i])
+                        T = unwrapinternal(src.ssavaluetypes[i])
                         symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
@@ -446,10 +459,18 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
             end
             append!(mapped, stmtmapping)
             sort!(mapped; by=t->t.position)   # since they went into a set, best to order them within the source
+            rhs = stmt
             stmt = src.code[i]   # re-get the statement so we process slot-assignment
             if length(mapped) == 1 && isa(stmt, Expr)
                 # We've mapped the call uniquely (i.e., we found the right match)
                 node = only(mapped)
+                if isexpr(rhs, :call) && (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :Generator)
+                    # Handle generator calls
+                    pnode = node.parent
+                    if pnode !== nothing && kind(pnode) == K"generator"
+                        mapped[1] = node = pnode
+                    end
+                end
                 # Final step: set up symtyps for all the user-visible variables
                 # Because lowering can build methods that take a different number of arguments than appear in the
                 # source text, don't try to count arguments. Instead, find a symbol that is part of
@@ -505,7 +526,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
-                                        symtyps[t] = unwrapconst(if j > 0
+                                        symtyps[t] = unwrapinternal(if j > 0
                                             src.ssavaluetypes[j]
                                         else
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry

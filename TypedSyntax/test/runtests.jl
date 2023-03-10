@@ -159,6 +159,28 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test has_name_typ(child(body, 1), :charset2, typeof(TSN.charset2))
 
+    # Generators & comprehensions
+    tsn = TypedSyntaxNode(TSN.boxedgenerator368, (Int,))
+    sig, body = children(tsn)
+    cnode = child(body, 2)
+    @test kind(cnode) == K"comprehension"
+    @test cnode.typ == Vector
+    tsn = TypedSyntaxNode(TSN.nestedgenerators, (Int, Int))
+    sig, body = children(tsn)
+    @test kind(body) == K"flatten"
+    @test body.typ <: Base.Iterators.Flatten
+    tsn = TypedSyntaxNode(TSN.nestedgenerators, (Int,))
+    sig, body = children(tsn)
+    @test kind(body) == K"flatten"
+    @test body.typ <: Base.Iterators.Flatten
+    tsn = TypedSyntaxNode(TSN.nestedexplicit, (Int,))
+    sig, body = children(tsn)
+    @test kind(body) == K"comprehension"
+    @test body.typ <: Vector
+    node = child(body, 1)
+    @test kind(node) == K"generator"
+    @test node.typ <: Base.Generator
+
     # kwfuncs
     st = """
     function avoidzero(x; avoid_zero=true)
