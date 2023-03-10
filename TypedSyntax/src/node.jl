@@ -109,17 +109,21 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     error("unexpected number of children: ", children(arg))
                 end
             end
+            outerarg = arg
+            if kind(outerarg) == K"macrocall"
+                arg = last(children(outerarg))
+            end
             kind(arg) == K"Identifier" || @show sig arg
             @assert kind(arg) == K"Identifier"
             if i > length(src.slotnames)
                 @assert defaultval != no_default_value
-                arg.typ = Core.Typeof(unwrapinternal(defaultval.val))
+                outerarg.typ = Core.Typeof(unwrapinternal(defaultval.val))
                 continue
             end
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
-                    arg.typ = unwrapinternal(src.slottypes[i])
+                    outerarg.typ = unwrapinternal(src.slottypes[i])
                     i += 1
                     break
                 end
