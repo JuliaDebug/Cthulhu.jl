@@ -105,8 +105,18 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.nospec, (Any,))
     sig, body = children(tsn)
     node = child(sig, 2)
-    @test node.typ === Any && kind(node) == K"macrocall"
+    @test kind(node) == K"macrocall"
     @test child(node, 1).val == Symbol("@nospecialize")
+    @test has_name_typ(child(node, 2), :x, Any)
+    @test body.typ === Any
+    tsn = TypedSyntaxNode(TSN.nospec2, (AbstractVecOrMat,))
+    sig, body = children(tsn)
+    node = child(sig, 2)
+    @test kind(node) == K"macrocall"
+    @test child(node, 1).val == Symbol("@nospecialize")
+    arg = child(node, 2)
+    @test kind(arg) == K"::"
+    @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
     @test body.typ === Any
 
     # `ref` indexing

@@ -83,6 +83,9 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                 defaultval = child(arg, 2)
                 arg = child(arg, 1)
             end
+            if kind(arg) == K"macrocall"
+                arg = last(children(arg))    # FIXME: is the variable always the final argument?
+            end
             if kind(arg) == K"::"
                 nchildren = length(children(arg))
                 if nchildren == 1
@@ -109,21 +112,17 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
                     error("unexpected number of children: ", children(arg))
                 end
             end
-            outerarg = arg
-            if kind(outerarg) == K"macrocall"
-                arg = last(children(outerarg))
-            end
             kind(arg) == K"Identifier" || @show sig arg
             @assert kind(arg) == K"Identifier"
             if i > length(src.slotnames)
                 @assert defaultval != no_default_value
-                outerarg.typ = Core.Typeof(unwrapinternal(defaultval.val))
+                arg.typ = Core.Typeof(unwrapinternal(defaultval.val))
                 continue
             end
             argname = arg.val
             while i <= length(src.slotnames)
                 if src.slotnames[i] == argname
-                    outerarg.typ = unwrapinternal(src.slottypes[i])
+                    arg.typ = unwrapinternal(src.slottypes[i])
                     i += 1
                     break
                 end

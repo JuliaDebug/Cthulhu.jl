@@ -111,5 +111,6 @@ nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 
 # Argument annotations
 nospec(@nospecialize(x)) = 2x
+nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
 
 end
