@@ -32,6 +32,18 @@ function summer(list)
     end
     return s
 end
+function summer_iterate(list)
+    # same as above, but with an explicit call it `iterate` to ensure our handling
+    # of implicit `iterate` doesn't mess up explicit `iterate`
+    s = 0
+    ret = iterate(list)
+    while ret !== nothing
+        x, state = ret
+        s += x
+        ret = iterate(list, state)
+    end
+    return s
+end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
 cb(a, i) = checkbounds(Bool, a, i)

@@ -25,8 +25,6 @@ function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     tsn_and_mappings(m, src, rt; kwargs...)
 end
 
-const tam_args = Ref{Any}()
-
 function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
     def = definition(String, m)
     if isnothing(def)
@@ -34,7 +32,6 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
         return nothing, nothing
     end
     sourcetext, lineno = def
-    tam_args[] = m, src, sourcetext
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
@@ -521,8 +518,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         for (arg, j) in argjs
                             if is_slot(arg)
                                 sym = src.slotnames[arg.id]
-                                (sym == Symbol("") || sym == Symbol("#self#")) && continue
-                                for t in symlocs[symloc_key(sym)]
+                                itr = get(symlocs, symloc_key(sym), nothing)
+                                itr === nothing && continue
+                                for t in itr
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
@@ -557,6 +555,16 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                 end
                             end
                         end
+                    end
+                end
+            elseif isempty(mapped) && isexpr(stmt, :(=))
+                lhs = stmt.args[1]
+                if is_slot(lhs)
+                    empty!(argmapping)
+                    append_targets_for_arg!(argmapping, i, lhs)
+                    if length(argmapping) == 1
+                        node = only(argmapping)
+                        mappings[i] = [node]
                     end
                 end
             end
