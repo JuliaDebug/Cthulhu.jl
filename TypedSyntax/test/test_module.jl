@@ -117,4 +117,14 @@ fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
 nospec(@nospecialize(x)) = 2x
 nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
 
+# Nested tuple destructuring (issue #381)
+struct Foo381
+    a
+    b
+end
+function bar381(foo)
+    a, (b1, b2) = foo.a, foo.b
+    return b1
+end
+
 end

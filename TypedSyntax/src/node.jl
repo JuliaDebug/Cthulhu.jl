@@ -495,21 +495,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         while !is_prec_assignment(lhsnode) && lhsnode.parent !== nothing
                             lhsnode = lhsnode.parent
                         end
-                        lhsnode = child(lhsnode, 1)
-                        if kind(lhsnode) == K"tuple"   # tuple destructuring
-                            found = false
-                            for child in children(lhsnode)
-                                if kind(child) == K"Identifier"
-                                    if child.val == sym
-                                        lhsnode = child
-                                        found = true
-                                        break
-                                    end
-                                end
-                            end
-                            @assert found
+                        lhsnode, found = find_identifier_or_tuplechild(child(lhsnode, 1), sym)
+                        if found
+                            symtyps[lhsnode] = src.ssavaluetypes[i]
                         end
-                        symtyps[lhsnode] = src.ssavaluetypes[i]
                     end
                     # Now process the RHS
                     stmt = stmt.args[2]
@@ -684,4 +673,15 @@ function getnextline(lt, j)
         j += 1
     end
     return typemax(Int)
+end
+
+function find_identifier_or_tuplechild(node, sym)
+    kind(node) == K"Identifier" && node.val == sym && return node, true
+    if kind(node) == K"tuple"   # tuple destructuring
+        for child in children(node)
+            tmpnode, found = find_identifier_or_tuplechild(child, sym)
+            found && return tmpnode, found
+        end
+    end
+    return node, false
 end
