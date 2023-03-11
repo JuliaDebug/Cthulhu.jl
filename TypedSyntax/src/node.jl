@@ -658,7 +658,7 @@ function symloc_key(sym::Symbol)
 end
 
 function getline(lt, j)
-    linfo = lt[j]
+    linfo = j == 0 ? first(lt) : lt[j]
     linfo.inlined_at == 0 && return linfo.line
     @assert linfo.method == Symbol("macro expansion")
     linfo = lt[linfo.inlined_at]
@@ -666,6 +666,7 @@ function getline(lt, j)
 end
 
 function getnextline(lt, j)
+    j == 0 && return typemax(Int)
     j += 1
     while j <= length(lt)
         linfo = lt[j]
