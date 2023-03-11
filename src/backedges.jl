@@ -66,7 +66,7 @@ const _emptybackedges = MethodInstance[]
 struct IPFrames
     sfs::Vector{StackTraces.StackFrame}
 end
-function buildframes(bt)
+function buildframes(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}})
     ipframes = IPFrames[]
     for ip in bt
         sfs = Base.StackTraces.lookup(ip)
@@ -75,6 +75,15 @@ function buildframes(bt)
         mi = sf.linfo
         isa(mi, Core.MethodInstance) || continue
         push!(ipframes, IPFrames(sfs))
+    end
+    return ipframes
+end
+function buildframes(st::Vector{StackTraces.StackFrame})
+    ipframes = IPFrames[]
+    for sf in st
+        mi = sf.linfo
+        isa(mi, Core.MethodInstance) || continue
+        push!(ipframes, IPFrames([sf]))
     end
     return ipframes
 end
@@ -88,6 +97,7 @@ nextnode(mi, edge) = edge
 
 instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? CC.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
+backedges(sframes::Vector{StackTraces.StackFrame}) = (ret = sframes[2:end]; isempty(ret) ? () : (ret,))
 
 instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? CC.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
@@ -131,3 +141,12 @@ end
 treelist!(::Node, ::IO, ::Nothing, ::AbstractString, ::Base.IdSet) = nothing
 
 treelist(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = treelist(buildframes(bt))
+treelist(st::Vector{StackTraces.StackFrame}) = treelist(buildframes(st))
+function treelist(exstk::Base.ExceptionStack)
+    if length(exstk.stack) == 1
+        return treelist(exstk.stack[1].backtrace)
+    end
+    # Don't error to avoid trashing `Main.err`
+    @error "exception stack contains $(length(exstk.stack)) exceptions, pick one with `ascend(err.stack[i].backtrace)`"
+    return nothing
+end

@@ -540,5 +540,6 @@ function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
     return false
 end
 maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
+maybe_callsite(info::RTCallInfo, mi::MethodInstance) = false
 
 unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg

@@ -791,6 +791,7 @@ FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.wri
 
 function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     root = treelist(mi)
+    root === nothing && return
     menu = TreeMenu(root)
     choice = menu.current
     while choice !== nothing
