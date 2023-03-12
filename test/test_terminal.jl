@@ -297,6 +297,51 @@ end
             write(in, 'q')
             wait(t)
         end
+        # With backtraces
+        bt = try
+            sum([])
+        catch e
+            catch_backtrace()
+        end
+        fake_terminal() do term, in, out, _
+            t = @async begin
+                @with_try_stderr out ascend(term, bt)
+            end
+            str = readuntil(out, 'v'; keep=true)
+            @test occursin(r"zero.*Type{Any}", str)
+            write(in, 'q')
+            wait(t)
+        end
+        # With stacktraces
+        st = try
+            sum([])
+        catch e
+            stacktrace(catch_backtrace())
+        end
+        fake_terminal() do term, in, out, _
+            t = @async begin
+                @with_try_stderr out ascend(term, st)
+            end
+            str = readuntil(out, 'v'; keep=true)
+            @test occursin(r"zero.*Type{Any}", str)
+            write(in, 'q')
+            wait(t)
+        end
+        # With ExceptionStack (e.g., REPL's global `err` variable)
+        exstk = try
+            sum([])
+        catch e
+            Base.ExceptionStack([(exception=e, backtrace=stacktrace(catch_backtrace()))])
+        end
+        fake_terminal() do term, in, out, _
+            t = @async begin
+                @with_try_stderr out ascend(term, exstk)
+            end
+            str = readuntil(out, 'v'; keep=true)
+            @test occursin(r"zero.*Type{Any}", str)
+            write(in, 'q')
+            wait(t)
+        end
     finally
         # Restore the previous settings
         for fn in fieldnames(Cthulhu.CthulhuConfig)
