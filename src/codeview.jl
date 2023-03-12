@@ -113,6 +113,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             # We empty the body when filling kwargs
             istruncated = isempty(children(body))
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+            if any(iszero, src.codelocs)
+                @warn "Some line information is missing, type-assignment may be incomplete"
+            end
             printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
