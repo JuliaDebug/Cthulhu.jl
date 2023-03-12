@@ -164,6 +164,13 @@ include("test_module.jl")
     @test has_name_typ(child(t, 1), :x, Int)
     @test has_name_typ(child(t, 2), :y, Float64)
 
+    tsn = TypedSyntaxNode(TSN.bar381, (TSN.Foo381,))
+    sig, body = children(tsn)
+    lhs = child(body, 1, 1)
+    @test has_name_typ(child(lhs, 1), :a, Any)
+    @test has_name_typ(child(lhs, 2, 1), :b1, Any)
+    @test has_name_typ(child(lhs, 2, 2), :b2, Any)
+
     g = Base.Generator(identity, 1.0:4.0)
     tsn = TypedSyntaxNode(TSN.typeof_first_item, (typeof(g),))
     sig, body = children(tsn)
@@ -328,7 +335,6 @@ include("test_module.jl")
     @test Symbol("kwargs...") ∈ src.slotnames
     sig, body = children(tsn)
     @test child(body, 2, 1).typ <: Base.Pairs
-
 
     # Unused statements
     tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
