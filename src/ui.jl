@@ -63,14 +63,15 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
             end
             string(chomp(
                 sprint(node; context=:color=>true) do io, node
+                    limiter = TextWidthLimiter(io, reduced_displaysize)
                     if TypedSyntax.is_runtime(node)
                         if iswarn
-                            printstyled(io, "runtime "; color=:red)
+                            printstyled(limiter, "runtime "; color=:red)
                         else
-                            print(io, "runtime ")
+                            print(limiter, "runtime ")
                         end
                     end
-                    printstyled(TextWidthLimiter(io, reduced_displaysize), node; iswarn, hide_type_stable)
+                    printstyled(limiter, node; iswarn, hide_type_stable)
                 end))
         end
     end
