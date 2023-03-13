@@ -127,4 +127,15 @@ function bar381(foo)
     return b1
 end
 
+# Generated functions (issue #385)
+function _generate_body385(N::Int)
+    quote
+        D = eachindex(dest)
+        Dy = iterate(D)
+        (idx, state) = Dy
+        return ndims(D)
+    end
+end
+@eval generated385(dest::AbstractVector) = $(_generate_body385(1))
+
 end
