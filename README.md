@@ -147,7 +147,31 @@ Choose a call for analysis (q to quit):
 You use the up/down arrows to navigate this menu, enter to select a call to `descend` into,
 and your space bar to toggle branch-folding.
 
-It also works on stacktraces:
+It also works on stacktraces. If your version of Julia stores the most recent error in the global `err` variable, you can use
+
+```julia
+julia> using Cthulhu
+
+julia> sqrt(-1)
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(f::Symbol, x::Float64)
+   @ Base.Math ./math.jl:33
+ [2] sqrt
+   @ ./math.jl:677 [inlined]
+ [3] sqrt(x::Int64)
+   @ Base.Math ./math.jl:1491
+ [4] top-level scope
+   @ REPL[1]:1
+
+julia> ascend(err)
+Choose a call for analysis (q to quit):
+ >   throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:33
+       sqrt(::Int64) at ./math.jl:1491
+```
+
+If this isn't available to you, a more "manual" approach is:
 
 ```julia
 julia> bt = try
@@ -168,6 +192,8 @@ Choose a call for analysis (q to quit):
 
 The calls that appear on the same line separated by `=>` represent inlined methods; when you select such a line,
 you enter at the final (topmost) call on that line.
+
+Using Cthulhu may be particularly useful for `MethodError`s, since those exist purely in the type-domain.
 
 By default,
 - `descend` views non-optimized code without "warn" coloration of types
