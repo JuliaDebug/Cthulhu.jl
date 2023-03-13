@@ -304,9 +304,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = src.codelocs[i]
         lt = src.linetable
-        start = getline(lt, j)
-        stop = getnextline(lt, j) - 1
-        linerange = start + Δline : stop + Δline
+        start = getline(lt, j) + Δline
+        stop = getnextline(lt, j, Δline) - 1
+        linerange = start : stop
         for t in targets
             source_line(t) ∈ linerange && push!(mapped, t)
         end
@@ -666,12 +666,12 @@ function getline(lt, j)
     return linfo.line
 end
 
-function getnextline(lt, j)
+function getnextline(lt, j, Δline)
     j == 0 && return typemax(Int)
     j += 1
     while j <= length(lt)
         linfo = lt[j]
-        linfo.inlined_at == 0 && return linfo.line
+        linfo.inlined_at == 0 && return linfo.line + Δline
         j += 1
     end
     return typemax(Int)
