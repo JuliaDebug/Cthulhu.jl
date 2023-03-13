@@ -281,6 +281,13 @@ include("test_module.jl")
     @test has_name_typ(child(sig, 2, 1), :x, Int)
     @test has_name_typ(child(body, 1, 1), :xf, Float64)
 
+    # generated functions
+    # This mostly tests that we don't choke on assignments to variables whose names do not show up in the source
+    tsn = TypedSyntaxNode(TSN.generated385, (Vector{Int},))
+    @test kind(tsn) == K"macrocall"
+    sig, body = children(child(tsn, 2))
+    @test has_name_typ(child(sig, 2, 1), :dest, Vector{Int})
+
     # `for` loops
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
     @test tsn.typ == Union{Int,Float64}

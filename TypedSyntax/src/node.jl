@@ -401,7 +401,8 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append!(mapped, mappings[id.id])
                     continue
                 elseif is_slot(id)
-                    append!(mapped, symlocs[src.slotnames[id.id]])
+                    targets = get_targets(id)
+                    targets !== nothing && append!(mapped, targets)
                     continue
                 end
             end
