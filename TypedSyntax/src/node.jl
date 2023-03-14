@@ -68,67 +68,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     fnode = get_function_def(trootnode)
     if is_function_def(fnode)
         sig, body = children(fnode)
-        if kind(sig) == K"where"
-            sig = child(sig, 1)
-        end
-        @assert kind(sig) == K"call"
-        i = j = 1
-        for arg in Iterators.drop(children(sig), 1)
-            kind(arg) == K"parameters" && break   # kw args
-            if kind(arg) == K"..."
-                arg = only(children(arg))
-            end
-            defaultval = no_default_value
-            if kind(arg) == K"="
-                defaultval = child(arg, 2)
-                arg = child(arg, 1)
-            end
-            if kind(arg) == K"macrocall"
-                arg = last(children(arg))    # FIXME: is the variable always the final argument?
-            end
-            if kind(arg) == K"::"
-                nchildren = length(children(arg))
-                if nchildren == 1
-                    # unnamed argument
-                    argc = child(arg, 1)
-                    found = false
-                    while i <= length(src.slotnames)
-                        if src.slotnames[i] == Symbol("#unused#") || (defaultval != no_default_value && kind(argc) == K"curly" && src.slotnames[i] == Symbol(""))
-                            arg.typ = unwrapinternal(src.slottypes[i])
-                            i += 1
-                            found = true
-                            break
-                        end
-                        i += 1
-                    end
-                    found && continue
-                    @assert kind(argc) == K"curly"
-                    arg.typ = unwrapinternal(src.ssavaluetypes[j])
-                    j += 1
-                    continue
-                elseif nchildren == 2
-                    arg = child(arg, 1)  # extract the name
-                else
-                    error("unexpected number of children: ", children(arg))
-                end
-            end
-            kind(arg) == K"Identifier" || @show sig arg
-            @assert kind(arg) == K"Identifier"
-            if i > length(src.slotnames)
-                @assert defaultval != no_default_value
-                arg.typ = Core.Typeof(unwrapinternal(defaultval.val))
-                continue
-            end
-            argname = arg.val
-            while i <= length(src.slotnames)
-                if src.slotnames[i] == argname
-                    arg.typ = unwrapinternal(src.slottypes[i])
-                    i += 1
-                    break
-                end
-                i += 1
-            end
-        end
+        map_signature!(sig, src)
     end
     return trootnode
 end
@@ -157,6 +97,161 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
         mappings[i][1] = tparent
     end
     return tparent
+end
+
+function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
+    function argidentifier(arg)
+        arg, defaultval = striparg(arg)
+        if kind(arg) == K"::"
+            nchildren = length(children(arg))
+            nchildren == 1 && return nothing, defaultval
+            @assert nchildren == 2
+            arg = child(arg, 1)
+        end
+        if kind(arg) == K"$"
+            return nothing, defaultval
+        end
+        if kind(arg) == K"."
+            arg = last(children(arg))
+            @assert kind(arg) == K"quote"
+            arg = only(children(arg))
+        end
+        kind(arg) == K"Identifier" || @show arg
+        @assert kind(arg) == K"Identifier"
+        return arg, defaultval
+    end
+
+    if kind(sig) == K"where"
+        sig = child(sig, 1)
+    end
+    @assert kind(sig) == K"call"
+    # First, match named args, since those have to be unique
+    sigarg = fill(0, length(src.slotnames))
+    slotarg = Int[]
+    argcontainer = children(sig)   # we use a flexible container, because the [parameters] node (for kw-funcs) is its own container
+    j = 1
+    havekws = false
+    while j <= length(argcontainer)
+        arg = argcontainer[j]
+        if kind(arg) == K"parameters"
+            argcontainer = children(arg)
+            j = 1
+            arg = argcontainer[j]
+            havekws = true
+        end
+        idx = nothing
+        # Try to find an identifier for this arg
+        arg, defaultval = argidentifier(arg)
+        if arg !== nothing
+            name = arg.val::Symbol
+            idx = findfirst(==(name), src.slotnames)
+            if idx === nothing && isempty(slotarg) && src.slotnames[1] == Symbol("#self#")
+                # The first argument is the function name itself, and matches `#self#`
+                idx = 1
+            end
+        end
+        if idx !== nothing
+            # Match made
+            push!(slotarg, idx)
+            sigarg[idx] = length(slotarg)
+        else
+            if defaultval != no_default_value && arg !== nothing # is this a default positional argument?
+                arg.typ = unwrapinternal(Core.Typeof(defaultval.val))
+            end
+            # No match, save an empty spot
+            push!(slotarg, 0)
+        end
+        j += 1
+    end
+    if any(iszero, slotarg)
+        # Some arguments went unmatched
+        kwdivider = 1
+        if havekws && src.slotnames[1] !== Symbol("#self#")
+            kwdivider = findfirst(1:length(src.slotnames)) do i
+                src.slotnames[i] == Symbol("") && unwrapinternal(src.slottypes[i]) <: Function  # this should be the parent function as an argument
+            end
+            if kwdivider === nothing
+                kwdivider = 1
+            end
+            if length(src.slottypes) >= 2 && src.slotnames[2] == Symbol("") && (nt = src.slottypes[2]) <: NamedTuple
+                # Match kwargs
+                argcontainer = children(last(children(sig)))
+                offset = length(children(sig)) - 1
+                names, typs = nt.parameters
+                for j = 1 : length(argcontainer)
+                    if iszero(slotarg[j + offset]) || src.slottypes[slotarg[j + offset]] === Union{}
+                        arg = argcontainer[j]
+                        arg, defaultval = argidentifier(arg)
+                        name = arg.val
+                        i = findfirst(==(name), names)
+                        if i !== nothing
+                            arg.typ = typs.parameters[i]
+                            slotarg[j + offset] = 0   # mark as complete
+                        end
+                    end
+                end
+            end
+        end
+        # Match the remaining positional arguments
+        i = kwdivider + 1
+        argcontainer = children(sig)
+        for j = 2 : length(argcontainer)
+            arg = argcontainer[j]
+            kind(arg) == K"parameters" && break
+            if iszero(slotarg[j])
+                if i <= length(src.slotnames)
+                    slotarg[j] = i
+                    sigarg[i] = j
+                else
+                    arg, defaultval = striparg(arg)
+                    @assert defaultval != no_default_value
+                    if kind(defaultval) == K"Identifier"
+                        val = defaultval.val
+                        arg.typ = unwrapinternal(Core.Typeof(val))
+                    end
+                end
+            end
+            i += 1
+        end
+    end
+    argcontainer, offset = children(sig), 0
+    for (j, idx) in enumerate(slotarg)
+        idx == 0 && continue
+        arg, defaultval = striparg(argcontainer[j - offset])
+        if kind(arg) == K"parameters"
+            offset = length(argcontainer) - 1
+            argcontainer = children(arg)
+            arg, defaultval = striparg(argcontainer[j - offset])
+        end
+        if kind(arg) == K"::" && length(children(arg)) == 2
+            arg = child(arg, 1)
+        end
+        arg.typ = unwrapinternal(src.slottypes[idx])
+    end
+
+    # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
+    # Strip the type annotation from the function name
+    arg, _ = argidentifier(child(sig, 1))
+    if arg !== nothing
+        arg.typ = nothing
+    end
+    return sig
+end
+
+# For a signature argument, strip "decorations"
+function striparg(arg)
+    defaultval = no_default_value
+    if kind(arg) == K"..."
+        arg = only(children(arg))
+    end
+    if kind(arg) == K"="
+        defaultval = child(arg, 2)
+        arg = child(arg, 1)
+    end
+    if kind(arg) == K"macrocall"
+        arg = last(children(arg))    # FIXME: is the variable always the final argument?
+    end
+    return arg, defaultval
 end
 
 function unwrapinternal(@nospecialize(T))
@@ -477,6 +572,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     # Broadcasting: move the match to the `materialize` call
                     @assert i < length(src.code)
                     nextstmt = src.code[i+1]
+                    if isexpr(nextstmt, :(=))
+                        nextstmt = nextstmt.args[2]
+                    end
                     @assert isexpr(nextstmt, :call) && (f = nextstmt.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :materialize)
                     @assert nextstmt.args[2] == SSAValue(i)
                     push!(mappings[i+1], node)
