@@ -530,7 +530,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                             # For each candidate source-node, push its parent-node into `stmtmapping`.
                             # The true call-node should be among these.
                             foreach(argmapping) do t
-                                push!(stmtmapping, skipped_parent(t))
+                                if t.parent !== nothing
+                                    push!(stmtmapping, skipped_parent(t))
+                                end
                             end
                         else
                             # Second or later matched argument
