@@ -51,16 +51,16 @@ build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, i
     vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
 function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
     reduced_displaysize = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
-    nd = nothing
+    idxlast = findlast(cs -> !isa(cs, Callsite), callsites)
+    if idxlast !== nothing
+        nd = TypedSyntax.ndigits_linenumbers(callsites[idxlast])
+        reduced_displaysize -= nd + 1
+    end
 
     shown_callsites = map(callsites) do node
         if isa(node, Callsite)
             show_as_line(node, with_effects, optimize, iswarn)
         else
-            if nd === nothing
-                nd = TypedSyntax.ndigits_linenumbers(node)
-                reduced_displaysize -= nd + 1
-            end
             string(chomp(
                 sprint(node; context=:color=>true) do io, node
                     limiter = TextWidthLimiter(io, reduced_displaysize)

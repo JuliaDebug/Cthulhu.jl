@@ -188,7 +188,7 @@ has_space(limiter::TextWidthLimiter, s) = has_space(limiter, textwidth(string(s)
 has_space(::IO, s) = true
 
 function Base.print(io::TextWidthLimiter, s::String)
-    io.width == io.limit && return
+    io.width >= io.limit && return
     width = textwidth(s)
     if has_space(io, width)
         print(io.io, s)
