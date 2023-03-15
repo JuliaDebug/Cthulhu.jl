@@ -93,15 +93,21 @@ end
 const debugcolors = (:nothing, :light_black, :yellow)
 function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
     custom_toggles::Vector{CustomToggle})
-    colorize(use_color::Bool, c::Char) = stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = stringify() do io
+        active_option ? printstyled(io, c; color=:blue) : printstyled(io, c; color=:magenta)
+    end
+
+    colorize(s::AbstractString; color::Symbol = :cyan) = stringify() do io
+        printstyled(io, s; color)
     end
 
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
 
-    println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
-    print(ioctx, "Toggles: [",
+    println(ioctx,
+        colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color=:green))
+    print(ioctx,
+        colorize("Toggles"), ": [",
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
@@ -123,19 +129,20 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
     end
     print(ioctx, '.')
     println(ioctx)
-    println(ioctx, "Show: [",
+    println(ioctx,
+        colorize("Show"), ": [",
         colorize(annotate_source, 'S'), "]ource code, [",
         colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
         colorize(!annotate_source && view_cmd === cthulhu_typed, 'T'), "]yped code, [",
         colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
         colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
-    """
-    Actions: [E]dit source code, [R]evise and redisplay""")
+        colorize("Actions"),
+        ": [E]dit source code, [R]evise and redisplay")
     if !annotate_source
         print(ioctx,
-        """
-        \nAdvanced: dump [P]arams cache.""")
+        colorize("\nAdvanced"),
+        ": dump [P]arams cache.")
     end
     return String(take!(io))
 end
