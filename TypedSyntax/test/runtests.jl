@@ -3,6 +3,7 @@ using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc
 using InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
+has_name_notyp(node, name::Symbol) = has_name_typ(node, name, nothing)
 
 include("test_module.jl")
 
@@ -256,7 +257,7 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,))
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 2), :x, Float32)
-    @test has_name_typ(child(sig, 3, 1), :y, Int)
+    @test has_name_notyp(child(sig, 3, 1), :y)
     # there is no argument 2 in tsn.typedsource
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,Int))
     sig, body = children(tsn)
@@ -336,8 +337,8 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Type{Matrix{Float32}}
     @test child(sig, 1, 3).typ === Type{Int}
-    @test child(sig, 1, 4, 1).typ === Int
-    @test child(sig, 1, 5, 1, 1).typ === String
+    @test has_name_notyp(child(sig, 1, 4, 1), :c)
+    @test has_name_typ(child(sig, 1, 5, 1, 1), :a, String)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, :c; a="hello")
     mi = nothing
     for _mi in m.specializations
@@ -372,7 +373,7 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test child(sig, 2).typ === Type{Matrix}
     @test child(sig, 3, 1).typ === Symbol
-    @test child(sig, 4, 1, 1, 1).typ === Bool
+    @test has_name_notyp(child(sig, 4, 1, 1, 1), :padding)
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))

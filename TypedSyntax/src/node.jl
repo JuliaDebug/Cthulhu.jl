@@ -155,9 +155,6 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
             push!(slotarg, idx)
             sigarg[idx] = length(slotarg)
         else
-            if defaultval != no_default_value && arg !== nothing # is this a default positional argument?
-                arg.typ = unwrapinternal(Core.Typeof(defaultval.val))
-            end
             # No match, save an empty spot
             push!(slotarg, 0)
         end
@@ -202,13 +199,6 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
                 if i <= length(src.slotnames)
                     slotarg[j] = i
                     sigarg[i] = j
-                else
-                    arg, defaultval = striparg(arg)
-                    @assert defaultval != no_default_value
-                    if kind(defaultval) == K"Identifier"
-                        val = defaultval.val
-                        arg.typ = unwrapinternal(Core.Typeof(val))
-                    end
                 end
             end
             i += 1
