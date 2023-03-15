@@ -120,6 +120,14 @@ include("test_module.jl")
     @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
     @test body.typ === Any
 
+    # operators
+    tsn = TypedSyntaxNode(+, (TSN.MyInt, TSN.MyInt))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2, 1), :a, TSN.MyInt)
+    tsn = TypedSyntaxNode(-, (TSN.MyInt, TSN.MyInt))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2, 1), :a, TSN.MyInt)
+
     # `ref` indexing
     st = """
         function setlist!(listset, listget, i, j)
