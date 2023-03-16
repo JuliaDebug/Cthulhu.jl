@@ -1,7 +1,7 @@
 name = "TypedSyntax"
 uuid = "d265eb64-f81a-44ad-a842-4247ee1503de"
 authors = ["Tim Holy <tim.holy@gmail.com> and contributors"]
-version = "1.1.1"
+version = "1.1.2"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"

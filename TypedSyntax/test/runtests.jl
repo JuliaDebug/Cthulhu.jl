@@ -447,6 +447,11 @@ include("test_module.jl")
     node = child(body, 1)
     @test node.typ === Type{Float64}
 
+    # Counting arguments (needed for Cthulhu)
+    # issue #397
+    tsn = TypedSyntaxNode(TSN.f397, (typeof(view([1,2,3], 1:2)),))
+    @test TypedSyntax.num_positional_args(tsn) == 2 # the function is arg1, x is arg2
+
     # Display
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
     str = sprint(tsn; context=:color=>false) do io, obj
