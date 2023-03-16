@@ -426,6 +426,12 @@ include("test_module.jl")
     sig, body = children(tsn)
     node = child(body, 1)
     @test node.typ === Type{Float64}
+    tsn = TypedSyntaxNode(TSN.DefaultArray{Float32}, (Vector{Int}, Int))
+    sig, body = children(tsn)
+    @test kind(sig) == K"where"
+    @test kind(child(sig, 1)) == K"call"
+    f = child(sig, 1, 1)
+    @test kind(f) == K"curly" && f.typ === Type{TSN.DefaultArray{Float32}}
 
     # Field access & a more complex example
     tsn = TypedSyntaxNode(Base.getindex, (TSN.DefaultArray{Float64,2,Matrix{Float64}}, Int, Int))
