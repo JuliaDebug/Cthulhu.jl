@@ -119,6 +119,12 @@ fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
 nospec(@nospecialize(x)) = 2x
 nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
 
+# Operators
+struct MyInt x::Int end
+Base.:+(a::MyInt, b::MyInt) = MyInt(a.x + b.x)
+import Base: -
+-(a::MyInt, b::MyInt) = MyInt(a.x - b.x)
+
 # Nested tuple destructuring (issue #381)
 struct Foo381
     a
