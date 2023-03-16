@@ -308,6 +308,10 @@ end
 function num_positional_args(tsn::AbstractSyntaxNode)
     TypedSyntax.is_function_def(tsn) || return 0
     sig, _ = children(tsn)
+    if kind(sig) == K"where"
+        sig = child(sig, 1)
+    end
+    @assert kind(sig) == K"call"
     for (i, node) in enumerate(children(sig))
         kind(node) == K"parameters" && return i-1
     end
