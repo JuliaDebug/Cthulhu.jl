@@ -540,3 +540,7 @@ include("test_module.jl")
     end
     @test occursin("-(x::Float64)::Float64", str)
 end
+
+if parse(Bool, get(ENV, "CI", "false"))
+    include("exhaustive.jl")
+end

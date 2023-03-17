@@ -31,7 +31,10 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing
     end
-    sourcetext, lineno = def
+    return tsn_and_mappings(m, src, rt, def...; warn, strip_macros, kwargs...)
+end
+
+function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
