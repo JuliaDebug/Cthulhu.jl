@@ -122,6 +122,7 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
         if kind(arg) == K"curly"
             arg = first(children(arg))
         end
+        kind(arg) == K"tuple" && return nothing, defaultval     # FIXME? see extrema2 test
         @assert kind(arg) == K"Identifier" || is_operator(arg)
         return arg, defaultval
     end

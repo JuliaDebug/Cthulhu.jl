@@ -190,6 +190,10 @@ include("test_module.jl")
     @test has_name_typ(child(lhs, 2, 1), :b1, Any)
     @test has_name_typ(child(lhs, 2, 2), :b2, Any)
 
+    tsn = TypedSyntaxNode(TSN.extrema2, (Tuple{Int,Int}, Tuple{Int,Int}))
+    sig, body = children(tsn)
+    @test child(sig, 2).typ == Tuple{Int,Int}
+
     g = Base.Generator(identity, 1.0:4.0)
     tsn = TypedSyntaxNode(TSN.typeof_first_item, (typeof(g),))
     sig, body = children(tsn)

@@ -156,6 +156,7 @@ function bar381(foo)
     a, (b1, b2) = foo.a, foo.b
     return b1
 end
+extrema2((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
 
 # Generated functions (issue #385)
 function _generate_body385(N::Int)
