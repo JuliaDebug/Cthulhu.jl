@@ -258,6 +258,12 @@ include("test_module.jl")
         @test_broken kind(node) == K"dotcall" && node.typ === Vector{String}
     end
 
+    # Misc lowering
+    tsn = TypedSyntaxNode(TSN.myunique, (AbstractRange,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 2), :r, AbstractRange)
+    @test_broken has_name_typ(child(body, 3, 2), :r, AbstractRange)
+
     # kwfuncs
     st = """
     function avoidzero(x; avoid_zero=true)

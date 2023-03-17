@@ -131,6 +131,9 @@ fbroadcast(list) = sum(sin.(list))
 fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
 fbroadcast2(list) = join("; value: " .* string.(list))   # double-broadcasted (.* and string.)
 
+# Lowered to `firstindex`
+myunique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+
 # Argument annotations
 nospec(@nospecialize(x)) = 2x
 nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)

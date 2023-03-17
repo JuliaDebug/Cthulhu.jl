@@ -742,6 +742,7 @@ end
 
 function skipped_parent(node::SyntaxNode)
     pnode = node.parent
+    pnode === nothing && return node
     if pnode.parent !== nothing
         if kind(pnode) ∈ KSet"... quote"   # might need to add more things here
             pnode = pnode.parent
