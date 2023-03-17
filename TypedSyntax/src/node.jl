@@ -578,15 +578,23 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 end
                 if kind(node) == K"dotcall" && isexpr(rhs, :call) &&  (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted)
                     # Broadcasting: move the match to the `materialize` call
-                    @assert i < length(src.code)
-                    nextstmt = src.code[i+1]
-                    if isexpr(nextstmt, :(=))
-                        nextstmt = nextstmt.args[2]
+                    if i < length(src.code)
+                        nextstmt = src.code[i + 1]
+                        if isexpr(nextstmt, :(=))
+                            nextstmt = nextstmt.args[2]
+                        end
+                        if isexpr(nextstmt, :call)
+                            f = nextstmt.args[1]
+                            if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
+                                empty!(mapped)
+                            elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] == SSAValue(i)
+                                push!(mappings[i+1], node)
+                                empty!(mapped)
+                            else
+                                error("unexpected broadcast")
+                            end
+                        end
                     end
-                    @assert isexpr(nextstmt, :call) && (f = nextstmt.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :materialize)
-                    @assert nextstmt.args[2] == SSAValue(i)
-                    push!(mappings[i+1], node)
-                    empty!(mapped)
                 end
                 # Final step: set up symtyps for all the user-visible variables
                 # Because lowering can build methods that take a different number of arguments than appear in the

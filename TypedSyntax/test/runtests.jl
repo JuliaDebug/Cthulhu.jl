@@ -243,6 +243,16 @@ include("test_module.jl")
     cnodef = child(cnode, 1, 2, 1)
     @test kind(cnodef) == K"Identifier" && cnodef.val == :broadcasted
     @test cnode.typ <: Broadcast.Broadcasted
+    tsn = TypedSyntaxNode(TSN.fbroadcast2, (Vector{Int},))
+    sig, body = children(tsn)
+    node = child(body, 2)
+    src = tsn.typedsource
+    if isa(src.code[1], GlobalRef)
+        @test kind(node) == K"dotcall" && node.typ === Vector{String}
+    else
+        # We aren't quite handling this properly yet
+        @test_broken kind(node) == K"dotcall" && node.typ === Vector{String}
+    end
 
     # kwfuncs
     st = """

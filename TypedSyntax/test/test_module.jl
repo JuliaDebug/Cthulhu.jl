@@ -127,6 +127,7 @@ nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 # Broadcasting
 fbroadcast(list) = sum(sin.(list))
 fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
+fbroadcast2(list) = join("; value: " .* string.(list))   # double-broadcasted (.* and string.)
 
 # Argument annotations
 nospec(@nospecialize(x)) = 2x
