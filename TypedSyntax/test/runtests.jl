@@ -440,6 +440,11 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test child(body, 2, 1).typ <: Base.Pairs
 
+    # quoted symbols that could be confused for function definition
+    tsn = TypedSyntaxNode(TSN.isexpreq, (Expr,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2, 1), :ex, Expr)
+
     # Unused statements
     tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
     @test tsn.typ === Nothing

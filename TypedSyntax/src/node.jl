@@ -300,7 +300,7 @@ end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
-    if kind(node) == K"="
+    if kind(node) == K"=" && length(children(node)) >= 1
         sig = child(node, 1)
         while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
             sig = child(sig, 1)

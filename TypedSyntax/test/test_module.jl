@@ -169,6 +169,9 @@ function _generate_body385(N::Int)
 end
 @eval generated385(dest::AbstractVector) = $(_generate_body385(1))
 
+# quoted `=`
+isexpreq(ex::Expr) = ex.head ∈ (:(=), :(.=))
+
 # Computing the number of args in the signature (issue #397)
 f397(x::SubArray{T, N, P, I, L}) where {T,N,P,I,L} = isempty(x)
 
