@@ -126,6 +126,12 @@ fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
 nospec(@nospecialize(x)) = 2x
 nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
 
+# Return-type annotation
+withrt(io::IO)::Bool = eof(io)
+function mytimes(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+    return ifelse(x, y, copysign(zero(y), y))
+end
+
 # Operators
 struct MyInt x::Int end
 Base.:+(a::MyInt, b::MyInt) = MyInt(a.x + b.x)

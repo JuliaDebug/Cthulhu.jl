@@ -123,7 +123,7 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
         return arg, defaultval
     end
 
-    if kind(sig) == K"where"
+    while kind(sig) ∈ KSet"where ::"   # handle MyType{T}(args...) and return-type annotations
         sig = child(sig, 1)
     end
     @assert kind(sig) == K"call"
@@ -233,15 +233,17 @@ end
 # For a signature argument, strip "decorations"
 function striparg(arg)
     defaultval = no_default_value
-    if kind(arg) == K"..."
-        arg = only(children(arg))
-    end
-    if kind(arg) == K"="
-        defaultval = child(arg, 2)
-        arg = child(arg, 1)
-    end
-    if kind(arg) == K"macrocall"
-        arg = last(children(arg))    # FIXME: is the variable always the final argument?
+    while kind(arg) ∈ KSet"... = macrocall"
+        if kind(arg) == K"..."
+            arg = only(children(arg))
+        end
+        if kind(arg) == K"="
+            defaultval = child(arg, 2)
+            arg = child(arg, 1)
+        end
+        if kind(arg) == K"macrocall"
+            arg = last(children(arg))    # FIXME: is the variable always the final argument?
+        end
     end
     return arg, defaultval
 end
@@ -294,7 +296,13 @@ end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
-    kind(node) == K"=" && kind(child(node, 1)) ∈ KSet"call where" && return true
+    if kind(node) == K"="
+        sig = child(node, 1)
+        while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
+            sig = child(sig, 1)
+        end
+        kind(sig) == K"call" && return true
+    end
     return false
 end
 

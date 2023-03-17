@@ -120,6 +120,16 @@ include("test_module.jl")
     @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
     @test body.typ === Any
 
+    # signature return-type annotations
+    tsn = TypedSyntaxNode(TSN.withrt, (IO,))
+    @test tsn.typ === Bool
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 2, 1), :io, IO)
+    tsn = TypedSyntaxNode(TSN.mytimes, (Bool,Float16))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 1, 2, 1), :x, Bool)
+    @test has_name_typ(child(sig, 1, 1, 3, 1), :y, Float16)
+
     # operators
     tsn = TypedSyntaxNode(+, (TSN.MyInt, TSN.MyInt))
     sig, body = children(tsn)
