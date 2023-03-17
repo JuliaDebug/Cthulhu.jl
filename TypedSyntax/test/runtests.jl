@@ -120,6 +120,16 @@ include("test_module.jl")
     @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
     @test body.typ === Any
 
+    # signature return-type annotations
+    tsn = TypedSyntaxNode(TSN.withrt, (IO,))
+    @test tsn.typ === Bool
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 2, 1), :io, IO)
+    tsn = TypedSyntaxNode(TSN.mytimes, (Bool,Float16))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 1, 2, 1), :x, Bool)
+    @test has_name_typ(child(sig, 1, 1, 3, 1), :y, Float16)
+
     # operators
     tsn = TypedSyntaxNode(+, (TSN.MyInt, TSN.MyInt))
     sig, body = children(tsn)
@@ -180,6 +190,10 @@ include("test_module.jl")
     @test has_name_typ(child(lhs, 2, 1), :b1, Any)
     @test has_name_typ(child(lhs, 2, 2), :b2, Any)
 
+    tsn = TypedSyntaxNode(TSN.extrema2, (Tuple{Int,Int}, Tuple{Int,Int}))
+    sig, body = children(tsn)
+    @test child(sig, 2).typ == Tuple{Int,Int}
+
     g = Base.Generator(identity, 1.0:4.0)
     tsn = TypedSyntaxNode(TSN.typeof_first_item, (typeof(g),))
     sig, body = children(tsn)
@@ -233,6 +247,22 @@ include("test_module.jl")
     cnodef = child(cnode, 1, 2, 1)
     @test kind(cnodef) == K"Identifier" && cnodef.val == :broadcasted
     @test cnode.typ <: Broadcast.Broadcasted
+    tsn = TypedSyntaxNode(TSN.fbroadcast2, (Vector{Int},))
+    sig, body = children(tsn)
+    node = child(body, 2)
+    src = tsn.typedsource
+    if isa(src.code[1], GlobalRef)
+        @test kind(node) == K"dotcall" && node.typ === Vector{String}
+    else
+        # We aren't quite handling this properly yet
+        @test_broken kind(node) == K"dotcall" && node.typ === Vector{String}
+    end
+
+    # Misc lowering
+    tsn = TypedSyntaxNode(TSN.myunique, (AbstractRange,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 2), :r, AbstractRange)
+    @test_broken has_name_typ(child(body, 3, 2), :r, AbstractRange)
 
     # kwfuncs
     st = """
@@ -321,6 +351,12 @@ include("test_module.jl")
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Int16
     @test has_name_typ(child(body, 2), :T, Type{Int16})
+    # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
+    m = @which TSN.vaparam(rand(3,3), ("hello", false))
+    mi = m.specializations[1]
+    tsn = TypedSyntaxNode(mi)
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 3, 1), :I, Tuple{String, Bool})
     tsn = TypedSyntaxNode(TSN.cb, (Vector{Int16}, Int))
     sig, body = children(tsn)
     @test has_name_typ(child(body, 2), :Bool, Type{Bool})
@@ -410,6 +446,11 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test child(body, 2, 1).typ <: Base.Pairs
 
+    # quoted symbols that could be confused for function definition
+    tsn = TypedSyntaxNode(TSN.isexpreq, (Expr,))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2, 1), :ex, Expr)
+
     # Unused statements
     tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
     @test tsn.typ === Nothing
@@ -420,6 +461,12 @@ include("test_module.jl")
     retnode = child(body, 2)
     @test kind(retnode) == K"return"
     @test retnode.typ === nothing || retnode.typ === Nothing
+
+    # Globals & scoped assignment
+    tsn = TypedSyntaxNode(TSN.setglobal, (Char,))
+    # Agnostic about whether it's good to tag the type of `myglobal`, but at least `val` should be tagged
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1, 1, 2), :val, Char)
 
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
@@ -523,4 +570,8 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test occursin("-(x::Float64)::Float64", str)
+end
+
+if parse(Bool, get(ENV, "CI", "false"))
+    include("exhaustive.jl")
 end

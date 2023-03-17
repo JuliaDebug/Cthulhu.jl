@@ -31,7 +31,10 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing
     end
-    sourcetext, lineno = def
+    return tsn_and_mappings(m, src, rt, def...; warn, strip_macros, kwargs...)
+end
+
+function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
     rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
@@ -119,11 +122,12 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
         if kind(arg) == K"curly"
             arg = first(children(arg))
         end
+        kind(arg) == K"tuple" && return nothing, defaultval     # FIXME? see extrema2 test
         @assert kind(arg) == K"Identifier" || is_operator(arg)
         return arg, defaultval
     end
 
-    if kind(sig) == K"where"
+    while kind(sig) ∈ KSet"where ::"   # handle MyType{T}(args...) and return-type annotations
         sig = child(sig, 1)
     end
     @assert kind(sig) == K"call"
@@ -233,15 +237,17 @@ end
 # For a signature argument, strip "decorations"
 function striparg(arg)
     defaultval = no_default_value
-    if kind(arg) == K"..."
-        arg = only(children(arg))
-    end
-    if kind(arg) == K"="
-        defaultval = child(arg, 2)
-        arg = child(arg, 1)
-    end
-    if kind(arg) == K"macrocall"
-        arg = last(children(arg))    # FIXME: is the variable always the final argument?
+    while kind(arg) ∈ KSet"... = macrocall"
+        if kind(arg) == K"..."
+            arg = only(children(arg))
+        end
+        if kind(arg) == K"="
+            defaultval = child(arg, 2)
+            arg = child(arg, 1)
+        end
+        if kind(arg) == K"macrocall"
+            arg = last(children(arg))    # FIXME: is the variable always the final argument?
+        end
     end
     return arg, defaultval
 end
@@ -294,7 +300,13 @@ end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
-    kind(node) == K"=" && kind(child(node, 1)) ∈ KSet"call where" && return true
+    if kind(node) == K"=" && length(children(node)) >= 1
+        sig = child(node, 1)
+        while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
+            sig = child(sig, 1)
+        end
+        kind(sig) == K"call" && return true
+    end
     return false
 end
 
@@ -457,11 +469,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
         elseif isa(stmt, Core.ReturnNode)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
-            if stmt.head == :(=)
+            if stmt.head == :(=) && is_slot(stmt.args[1])
                 # We defer setting up `symtyps` for the LHS because processing the RHS first might eliminate ambiguities
                 # # Update `symtyps` for this assignment
                 lhs = stmt.args[1]
-                @assert is_slot(lhs)
                 # For `mappings` we're interested only in the right hand side of this assignment
                 stmt = stmt.args[2]
                 if is_slot(stmt) || isa(stmt, SSAValue) || is_src_literal(stmt) # generic calls are handled below. Here, can we just look up the answer?
@@ -568,24 +579,31 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 end
                 if kind(node) == K"dotcall" && isexpr(rhs, :call) &&  (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted)
                     # Broadcasting: move the match to the `materialize` call
-                    @assert i < length(src.code)
-                    nextstmt = src.code[i+1]
-                    if isexpr(nextstmt, :(=))
-                        nextstmt = nextstmt.args[2]
+                    if i < length(src.code)
+                        nextstmt = src.code[i + 1]
+                        if isexpr(nextstmt, :(=))
+                            nextstmt = nextstmt.args[2]
+                        end
+                        if isexpr(nextstmt, :call)
+                            f = nextstmt.args[1]
+                            if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
+                                empty!(mapped)
+                            elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] == SSAValue(i)
+                                push!(mappings[i+1], node)
+                                empty!(mapped)
+                            else
+                                error("unexpected broadcast")
+                            end
+                        end
                     end
-                    @assert isexpr(nextstmt, :call) && (f = nextstmt.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :materialize)
-                    @assert nextstmt.args[2] == SSAValue(i)
-                    push!(mappings[i+1], node)
-                    empty!(mapped)
                 end
                 # Final step: set up symtyps for all the user-visible variables
                 # Because lowering can build methods that take a different number of arguments than appear in the
                 # source text, don't try to count arguments. Instead, find a symbol that is part of
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
-                if stmt.head == :(=)
+                if stmt.head == :(=) && is_slot(stmt.args[1])
                     # Tag the LHS of this expression
                     arg = stmt.args[1]
-                    @assert is_slot(arg)
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node
@@ -637,7 +655,8 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                 id = arg.args[1]
                                 name = sparam_name(mi, id)
                                 for t in symlocs[name]
-                                    symtyps[t] = Type{mi.sparam_vals[id]}
+                                    T = mi.sparam_vals[id]
+                                    symtyps[t] = Base.isvarargtype(T) ? T : Type{T}
                                 end
                             elseif isa(arg, GlobalRef)
                                 T = nothing
@@ -723,6 +742,7 @@ end
 
 function skipped_parent(node::SyntaxNode)
     pnode = node.parent
+    pnode === nothing && return node
     if pnode.parent !== nothing
         if kind(pnode) ∈ KSet"... quote"   # might need to add more things here
             pnode = pnode.parent

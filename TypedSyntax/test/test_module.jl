@@ -46,6 +46,8 @@ function summer_iterate(list)
 end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
+vaparam(a::AbstractArray{T,N}, I::NTuple{N,Any}) where {T,N} = N
+
 unnamedargs(::Type{<:AbstractMatrix{T}}, ::Type{Int}, c=1; a=1) where T<:Real = a
 unnamedargs2(::Type{Matrix}, op::Symbol; padding::Bool=false) = padding
 cb(a, i) = checkbounds(Bool, a, i)
@@ -73,6 +75,12 @@ getchar2(idx) = charset2[idx]
 function mycheckbounds(A, i)
     checkbounds(Bool, A, i) || Base.throw_boundserror(A, i)
     return nothing
+end
+
+# Globals & scoped assignment
+myglobal = nothing
+function setglobal(val)
+    global myglobal = val
 end
 
 # Implementation of a struct & interface
@@ -121,10 +129,20 @@ nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 # Broadcasting
 fbroadcast(list) = sum(sin.(list))
 fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
+fbroadcast2(list) = join("; value: " .* string.(list))   # double-broadcasted (.* and string.)
+
+# Lowered to `firstindex`
+myunique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
 
 # Argument annotations
 nospec(@nospecialize(x)) = 2x
 nospec2(@nospecialize(x::AbstractVecOrMat)) = first(x)
+
+# Return-type annotation
+withrt(io::IO)::Bool = eof(io)
+function mytimes(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+    return ifelse(x, y, copysign(zero(y), y))
+end
 
 # Operators
 struct MyInt x::Int end
@@ -141,6 +159,7 @@ function bar381(foo)
     a, (b1, b2) = foo.a, foo.b
     return b1
 end
+extrema2((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
 
 # Generated functions (issue #385)
 function _generate_body385(N::Int)
@@ -152,6 +171,9 @@ function _generate_body385(N::Int)
     end
 end
 @eval generated385(dest::AbstractVector) = $(_generate_body385(1))
+
+# quoted `=`
+isexpreq(ex::Expr) = ex.head ∈ (:(=), :(.=))
 
 # Computing the number of args in the signature (issue #397)
 f397(x::SubArray{T, N, P, I, L}) where {T,N,P,I,L} = isempty(x)
