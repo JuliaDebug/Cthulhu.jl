@@ -654,7 +654,8 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                 id = arg.args[1]
                                 name = sparam_name(mi, id)
                                 for t in symlocs[name]
-                                    symtyps[t] = Type{mi.sparam_vals[id]}
+                                    T = mi.sparam_vals[id]
+                                    symtyps[t] = Base.isvarargtype(T) ? T : Type{T}
                                 end
                             elseif isa(arg, GlobalRef)
                                 T = nothing

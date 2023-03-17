@@ -46,6 +46,8 @@ function summer_iterate(list)
 end
 
 zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
+vaparam(a::AbstractArray{T,N}, I::NTuple{N,Any}) where {T,N} = N
+
 unnamedargs(::Type{<:AbstractMatrix{T}}, ::Type{Int}, c=1; a=1) where T<:Real = a
 unnamedargs2(::Type{Matrix}, op::Symbol; padding::Bool=false) = padding
 cb(a, i) = checkbounds(Bool, a, i)

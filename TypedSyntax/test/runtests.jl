@@ -341,6 +341,12 @@ include("test_module.jl")
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Int16
     @test has_name_typ(child(body, 2), :T, Type{Int16})
+    # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
+    m = @which TSN.vaparam(rand(3,3), ("hello", false))
+    mi = m.specializations[1]
+    tsn = TypedSyntaxNode(mi)
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 1, 3, 1), :I, Tuple{String, Bool})
     tsn = TypedSyntaxNode(TSN.cb, (Vector{Int16}, Int))
     sig, body = children(tsn)
     @test has_name_typ(child(body, 2), :Bool, Type{Bool})
