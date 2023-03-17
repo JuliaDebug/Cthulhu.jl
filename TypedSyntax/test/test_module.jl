@@ -80,7 +80,14 @@ struct DefaultArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     parentarray::A
     defaultvalue::T
 end
-DefaultArray(parentarray, defaultvalue) = DefaultArray{ndims(parentarray)}(parentarray, defaultvalue)
+function DefaultArray{T}(parentarray::AbstractArray, defaultvalue) where T
+    p = convert(AbstractArray{T}, parentarray)
+    return DefaultArray{T, ndims(parentarray), typeof(p)}(p, convert(T, defaultvalue))
+end
+function DefaultArray(parentarray::AbstractArray, defaultvalue)
+    T = promote_type(eltype(parentarray), typeof(defaultvalue))
+    return DefaultArray{T}(parentarray, defaultvalue)
+end
 Base.getindex(a::DefaultArray{T,N}, i::Vararg{Int,N}) where {T,N} = checkbounds(Bool, a, i...) ? a.parentarray[i...] : a.defaultvalue
 Base.size(a::DefaultArray) = size(a.parentarray)
 

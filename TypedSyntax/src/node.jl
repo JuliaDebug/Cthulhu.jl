@@ -116,6 +116,9 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
             @assert kind(arg) == K"quote"
             arg = only(children(arg))
         end
+        if kind(arg) == K"curly"
+            arg = first(children(arg))
+        end
         @assert kind(arg) == K"Identifier" || is_operator(arg)
         return arg, defaultval
     end
