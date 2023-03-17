@@ -465,11 +465,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
         elseif isa(stmt, Core.ReturnNode)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
-            if stmt.head == :(=)
+            if stmt.head == :(=) && is_slot(stmt.args[1])
                 # We defer setting up `symtyps` for the LHS because processing the RHS first might eliminate ambiguities
                 # # Update `symtyps` for this assignment
                 lhs = stmt.args[1]
-                @assert is_slot(lhs)
                 # For `mappings` we're interested only in the right hand side of this assignment
                 stmt = stmt.args[2]
                 if is_slot(stmt) || isa(stmt, SSAValue) || is_src_literal(stmt) # generic calls are handled below. Here, can we just look up the answer?
@@ -590,10 +589,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 # Because lowering can build methods that take a different number of arguments than appear in the
                 # source text, don't try to count arguments. Instead, find a symbol that is part of
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
-                if stmt.head == :(=)
+                if stmt.head == :(=) && is_slot(stmt.args[1])
                     # Tag the LHS of this expression
                     arg = stmt.args[1]
-                    @assert is_slot(arg)
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node

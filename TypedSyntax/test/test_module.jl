@@ -75,6 +75,12 @@ function mycheckbounds(A, i)
     return nothing
 end
 
+# Globals & scoped assignment
+myglobal = nothing
+function setglobal(val)
+    global myglobal = val
+end
+
 # Implementation of a struct & interface
 struct DefaultArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     parentarray::A

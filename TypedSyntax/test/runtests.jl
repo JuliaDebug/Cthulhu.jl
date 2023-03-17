@@ -431,6 +431,12 @@ include("test_module.jl")
     @test kind(retnode) == K"return"
     @test retnode.typ === nothing || retnode.typ === Nothing
 
+    # Globals & scoped assignment
+    tsn = TypedSyntaxNode(TSN.setglobal, (Char,))
+    # Agnostic about whether it's good to tag the type of `myglobal`, but at least `val` should be tagged
+    sig, body = children(tsn)
+    @test has_name_typ(child(body, 1, 1, 2), :val, Char)
+
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
     sig, body = children(tsn)
