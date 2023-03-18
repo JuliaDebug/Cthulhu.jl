@@ -1,7 +1,7 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
-version = "2.8.5"
+version = "2.8.6"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
