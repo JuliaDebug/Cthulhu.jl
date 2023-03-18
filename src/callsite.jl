@@ -172,67 +172,11 @@ get_mi(c::Callsite) = get_mi(c.info)
 get_effects(c::Callsite) = get_effects(c.info)
 
 # Callsite printing
-mutable struct TextWidthLimiter <: IO
-    io::IO
-    width::Int
-    limit::Int
-end
-TextWidthLimiter(io::IO, limit) = TextWidthLimiter(io, 0, limit)
-Base.get(limiter::TextWidthLimiter, key, default) = get(limiter.io, key, default)
 
-# Uncomment this to debug display of a TextWidthLimiter (e.g., triggered by `print(limited, args1, args...)`)
-# Base.show(io::IO, twl::TextWidthLimiter) = error("do not display")
-
+# compatibility (TextWidthLimiter used to live here)
 has_space(limiter::TextWidthLimiter, width::Int) = limiter.width + width < limiter.limit - 1
 has_space(limiter::TextWidthLimiter, s) = has_space(limiter, textwidth(string(s)))
 has_space(::IO, s) = true
-
-function Base.print(io::TextWidthLimiter, s::String)
-    io.width == io.limit && return
-    width = textwidth(s)
-    if has_space(io, width)
-        print(io.io, s)
-        io.width += width
-        return
-    end
-    seen_termchar = in_termchar = false
-    for c in graphemes(s)
-        if c == "\e"
-            in_termchar = true
-        end
-        cwidth = textwidth(c)
-        if in_termchar || has_space(io, cwidth)
-            print(io.io, c)
-            io.width += cwidth
-        else
-            seen_termchar || break
-        end
-        if in_termchar && c == "m"
-            in_termchar = false
-            seen_termchar = !seen_termchar
-        end
-    end
-    print(io.io, '…')
-    io.width += 1
-    return
-end
-
-function Base.print(io::TextWidthLimiter, c::Char)
-    tw = textwidth(c)
-    if has_space(io, tw)
-        print(io.io, c)
-        io.width += tw
-        return
-    end
-    return
-end
-Base.print(io::TextWidthLimiter, sym::Symbol) = print(io, string(sym))
-Base.write(io::TextWidthLimiter, x::UInt8) = print(io, Char(x))
-
-function Base.take!(io::TextWidthLimiter)
-    io.width = 0
-    return take!(io.io)
-end
 
 function headstring(@nospecialize(T))
     if isvarargtype(T)

@@ -552,7 +552,7 @@ end
         return f(String(take!(iolim)))
     end
     @test checklim(str -> str == "α", 3, 'α')
-    @test checklim(str -> str == "", 1, 'a')
+    @test checklim(str -> str == "…", 1, 'a')
     @test checklim(str ->  occursin("…", str), 80, "abcd"^21)
     @test checklim(str -> !occursin("…", str), 80, "abcd"^19)
 

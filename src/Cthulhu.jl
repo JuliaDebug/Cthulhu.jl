@@ -9,6 +9,7 @@ using REPL: REPL, AbstractTerminal
 using JuliaSyntax
 using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
+using WidthLimitedIO
 
 import Core: MethodInstance
 const CC = Core.Compiler
