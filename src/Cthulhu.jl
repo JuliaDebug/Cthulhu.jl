@@ -808,12 +808,18 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                 ulocs = find_caller_of(interp, miparent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
+                    explain_inlining = length(ulocs) > 1 ? "(including inlined callers represented by indentation) " : ""
                     push!(strlocs, "Browse typed code")
                     linemenu = TerminalMenus.RadioMenu(strlocs; charset=:ascii)
                     browsecodetyped = false
                     choice2 = 1
                     while choice2 != -1
-                        choice2 = TerminalMenus.request(term, "\nChoose possible caller of $miparent or proceed to typed code:", linemenu; cursor=choice2)
+                        promptstr = sprint(miparent, explain_inlining; context=:color=>get(term, :color, false)) do iobuf, mip, exi
+                            printstyled(iobuf, "\nOpen an editor at a possible caller of\n  "; color=:light_cyan)
+                            print(iobuf, miparent)
+                            printstyled(iobuf, "\n$(explain_inlining)or browse typed code:"; color=:light_cyan)
+                        end
+                        choice2 = TerminalMenus.request(term, promptstr, linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
                             loc = ulocs[choice2]
                             edit(String(loc[1][2]), first(loc[2]))
