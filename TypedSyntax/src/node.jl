@@ -317,7 +317,7 @@ end
 
 # Strip macros and return the function-definition node
 function get_function_def(rootnode)
-    while kind(rootnode) == K"macrocall"
+    while kind(rootnode) ∈ KSet"macrocall global local const"
         idx = findlast(node -> is_function_def(node) || kind(node) == K"macrocall", children(rootnode))
         idx === nothing && break
         rootnode = child(rootnode, idx)

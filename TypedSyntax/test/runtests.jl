@@ -504,6 +504,12 @@ include("test_module.jl")
     @test default.typ === Float64
     @test child(default, 1).typ === TSN.DefaultArray{Float64,2,Matrix{Float64}}
 
+    # global
+    tsn = TypedSyntaxNode(TSN.in_let, (Int,))
+    sig, body = children(child(tsn, 1))
+    @test has_name_typ(child(sig, 2), :x, Int)
+    @test_broken body.typ == Int
+
     # Construction from MethodInstance
     src, rt = TypedSyntax.getsrc(TSN.myoftype, (Float64, Int))
     tsn = TypedSyntaxNode(src.parent)
