@@ -508,6 +508,11 @@ include("test_module.jl")
     node = child(body, 1)
     @test node.typ === Type{Float64}
 
+    # UnionAll in signature (issue #409)
+    tsn = TypedSyntaxNode(Core.kwcall, (NamedTuple, typeof(issorted), Vector{Int}))
+    sig, body = children(tsn)
+    @test has_name_typ(child(sig, 2), :itr, Vector{Int})
+
     # Counting arguments (needed for Cthulhu)
     # issue #397
     tsn = TypedSyntaxNode(TSN.f397, (typeof(view([1,2,3], 1:2)),))
