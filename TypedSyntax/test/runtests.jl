@@ -119,6 +119,8 @@ include("test_module.jl")
     @test kind(arg) == K"::"
     @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
     @test body.typ === Any
+    tsn = TypedSyntaxNode(eltype, (TSN.ReadOnly,))
+    @test tsn.typ === Type{Int}
 
     # signature return-type annotations
     tsn = TypedSyntaxNode(TSN.withrt, (IO,))

@@ -201,4 +201,9 @@ let
     global in_let(x) = x^2
 end
 
+# Scoped + interpolated function names (taken from `eltype(::SparseArrays.ReadOnly)`)
+struct ReadOnly end
+fname = :eltype
+@eval Base.@propagate_inbounds @inline Base.$fname(::ReadOnly) = Int
+
 end

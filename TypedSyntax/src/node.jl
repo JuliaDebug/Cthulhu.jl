@@ -119,6 +119,10 @@ function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes)
         end
         if kind(arg) == K"."
             arg = last(children(arg))
+            if kind(arg) == K"inert"
+                @assert kind(only(children(arg))) == K"$"
+                return nothing, defaultval
+            end
             @assert kind(arg) == K"quote"
             arg = only(children(arg))
         end
