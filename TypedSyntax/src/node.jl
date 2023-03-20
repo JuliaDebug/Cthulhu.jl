@@ -645,8 +645,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                             src.ssavaluetypes[j]
                                         else
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
-                                            j = findfirst(==(sym), src.slotnames)
-                                            src.slottypes[j]
+                                            src.slottypes[arg.id]
                                         end)
                                         break
                                     end
