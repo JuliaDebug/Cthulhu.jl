@@ -214,13 +214,13 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
     end
     argcontainer, offset = children(sig), 0
     for (j, idx) in enumerate(slotarg)
-        idx == 0 && continue
         arg, defaultval = striparg(argcontainer[j - offset])
         if kind(arg) == K"parameters"
             offset = length(argcontainer) - 1
             argcontainer = children(arg)
             arg, defaultval = striparg(argcontainer[j - offset])
         end
+        idx == 0 && continue
         if kind(arg) == K"::" && length(children(arg)) == 2
             arg = child(arg, 1)
         end
