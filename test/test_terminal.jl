@@ -290,9 +290,9 @@ end
             lines = split(cread(out), '\n')
             idx = first(findfirst("inner3", lines[2]))
             @test first(findfirst("inner2", lines[3])) == idx + 2
-            ln = occursin(r"caller.*inner3", lines[6]) ? 6 :
-                 occursin(r"caller.*inner3", lines[8]) ? 8 : error("not found")
-            @test occursin("inner2", lines[ln+1])
+            ln = occursin(r"caller", lines[6]) ? 6 :
+                 occursin(r"caller", lines[8]) ? 8 : error("not found")
+            @test occursin("inner2", lines[ln+3])
             write(in, 'q')
             write(in, 'q')
             wait(t)
