@@ -180,16 +180,18 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
-                names, typs = nt.parameters
-                for j = 1 : length(argcontainer)
-                    if iszero(slotarg[j + offset]) || src.slottypes[slotarg[j + offset]] === Union{}
-                        arg = argcontainer[j]
-                        arg, defaultval = argidentifier(arg)
-                        name = arg.val
-                        i = findfirst(==(name), names)
-                        if i !== nothing
-                            arg.typ = typs.parameters[i]
-                            slotarg[j + offset] = 0   # mark as complete
+                names, typs = Base.unwrap_unionall(nt).parameters
+                if names isa Tuple{Vararg{Symbol}} && typs isa DataType && typs.name === Tuple.name
+                    for j = 1 : length(argcontainer)
+                        if iszero(slotarg[j + offset]) || src.slottypes[slotarg[j + offset]] === Union{}
+                            arg = argcontainer[j]
+                            arg, defaultval = argidentifier(arg)
+                            name = arg.val
+                            i = findfirst(==(name), names)
+                            if i !== nothing
+                                arg.typ = typs.parameters[i]
+                                slotarg[j + offset] = 0   # mark as complete
+                            end
                         end
                     end
                 end

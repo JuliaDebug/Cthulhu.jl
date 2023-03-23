@@ -369,7 +369,8 @@ function truncate_if_defaultargs!(tsn, mappings, meth)
             rawargs = raw.args[1:idx-1]
             tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, rawargs), rawargs)
             body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
-            empty!(children(body))
+            cs = children(body)
+            cs !== () && empty!(cs)
         end
         empty!(mappings)
     end
