@@ -588,6 +588,15 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test occursin("-(x::Float64)::Float64", str)
+
+    # issue #413
+    @test TypedSyntax.is_small_union_or_tunion(Union{})
+    @test TypedSyntax.is_small_union_or_tunion(Union{Tuple{}, Tuple{Int64}})
+
+    # artificial trigger for #414
+    tsn = TypedSyntaxNode(TSN.unnamedargs, (Type{Matrix{Float32}}, Type{Int}))
+    sig, body = children(tsn)
+    @test isa(TypedSyntax.map_signature!(sig, fill(Symbol(""), 3), Any[Any, Core.Const(2), Any]), TypedSyntaxNode)
 end
 
 if parse(Bool, get(ENV, "CI", "false"))

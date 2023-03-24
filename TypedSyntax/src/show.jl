@@ -135,12 +135,15 @@ nlines(source) = length(source.line_starts) - 1
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 function is_small_union_or_tunion(@nospecialize(T))
     Base.isvarargtype(T) && return false
-    if T <: Tuple   # is it Tuple{U}
+    T === Union{} && return true
+    if isa(T, Union)
+        n, isc = countconcrete(T)
+        return isc & (n <= 3)
+    end
+    if T <: Tuple  # is it Tuple{U}
         return all(is_small_union_or_tunion, Base.unwrap_unionall(T).parameters)
     end
-    isa(T, Union) || return false
-    n, isc = countconcrete(T)
-    return isc & (n <= 3)
+    return false
 end
 
 function countconcrete(@nospecialize(T))

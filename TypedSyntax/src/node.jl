@@ -102,7 +102,10 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     return tparent
 end
 
-function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
+map_signature!(sig::TypedSyntaxNode, src::CodeInfo) =
+    map_signature!(sig, src.slotnames, src.slottypes)
+
+function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes)
     function argidentifier(arg)
         arg, defaultval = striparg(arg)
         if kind(arg) == K"::"
@@ -132,7 +135,7 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
     end
     @assert kind(sig) == K"call"
     # First, match named args, since those have to be unique
-    sigarg = fill(0, length(src.slotnames))
+    sigarg = fill(0, length(slotnames))
     slotarg = Int[]
     argcontainer = children(sig)   # we use a flexible container, because the [parameters] node (for kw-funcs) is its own container
     j = 1
@@ -150,8 +153,8 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
         arg, defaultval = argidentifier(arg)
         if arg !== nothing
             name = arg.val::Symbol
-            idx = findfirst(==(name), src.slotnames)
-            if idx === nothing && isempty(slotarg) && src.slotnames[1] == Symbol("#self#")
+            idx = findfirst(==(name), slotnames)
+            if idx === nothing && isempty(slotarg) && slotnames[1] == Symbol("#self#")
                 # The first argument is the function name itself, and matches `#self#`
                 idx = 1
             end
@@ -169,21 +172,21 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
     if any(iszero, slotarg)
         # Some arguments went unmatched
         kwdivider = 1
-        if havekws && src.slotnames[1] !== Symbol("#self#")
-            kwdivider = findfirst(1:length(src.slotnames)) do i
-                src.slotnames[i] == Symbol("") && unwrapinternal(src.slottypes[i]) <: Function  # this should be the parent function as an argument
+        if havekws && slotnames[1] !== Symbol("#self#")
+            kwdivider = findfirst(1:length(slotnames)) do i
+                slotnames[i] == Symbol("") && unwrapinternal(slottypes[i]) <: Function  # this should be the parent function as an argument
             end
             if kwdivider === nothing
                 kwdivider = 1
             end
-            if length(src.slottypes) >= 2 && src.slotnames[2] == Symbol("") && (nt = src.slottypes[2]) <: NamedTuple
+            if length(slottypes) >= 2 && slotnames[2] == Symbol("") && (nt = unwrapinternal(slottypes[2])) <: NamedTuple
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
                 names, typs = Base.unwrap_unionall(nt).parameters
                 if names isa Tuple{Vararg{Symbol}} && typs isa DataType && typs.name === Tuple.name
                     for j = 1 : length(argcontainer)
-                        if iszero(slotarg[j + offset]) || src.slottypes[slotarg[j + offset]] === Union{}
+                        if iszero(slotarg[j + offset]) || slottypes[slotarg[j + offset]] === Union{}
                             arg = argcontainer[j]
                             arg, defaultval = argidentifier(arg)
                             name = arg.val
@@ -204,7 +207,7 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
             arg = argcontainer[j]
             kind(arg) == K"parameters" && break
             if iszero(slotarg[j])
-                if i <= length(src.slotnames)
+                if i <= length(slotnames)
                     slotarg[j] = i
                     sigarg[i] = j
                 end
@@ -214,17 +217,17 @@ function map_signature!(sig::TypedSyntaxNode, src::CodeInfo)
     end
     argcontainer, offset = children(sig), 0
     for (j, idx) in enumerate(slotarg)
-        idx == 0 && continue
         arg, defaultval = striparg(argcontainer[j - offset])
         if kind(arg) == K"parameters"
             offset = length(argcontainer) - 1
             argcontainer = children(arg)
             arg, defaultval = striparg(argcontainer[j - offset])
         end
+        idx == 0 && continue
         if kind(arg) == K"::" && length(children(arg)) == 2
             arg = child(arg, 1)
         end
-        arg.typ = unwrapinternal(src.slottypes[idx])
+        arg.typ = unwrapinternal(slottypes[idx])
     end
 
     # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
