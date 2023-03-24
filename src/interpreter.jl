@@ -138,8 +138,14 @@ end
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
     res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
     key = CC.any(state.result.overridden_by_const) ? state.result : state.linfo
+    unoptsrc = copy(state.src)
+    unoptsrc.slotnames = copy(unoptsrc.slotnames)
+    unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
+        slottypes === nothing ? nothing : copy(unoptsrc.slottypes)
+    end
+    unoptsrc.slotflags = copy(unoptsrc.slotflags)
     interp.unopt[key] = InferredSource(
-        copy(state.src),
+        unoptsrc,
         copy(state.stmt_info),
         isdefined(CC, :Effects) ? state.ipo_effects : nothing,
         state.result.result)

@@ -332,8 +332,12 @@ function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     (; src, rt, codeinf) = lookup(interp, mi, optimize)
     src = preprocess_ci!(src, mi, optimize, CONFIG)
     if src isa IRCode
-        nargs = Int((mi.def::Method).nargs) - 1
-        CC.replace_code_newstyle!(codeinf, src, nargs)
+        @static if VERSION ≥ v"1.10.0-DEV.870"
+            CC.replace_code_newstyle!(codeinf, src)
+        else
+            nargs = Int((mi.def::Method).nargs) - 1
+            CC.replace_code_newstyle!(codeinf, src, nargs)
+        end
     end
     return codeinf => rt
 end

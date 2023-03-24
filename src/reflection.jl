@@ -261,7 +261,11 @@ function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::Cthu
         end
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
-        ci = CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
+        @static if VERSION ≥ v"1.10.0-DEV.870"
+            ci = CC.replace_code_newstyle!(ci, ir)
+        else
+            ci = CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
+        end
     end
     return ci
 end
