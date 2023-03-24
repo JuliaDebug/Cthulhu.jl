@@ -581,8 +581,9 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 end
                 if kind(node) == K"dotcall" && isexpr(rhs, :call) &&  (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted)
                     # Broadcasting: move the match to the `materialize` call
-                    if i < length(src.code)
-                        nextstmt = src.code[i + 1]
+                    inext = i
+                    while inext < length(src.code)
+                        nextstmt = src.code[inext+=1]
                         if isexpr(nextstmt, :(=))
                             nextstmt = nextstmt.args[2]
                         end
@@ -590,11 +591,11 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                             f = nextstmt.args[1]
                             if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
                                 empty!(mapped)
+                                break
                             elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] == SSAValue(i)
-                                push!(mappings[i+1], node)
+                                push!(mappings[inext], node)
                                 empty!(mapped)
-                            else
-                                error("unexpected broadcast")
+                                break
                             end
                         end
                     end

@@ -141,6 +141,13 @@ nestedexplicit(k) = [Base.Generator(identity, 1:3) for _ = 1:k]
 fbroadcast(list) = sum(sin.(list))
 fbroadcast_explicit(list) = sum(Base.materialize(Base.broadcasted(sin, list)))
 fbroadcast2(list) = join("; value: " .* string.(list))   # double-broadcasted (.* and string.)
+struct B415
+    y::Float64
+    B415(y) = new(y)
+end
+function bcast415(b, x)
+    return (x .+ 2.0) .+ b.y
+end
 
 # Lowered to `firstindex`
 myunique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])

@@ -257,6 +257,9 @@ include("test_module.jl")
         # We aren't quite handling this properly yet
         @test_broken kind(node) == K"dotcall" && node.typ === Vector{String}
     end
+    tsn = TypedSyntaxNode(TSN.bcast415, (TSN.B415, Float64))
+    sig, body = children(tsn)
+    @test child(body, 1).typ === Float64
 
     # Misc lowering
     tsn = TypedSyntaxNode(TSN.myunique, (AbstractRange,))
