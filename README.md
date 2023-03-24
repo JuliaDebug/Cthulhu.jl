@@ -28,7 +28,8 @@ You can also toggle various aspect of the view, for example to suppress
 types in red.
 Currently-active options are highlighted with color; press the corresponding
 key to toggle these options. Below we walk through a simple example of
-these interactive features.
+these interactive features; you can also see Cthulhu v2.8 in action in
+[this video](https://youtu.be/pvduxLowpPY).
 
 ## Usage: descend
 
