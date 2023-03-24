@@ -24,7 +24,7 @@ function first_specialization(m::Method)
     if specs isa Core.MethodInstance
         return specs
     elseif specs isa Core.SimpleVector
-        return specs[1]::Core.MethodInstance
+        return something(specs...)::Core.MethodInstance
     else
         throw((m, specs))
     end
