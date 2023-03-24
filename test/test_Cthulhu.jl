@@ -631,15 +631,15 @@ end
 end
 
 @testset "MaybeUndef" begin
-    function undef(b::Bool)
+    function maybeundef(b::Bool)
         b || @goto final_step
         str = randstring(8)
         @label final_step
         return str*"end"
     end
-    @test isa(undef(true), String)
-    @test_throws UndefVarError undef(false)
-    cs = find_callsites_by_ftt(undef, Tuple{Bool})[end]
+    @test isa(maybeundef(true), String)
+    @test_throws UndefVarError maybeundef(false)
+    cs = find_callsites_by_ftt(maybeundef, Tuple{Bool})[end]
     @test cs.head === :invoke
     @test cs.info.mi.def == which(string, (String,String))
 end
