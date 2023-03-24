@@ -19,6 +19,17 @@ function empty_func(::Bool) end
 anykwargs(a; kwargs...) = println(a, " keyword args: ", kwargs...)
 hasdefaultargs(a, b=2) = a + b
 
+function first_specialization(m::Method)
+    specs = m.specializations
+    if specs isa Core.MethodInstance
+        return specs
+    elseif specs isa Core.SimpleVector
+        return something(specs...)::Core.MethodInstance
+    else
+        throw((m, specs))
+    end
+end
+
 @testset "Callsites" begin
     callsites = find_callsites_by_ftt(testf_simple)
     @test length(callsites) >= 4
@@ -53,7 +64,7 @@ hasdefaultargs(a, b=2) = a + b
 
     # Callsite handling in source-view mode: for kwarg functions, strip the body, and use "typed" callsites
     for m in (@which(anykwargs("animals")), @which(anykwargs("animals"; cat=1, dog=2)))
-        mi = m.specializations[1]
+        mi = first_specialization(m)
         src, rt = Cthulhu.TypedSyntax.getsrc(mi)
         tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
         str = sprint(printstyled, tsn)
@@ -62,7 +73,7 @@ hasdefaultargs(a, b=2) = a + b
     end
     # Likewise for methods that fill in default positional arguments
     m = @which hasdefaultargs(1)
-    mi = m.specializations[1]
+    mi = first_specialization(m)
     src, rt = Cthulhu.TypedSyntax.getsrc(mi)
     tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
     str = sprint(printstyled, tsn)
@@ -70,7 +81,7 @@ hasdefaultargs(a, b=2) = a + b
     @test !occursin("a + b", str)
     @test isempty(mappings)
     m = @which hasdefaultargs(1, 5)
-    mi = m.specializations[1]
+    mi = first_specialization(m)
     src, rt = Cthulhu.TypedSyntax.getsrc(mi)
     tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
     str = sprint(printstyled, tsn)
@@ -699,8 +710,7 @@ fst5(x) = fst4(x)
 @testset "backedges and treelist" begin
     @test fbackedge2(0.2) == 1
     @test fbackedge2(-0.2) == -1
-    mspec = @which(fbackedge1()).specializations
-    mi = isa(mspec, Core.SimpleVector) ? mspec[1] : mspec.func
+    mi = first_specialization(@which(fbackedge1()))
     root = Cthulhu.treelist(mi)
     @test Cthulhu.count_open_leaves(root) == 2
     @test root.data.callstr == "fbackedge1()"
@@ -709,7 +719,7 @@ fst5(x) = fst4(x)
     # issue #114
     unspecva(@nospecialize(i::Int...)) = 1
     @test unspecva(1, 2) == 1
-    mi = something(first(methods(unspecva)).specializations...)
+    mi = first_specialization(only(methods(unspecva)))
     root = Cthulhu.treelist(mi)
     @test occursin("Vararg", root.data.callstr)
 
