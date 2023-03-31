@@ -188,9 +188,10 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
             return src.ir
         end
     else
+        @assert src isa CC.SemiConcreteResult || src === nothing "invalid Cthulhu code cache"
         # the default inlining policy may try additional effor to find the source in a local cache
         return @invoke CC.inlining_policy(interp::AbstractInterpreter,
-            nothing, info::CCCallInfo, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+            src::Any, info::CCCallInfo, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
     end
     return nothing
 end
