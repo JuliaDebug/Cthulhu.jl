@@ -135,13 +135,28 @@ function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_o
 end
 end
 
+function annotate_slottypes!(sv::InferenceState)
+    slottypes = sv.slottypes
+    for i = 1:length(slottypes)
+        slottypes[i] = CC.widenconditional(slottypes[i])
+    end
+    CC.record_slot_assign!(sv)
+    return sv.src.slottypes
+end
+
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
     res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
     key = CC.any(state.result.overridden_by_const) ? state.result : state.linfo
     unoptsrc = copy(state.src)
     unoptsrc.slotnames = copy(unoptsrc.slotnames)
     unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
-        slottypes === nothing ? nothing : copy(unoptsrc.slottypes)
+        # TODO this is only supported in 1.9 and higher
+        # if slottypes === nothing
+        #     # `slottypes::Vector{Any}` hasn't been generated due to recursion,
+        #     # so manually generate it here
+        #     slottypes = annotate_slottypes!(state)
+        # end
+        slottypes === nothing ? nothing : copy(slottypes)
     end
     unoptsrc.slotflags = copy(unoptsrc.slotflags)
     interp.unopt[key] = InferredSource(
