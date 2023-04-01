@@ -641,7 +641,11 @@ end
     @test_throws UndefVarError maybeundef(false)
     cs = find_callsites_by_ftt(maybeundef, Tuple{Bool})[end]
     @test cs.head === :invoke
-    @test cs.info.mi.def == which(string, (String,String))
+    if !isdefined(Base, :_string)
+        @test cs.info.mi.def == which(string, (String,String))
+    else
+        @test cs.info.mi.def ∈ [which(string, (String,String)), only(methods(Base._string))]
+    end
 end
 
 @testset "warntype variables" begin
