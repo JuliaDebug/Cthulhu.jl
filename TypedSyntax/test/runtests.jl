@@ -8,6 +8,8 @@ has_name_notyp(node, name::Symbol) = has_name_typ(node, name, nothing)
 include("test_module.jl")
 
 @testset "TypedSyntax.jl" begin
+    specializations(m::Method) = isdefined(Base, :specializations) ? Base.specializations(m) : m.specializations
+
     st = """
     f(x, y, z) = x * y + z
     """
@@ -358,7 +360,7 @@ include("test_module.jl")
     @test has_name_typ(child(body, 2), :T, Type{Int16})
     # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
     m = @which TSN.vaparam(rand(3,3), ("hello", false))
-    mi = m.specializations[1]
+    mi = first(specializations(m))
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
     @test has_name_typ(child(sig, 1, 3, 1), :I, Tuple{String, Bool})
@@ -381,7 +383,7 @@ include("test_module.jl")
     @test child(sig, 1, 3).typ === Type{Int}
     m = @which TSN.unnamedargs(Matrix{Float32}, Int; a="hello")
     mi = nothing
-    for _mi in m.specializations
+    for _mi in specializations(m)
         _mi === nothing && continue
         nt = _mi.specTypes.parameters[2]
         nt <: NamedTuple || continue
@@ -398,7 +400,7 @@ include("test_module.jl")
     @test has_name_typ(child(sig, 1, 5, 1, 1), :a, String)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, :c; a="hello")
     mi = nothing
-    for _mi in m.specializations
+    for _mi in specializations(m)
         _mi === nothing && continue
         if any(==(Symbol), _mi.specTypes.parameters)
             mi = _mi
@@ -413,7 +415,7 @@ include("test_module.jl")
     @test child(sig, 1, 5, 1, 1).typ === String
     mbody = only(methods(fbody))
     mi = nothing
-    for _mi in mbody.specializations
+    for _mi in specializations(mbody)
         _mi === nothing && continue
         if any(==(Symbol), _mi.specTypes.parameters)
             mi = _mi
@@ -452,7 +454,7 @@ include("test_module.jl")
     @test has_name_typ(child(body, 2, 1), :x, Tuple{Int,Int})
     @test has_name_typ(child(body, 3, 1), :y, Tuple{Int})
     m = @which TSN.anykwargs(; cat=1, dog=2)
-    mi = m.specializations[1]
+    mi = first(specializations(m))
     tsn = TypedSyntaxNode(mi)
     src = tsn.typedsource
     @test Symbol("kwargs...") ∈ src.slotnames
