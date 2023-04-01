@@ -105,7 +105,7 @@ end
 map_signature!(sig::TypedSyntaxNode, src::CodeInfo) =
     map_signature!(sig, src.slotnames, src.slottypes)
 
-function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes)
+function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes::Vector{Any})
     function argidentifier(arg)
         arg, defaultval = striparg(arg)
         if kind(arg) == K"::"
@@ -242,6 +242,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes)
     end
     return sig
 end
+map_signature!(sig::TypedSyntaxNode, slotnames, slottypes::Nothing) = nothing
 
 # For a signature argument, strip "decorations"
 function striparg(arg)
@@ -395,6 +396,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     symtyps = IdDict{typeof(rootnode),Any}()                     # symtyps = IdDict(node => typ)
     # Initialize the (possibly ambiguous) attributions for each stmt in `src` (`stmt = src.code[i]`)
     mappings = [MaybeTypedSyntaxNode[] for _ in eachindex(src.code)]  # mappings[i] = [node1, node2, ...]
+    have_slottypes = src.slottypes !== nothing
 
     used = BitSet()
     for (i, stmt) in enumerate(src.code)
@@ -489,7 +491,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
                         symtyps[only(mapped)] = unwrapinternal(
-                                                is_slot(stmt) ? src.slottypes[stmt.id] :
+                                                (is_slot(stmt) & have_slottypes) ? src.slottypes[stmt.id] :
                                                 isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
                         )
                     end
@@ -653,9 +655,11 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                         is_prec_assignment(node) && t == child(node, 1) && continue
                                         symtyps[t] = unwrapinternal(if j > 0
                                             src.ssavaluetypes[j]
-                                        else
+                                        elseif have_slottypes
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
                                             src.slottypes[arg.id]
+                                        else
+                                            nothing
                                         end)
                                         break
                                     end

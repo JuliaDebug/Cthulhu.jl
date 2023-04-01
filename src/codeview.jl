@@ -116,6 +116,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if any(iszero, src.codelocs)
                 @warn "Some line information is missing, type-assignment may be incomplete"
             end
+            if src.slottypes === nothing
+                @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
+            end
             printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
