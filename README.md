@@ -130,7 +130,7 @@ For example, you can use it to examine all the inferred callers of a method inst
 julia> m = which(length, (Set{Symbol},))
 length(s::Set) in Base at set.jl:55
 
-julia> mi = m.specializations[1]
+julia> mi = m.specializations[1]      # or `mi = first(Base.specializations(m))` on Julia 1.10+
 MethodInstance for length(::Set{Symbol})
 
 julia> ascend(mi)

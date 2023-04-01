@@ -119,6 +119,10 @@ function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes)
         end
         if kind(arg) == K"."
             arg = last(children(arg))
+            if kind(arg) == K"inert"
+                @assert kind(only(children(arg))) == K"$"
+                return nothing, defaultval
+            end
             @assert kind(arg) == K"quote"
             arg = only(children(arg))
         end
@@ -317,7 +321,7 @@ end
 
 # Strip macros and return the function-definition node
 function get_function_def(rootnode)
-    while kind(rootnode) == K"macrocall"
+    while kind(rootnode) ∈ KSet"macrocall global local const"
         idx = findlast(node -> is_function_def(node) || kind(node) == K"macrocall", children(rootnode))
         idx === nothing && break
         rootnode = child(rootnode, idx)

@@ -196,4 +196,14 @@ isexpreq(ex::Expr) = ex.head ∈ (:(=), :(.=))
 # Computing the number of args in the signature (issue #397)
 f397(x::SubArray{T, N, P, I, L}) where {T,N,P,I,L} = isempty(x)
 
+# global
+let
+    global in_let(x) = x^2
+end
+
+# Scoped + interpolated function names (taken from `eltype(::SparseArrays.ReadOnly)`)
+struct ReadOnly end
+fname = :eltype
+@eval Base.@propagate_inbounds @inline Base.$fname(::ReadOnly) = Int
+
 end
