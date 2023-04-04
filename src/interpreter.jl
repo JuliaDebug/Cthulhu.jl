@@ -235,12 +235,26 @@ function CC.inlining_policy(interp::CthulhuInterpreter)
 end
 end
 
-@static if isdefined(CC, :codeinst_to_ir)
-function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
-    isa(code.inferred, Nothing) && return nothing
-    return CC.copy((code.inferred::OptimizedSource).ir)
+@static if isdefined(CC, :AbsIntState)
+function CC.IRInterpretationState(interp::CthulhuInterpreter,
+    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+    inferred = @atomic :monotonic code.inferred
+    inferred === nothing && return nothing
+    inferred = inferred::OptimizedSource
+    ir = CC.copy(inferred.ir)
+    src = inferred.src
+    method_info = CC.MethodInfo(src)
+    return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
+                                    src.min_world, src.max_world)
 end
-end # @static if isdefined(CC, :codeinst_to_ir)
+elseif isdefined(CC, :codeinst_to_ir)
+function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
+    inferred = @atomic :monotonic code.inferred
+    inferred === nothing && return nothing
+    inferred = inferred::OptimizedSource
+    return CC.copy(inferred.ir)
+end
+end
 
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     effects = EFFECTS_ENABLED ? caller.ipo_effects : nothing
