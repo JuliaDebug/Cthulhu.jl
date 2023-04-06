@@ -1,4 +1,5 @@
 module TSN
+using Dates
 
 # with two uses of the same slot in the same call. Must start on line 4 (or update the corresponding test)
 function simplef(a, b)
@@ -205,5 +206,11 @@ end
 struct ReadOnly end
 fname = :eltype
 @eval Base.@propagate_inbounds @inline Base.$fname(::ReadOnly) = Int
+
+# Issue #426
+const T426 = Dict{Type{<:Dates.Period}, Bool}(
+    Dates.Year => true,
+    Dates.Month => false,
+)
 
 end

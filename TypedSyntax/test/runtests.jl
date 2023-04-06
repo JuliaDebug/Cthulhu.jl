@@ -1,6 +1,6 @@
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
 using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc
-using InteractiveUtils, Test
+using Dates, InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 has_name_notyp(node, name::Symbol) = has_name_typ(node, name, nothing)
@@ -532,6 +532,9 @@ include("test_module.jl")
     # issue #397
     tsn = TypedSyntaxNode(TSN.f397, (typeof(view([1,2,3], 1:2)),))
     @test TypedSyntax.num_positional_args(tsn) == 2 # the function is arg1, x is arg2
+    # issue #426
+    tsn = TypedSyntaxNode(getindex, (typeof(TSN.T426), Type{Year},))
+    @test TypedSyntax.num_positional_args(tsn) == 3
 
     # Display
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
@@ -589,10 +592,10 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test str === """
-        4 function simplef(a::Int64, b::Float64)::Float64
-        5     z::Int64 = (a::Int64 * a::Int64)::Int64
-        6     return (z::Int64 + b::Float64)::Float64
-        7 end"""
+        5 function simplef(a::Int64, b::Float64)::Float64
+        6     z::Int64 = (a::Int64 * a::Int64)::Int64
+        7     return (z::Int64 + b::Float64)::Float64
+        8 end"""
     tsn = TypedSyntaxNode(TSN.myabs, (Float64,))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)

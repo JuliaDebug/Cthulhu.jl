@@ -333,7 +333,7 @@ end
 function num_positional_args(tsn::AbstractSyntaxNode)
     TypedSyntax.is_function_def(tsn) || return 0
     sig, _ = children(tsn)
-    if kind(sig) == K"where"
+    while kind(sig) == K"where"
         sig = child(sig, 1)
     end
     @assert kind(sig) == K"call"
