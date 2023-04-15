@@ -17,6 +17,8 @@ import .CC: MethodMatch, LimitedAccuracy, ignorelimited
 import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
+using Base: typesof    # workaround for https://github.com/JuliaLang/julia/issues/47606
+
 const ArgTypes = Vector{Any}
 
 @static if !isdefined(CC, :Effects)
