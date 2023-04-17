@@ -144,9 +144,7 @@ function annotate_slottypes!(sv::InferenceState)
     return sv.src.slottypes
 end
 
-function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
-    res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
-    key = CC.any(state.result.overridden_by_const) ? state.result : state.linfo
+function InferredSource(state::InferenceState)
     unoptsrc = copy(state.src)
     unoptsrc.slotnames = copy(unoptsrc.slotnames)
     unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
@@ -159,11 +157,17 @@ function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
         slottypes === nothing ? nothing : copy(slottypes)
     end
     unoptsrc.slotflags = copy(unoptsrc.slotflags)
-    interp.unopt[key] = InferredSource(
+    return InferredSource(
         unoptsrc,
         copy(state.stmt_info),
         isdefined(CC, :Effects) ? state.ipo_effects : nothing,
         state.result.result)
+end
+
+function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
+    res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
+    key = CC.any(state.result.overridden_by_const) ? state.result : state.linfo
+    interp.unopt[key] = InferredSource(state)
     return res
 end
 
