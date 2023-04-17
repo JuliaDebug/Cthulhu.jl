@@ -1,6 +1,7 @@
-import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
-import Base.Meta: isexpr
+using Core: CodeInfo, ReturnNode, MethodInstance
+using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
+using Base.Meta: isexpr
+using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
 argextype(@nospecialize args...) = Core.Compiler.argextype(args...)
 @static if VERSION >= v"1.10.0-DEV.556"
@@ -9,7 +10,13 @@ else
     argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Any[])
 end
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
+macro code_typed1(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :code_typed1, ex0)
+end
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+macro get_code(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :get_code, ex0)
+end
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
