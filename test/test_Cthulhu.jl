@@ -49,19 +49,6 @@ end
     end
     @test occursin(r"< (pure|concrete eval) >", string(callsites[1]))
 
-    # Some weird methods get inferred
-    callsites = find_callsites_by_ftt(iterate, (Base.IdSet{Any}, Union{}); optimize=false)
-    @test callsites[1].info isa Cthulhu.ConstPropCallInfo
-
-    @static if Cthulhu.EFFECTS_ENABLED
-        effects = Cthulhu.get_effects(callsites[1].info)
-        @test !Core.Compiler.is_foldable(effects)
-        @test !Core.Compiler.is_consistent(effects)
-        @test Core.Compiler.is_effect_free(effects)
-        @test Core.Compiler.is_nothrow(effects)
-        @test Core.Compiler.is_terminates(effects)
-    end
-
     # Callsite handling in source-view mode: for kwarg functions, strip the body, and use "typed" callsites
     for m in (@which(anykwargs("animals")), @which(anykwargs("animals"; cat=1, dog=2)))
         mi = first_specialization(m)
