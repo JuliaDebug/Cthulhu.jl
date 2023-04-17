@@ -146,17 +146,18 @@ end
 
 function InferredSource(state::InferenceState)
     unoptsrc = copy(state.src)
-    unoptsrc.slotnames = copy(unoptsrc.slotnames)
-    unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
-        # TODO this is only supported in 1.9 and higher
-        # if slottypes === nothing
-        #     # `slottypes::Vector{Any}` hasn't been generated due to recursion,
-        #     # so manually generate it here
-        #     slottypes = annotate_slottypes!(state)
-        # end
-        slottypes === nothing ? nothing : copy(slottypes)
+    @static if VERSION ≥ v"1.10.0-DEV.1033"
+        if unoptsrc.slottypes === nothing
+            # `slottypes::Vector{Any}` hasn't been generated due to recursion,
+            # so manually generate it here
+            unoptsrc.slottypes = annotate_slottypes!(state)
+        end
+    else
+        # xref: https://github.com/JuliaLang/julia/pull/49378
+        unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
+            slottypes === nothing ? nothing : copy(slottypes)
+        end
     end
-    unoptsrc.slotflags = copy(unoptsrc.slotflags)
     return InferredSource(
         unoptsrc,
         copy(state.stmt_info),
