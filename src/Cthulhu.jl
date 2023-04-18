@@ -39,7 +39,7 @@ else
     specialize_method(@nospecialize(args...); preexisting::Bool=false) =
         CC.specialize_method(args..., preexisting)
     compileable_specialization(@nospecialize(args...)) =
-        CC.specialize_method(args..., compilesig_invokes=true)
+        CC.specialize_method(args..., compilesig=true)
 end
 
 Base.@kwdef mutable struct CthulhuConfig
