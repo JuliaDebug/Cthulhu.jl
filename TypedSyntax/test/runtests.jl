@@ -535,6 +535,9 @@ include("test_module.jl")
     # issue #426
     tsn = TypedSyntaxNode(getindex, (typeof(TSN.T426), Type{Year},))
     @test TypedSyntax.num_positional_args(tsn) == 3
+    # issue #433
+    tsn = TypedSyntaxNode(TSN.withrt, (IO,))
+    @test TypedSyntax.num_positional_args(tsn) == 2
 
     # Display
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
