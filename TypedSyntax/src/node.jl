@@ -279,7 +279,7 @@ function gettyp(node2ssa, node, src)
     return unwrapinternal(src.ssavaluetypes[i])
 end
 
-Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ)
+Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ, tsd.runtime)
 
 gettyp(node::AbstractSyntaxNode) = gettyp(node.data)
 gettyp(::JuliaSyntax.SyntaxData) = nothing

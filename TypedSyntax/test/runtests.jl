@@ -610,6 +610,10 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.unnamedargs, (Type{Matrix{Float32}}, Type{Int}))
     sig, body = children(tsn)
     @test isa(TypedSyntax.map_signature!(sig, fill(Symbol(""), 3), Any[Any, Core.Const(2), Any]), TypedSyntaxNode)
+
+    # issue #435
+    tsnc = copy(tsn)
+    @test isa(tsnc, TypedSyntaxNode)
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
