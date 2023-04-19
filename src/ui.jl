@@ -61,7 +61,7 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                 nd = TypedSyntax.ndigits_linenumbers(node)
                 reduced_displaysize -= nd + 1
             end
-            string(chomp(
+            str = string(chomp(
                 sprint(node; context=:color=>true) do io, node
                     limiter = TextWidthLimiter(io, reduced_displaysize)
                     if TypedSyntax.is_runtime(node)
@@ -71,8 +71,9 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                             print(limiter, "runtime ")
                         end
                     end
-                    printstyled(limiter, node; iswarn, hide_type_stable)
+                    printstyled(limiter, node; iswarn, hide_type_stable, with_linenumber=false)
                 end))
+            replace(str, r"\n *" => s" ")  # in case of multiline code, issue #428
         end
     end
     push!(shown_callsites, "↩")
