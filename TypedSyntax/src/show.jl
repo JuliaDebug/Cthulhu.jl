@@ -31,12 +31,13 @@ end
 
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
+                          with_linenumber::Bool=true,
                           idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
-    nd = ndigits_linenumbers(rootnode, idxend)
+    nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
     position = first_byte(rootnode) - 1
-    print_linenumber(io, rootnode, position + 1, nd)
+    with_linenumber && print_linenumber(io, rootnode, position + 1, nd)
     if is_function_def(rootnode)
         # We're printing a MethodInstance
         @assert length(children(rootnode)) == 2
@@ -120,7 +121,7 @@ function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, sto
     if position + 1 < stop
         for (i, c) in pairs(node.source[position+1:stop-1])
             print(io, c)
-            if c == '\n'
+            if c == '\n' && nd > 0
                 print_linenumber(io, node, position + i + 1, nd)
             end
         end
