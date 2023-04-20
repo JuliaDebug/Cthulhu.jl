@@ -33,11 +33,13 @@ end
 
 import Base: @constprop
 
-@static if hasmethod(CC.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,:compilesig))
-    import .CC: specialize_method
+@static if hasmethod(CC.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,))
+    import .CC: specialize_method, compileable_specialization
 else
-    specialize_method(@nospecialize(args...); preexisting::Bool=false, compilesig::Bool=false) =
-        CC.specialize_method(args..., preexisting, compilesig)
+    specialize_method(@nospecialize(args...); preexisting::Bool=false) =
+        CC.specialize_method(args..., preexisting)
+    compileable_specialization(@nospecialize(args...)) =
+        CC.specialize_method(args..., compilesig=true)
 end
 
 Base.@kwdef mutable struct CthulhuConfig
