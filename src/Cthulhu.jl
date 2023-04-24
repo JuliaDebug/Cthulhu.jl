@@ -853,12 +853,12 @@ with the option to `descend` into intermediate calls. `kwargs` are passed to [`d
 """
 ascend
 
-using SnoopPrecompile
-@precompile_setup begin
+using PrecompileTools
+@setup_workload begin
     input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
     term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
     write(input.in, 'q')
-    @precompile_all_calls begin
+    @compile_workload begin
         descend(gcd, (Int, Int); terminal=term)
         # declare we are done with streams
         close(input.in)
