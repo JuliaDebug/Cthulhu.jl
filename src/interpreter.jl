@@ -135,24 +135,9 @@ function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_o
 end
 end
 
-function annotate_slottypes!(sv::InferenceState)
-    slottypes = sv.slottypes
-    for i = 1:length(slottypes)
-        slottypes[i] = CC.widenconditional(slottypes[i])
-    end
-    CC.record_slot_assign!(sv)
-    return sv.src.slottypes
-end
-
 function InferredSource(state::InferenceState)
     unoptsrc = copy(state.src)
-    @static if VERSION ≥ v"1.10.0-DEV.1033"
-        if unoptsrc.slottypes === nothing
-            # `slottypes::Vector{Any}` hasn't been generated due to recursion,
-            # so manually generate it here
-            unoptsrc.slottypes = annotate_slottypes!(state)
-        end
-    else
+    @static if VERSION < v"1.10.0-DEV.1033"
         # xref: https://github.com/JuliaLang/julia/pull/49378
         unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
             slottypes === nothing ? nothing : copy(slottypes)
