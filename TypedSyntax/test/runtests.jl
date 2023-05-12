@@ -13,7 +13,7 @@ include("test_module.jl")
     st = """
     f(x, y, z) = x * y + z
     """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN1.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN1.jl")
     TSN.eval(Expr(rootnode))
     src, _ = getsrc(TSN.f, (Float32, Int, Float64))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -31,7 +31,7 @@ include("test_module.jl")
         return x + c
     end
     """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN2.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
     src, _ = getsrc(TSN.g, (Int16, Int16, Int32))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -44,7 +44,7 @@ include("test_module.jl")
 
     # Target ambiguity
     st = "math(x) = x + sin(x + π / 4)"
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN2.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
     src, _ = getsrc(TSN.math, (Int,))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -68,7 +68,7 @@ include("test_module.jl")
 
     # Target duplication
     st = "math2(x) = sin(x) + sin(x)"
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN2.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
     src, _ = getsrc(TSN.math2, (Int,))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -89,7 +89,7 @@ include("test_module.jl")
         end
         """, (3, 1), (1, 2))
         )
-        rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN3.jl")
+        rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN3.jl")
         TSN.eval(Expr(rootnode))
         src, _ = getsrc(TSN.firstfirst, (Vector{Vector{Real}},))
         tsn = TypedSyntaxNode(rootnode, src)
@@ -148,7 +148,7 @@ include("test_module.jl")
             listset[i+1][j+1] = listget[i][j]
         end
         """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN4.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN4.jl")
     TSN.eval(Expr(rootnode))
     src, rt = getsrc(TSN.setlist!, (Vector{Vector{Float32}}, Vector{Vector{UInt8}}, Int, Int))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -173,7 +173,7 @@ include("test_module.jl")
             return y
         end
     """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN5.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN5.jl")
     TSN.eval(Expr(rootnode))
     src, rt = getsrc(TSN.callfindmin, (Vector{Float64},))
     tsn = TypedSyntaxNode(rootnode, src)
@@ -219,11 +219,11 @@ include("test_module.jl")
     @test cnode.typ == Vector
     tsn = TypedSyntaxNode(TSN.nestedgenerators, (Int, Int))
     sig, body = children(tsn)
-    @test kind(body) == K"flatten"
+    @test kind(body) == K"generator"
     @test body.typ <: Base.Iterators.Flatten
     tsn = TypedSyntaxNode(TSN.nestedgenerators, (Int,))
     sig, body = children(tsn)
-    @test kind(body) == K"flatten"
+    @test kind(body) == K"generator"
     @test body.typ <: Base.Iterators.Flatten
     tsn = TypedSyntaxNode(TSN.nestedexplicit, (Int,))
     sig, body = children(tsn)
@@ -278,7 +278,7 @@ include("test_module.jl")
         return iszero(x) ? oftype(fx, NaN) : fx
     end
     """
-    rootnode = JuliaSyntax.parse(SyntaxNode, st; filename="TSN6.jl")
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN6.jl")
     TSN.eval(Expr(rootnode))
     src, rt = getsrc(TSN.avoidzero, (Int,))
     # src looks like this:

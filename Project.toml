@@ -19,7 +19,7 @@ WidthLimitedIO = "b8c1c048-cf81-46c6-9da0-18c1d99e41f2"
 [compat]
 CodeTracking = "0.5, 1"
 FoldingTrees = "1"
-JuliaSyntax = "0.3.2"
+JuliaSyntax = "0.4"
 Preferences = "1"
 PrecompileTools = "1"
 TypedSyntax = "1.1.7"
