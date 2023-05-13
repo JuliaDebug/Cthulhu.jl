@@ -53,7 +53,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
-ndigits_linenumbers(node, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
+ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
@@ -142,7 +142,7 @@ function is_small_union_or_tunion(@nospecialize(T))
         return isc & (n <= 3)
     end
     if T <: Tuple  # is it Tuple{U}
-        return all(is_small_union_or_tunion, Base.unwrap_unionall(T).parameters)
+        return all(is_small_union_or_tunion, (Base.unwrap_unionall(T)::DataType).parameters)
     end
     return false
 end
