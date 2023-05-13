@@ -65,7 +65,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
-    trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data, src, gettyp(node2ssa, rootnode, src)))
+    trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, gettyp(node2ssa, rootnode, src)))
     addchildren!(trootnode, rootnode, src, node2ssa, symtyps, mappings)
     # Add argtyps to signature
     fnode = get_function_def(trootnode)
@@ -82,7 +82,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
         tparent.children = TypedSyntaxNode[]
     end
     for child in children(parent)
-        tnode = TreeNode(tparent, nothing, TypedSyntaxData(child.data, src, gettyp(node2ssa, child, src)))
+        tnode = TreeNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, gettyp(node2ssa, child, src)))
         if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
             tnode.typ = get(symtyps, child, nothing)
         end
@@ -103,9 +103,9 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
 end
 
 map_signature!(sig::TypedSyntaxNode, src::CodeInfo) =
-    map_signature!(sig, src.slotnames, src.slottypes)
+    map_signature!(sig, src.slotnames::Vector{Symbol}, src.slottypes::Vector{Any})
 
-function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes::Vector{Any})
+function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottypes::Vector{Any})
     function argidentifier(arg)
         arg, defaultval = striparg(arg)
         if kind(arg) == K"::"
@@ -187,13 +187,13 @@ function map_signature!(sig::TypedSyntaxNode, slotnames, slottypes::Vector{Any})
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
-                names, typs = Base.unwrap_unionall(nt).parameters
+                names, typs = (Base.unwrap_unionall(nt)::DataType).parameters
                 if names isa Tuple{Vararg{Symbol}} && typs isa DataType && typs.name === Tuple.name
                     for j = 1 : length(argcontainer)
                         if iszero(slotarg[j + offset]) || slottypes[slotarg[j + offset]] === Union{}
                             arg = argcontainer[j]
-                            arg, defaultval = argidentifier(arg)
-                            name = arg.val
+                            arg, defaultval = argidentifier(arg)::Tuple{TypedSyntaxNode, Any}
+                            name = arg.val::Symbol
                             i = findfirst(==(name), names)
                             if i !== nothing
                                 arg.typ = typs.parameters[i]
@@ -271,17 +271,19 @@ function gettyp(node2ssa, node, src)
     i = get(node2ssa, node, nothing)
     i === nothing && return nothing
     stmt = src.code[i]
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
     if isa(stmt, Core.ReturnNode)
         arg = stmt.val
-        isa(arg, SSAValue) && return unwrapinternal(src.ssavaluetypes[arg.id])
-        is_slot(arg) && return unwrapinternal(src.slottypes[arg.id])
+        isa(arg, SSAValue) && return unwrapinternal(ssavaluetypes[arg.id])
+        is_slot(arg) && return unwrapinternal((src.slottypes::Vector{Any})[arg.id])
     end
-    return unwrapinternal(src.ssavaluetypes[i])
+    return unwrapinternal(ssavaluetypes[i])
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ, tsd.runtime)
 
 gettyp(node::AbstractSyntaxNode) = gettyp(node.data)
+gettyp(::Nothing) = nothing
 gettyp(::JuliaSyntax.SyntaxData) = nothing
 gettyp(data::TypedSyntaxData) = data.typ
 
@@ -389,14 +391,16 @@ end
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
 function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
-    mi = src.parent
+    mi = src.parent::MethodInstance
+    slottypes = src.slottypes::Union{Nothing, Vector{Any}}
+    have_slottypes = slottypes !== nothing
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
     # Find all leaf-nodes for a given symbol
     symlocs = collect_symbol_nodes(rootnode)      # symlocs = Dict(:name => [node1, node2, ...])
     # Initialize the type-assignment of each slot at each use location
     symtyps = IdDict{typeof(rootnode),Any}()                     # symtyps = IdDict(node => typ)
     # Initialize the (possibly ambiguous) attributions for each stmt in `src` (`stmt = src.code[i]`)
     mappings = [MaybeTypedSyntaxNode[] for _ in eachindex(src.code)]  # mappings[i] = [node1, node2, ...]
-    have_slottypes = src.slottypes !== nothing
 
     used = BitSet()
     for (i, stmt) in enumerate(src.code)
@@ -417,7 +421,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = src.codelocs[i]
-        lt = src.linetable
+        lt = src.linetable::Vector{Any}
         start = getline(lt, j) + Δline
         stop = getnextline(lt, j, Δline) - 1
         linerange = start : stop
@@ -428,7 +432,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     end
     # For a call argument `arg`, find all source statements that match
     function append_targets_for_arg!(mapped#=::Vector{nodes}=#, i::Int, @nospecialize(arg))
-        targets = get_targets(arg)
+        targets = get_targets(arg)::Union{Nothing,Vector{<:MaybeTypedSyntaxNode}}
         if targets !== nothing
             append_targets_for_line!(mapped, i, targets)        # select the subset consistent with the line number
         end
@@ -437,7 +441,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     function get_targets(@nospecialize(arg))
         return if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
-            name = src.slotnames[arg.id]
+            name = src.slotnames[(arg::Union{SlotNumber,TypedSlot}).id]
             is_gensym(name) ? nothing : get(symlocs, symloc_key(name), nothing)
             # get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
@@ -452,7 +456,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
         elseif is_src_literal(arg)
             get(symlocs, arg, nothing)   # FIXME: distinguish this `nothing` from a literal `nothing`
         elseif isexpr(arg, :static_parameter)
-            name = sparam_name(mi, arg.args[1])
+            name = sparam_name(mi, arg.args[1]::Int)
             get(symlocs, name, nothing)
         else
             nothing
@@ -464,10 +468,12 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # and for which argnode is in the correct side of the assignment
     function filter_assignment_targets!(targets, is_rhs::Bool)
         length(targets) > 1 && filter!(targets) do argnode
-            if kind(argnode.parent) == K"tuple"  # tuple-structuring (go up one more node to see if it's an assignment)
-                argnode = argnode.parent
+            p = argnode.parent::MaybeTypedSyntaxNode
+            if kind(p) == K"tuple"  # tuple-structuring (go up one more node to see if it's an assignment)
+                argnode = p
+                p = argnode.parent::MaybeTypedSyntaxNode
             end
-            is_prec_assignment(argnode.parent) && argnode == child(argnode.parent, 1 + is_rhs)  # is it the correct side of an assignment?
+            is_prec_assignment(p) && argnode == child(p, 1 + is_rhs)  # is it the correct side of an assignment?
         end
         return targets
     end
@@ -491,15 +497,15 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
                         symtyps[only(mapped)] = unwrapinternal(
-                                                (is_slot(stmt) & have_slottypes) ? src.slottypes[stmt.id] :
-                                                isa(stmt, SSAValue) ? src.ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
+                                                (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::Union{SlotNumber,TypedSlot}).id] :
+                                                isa(stmt, SSAValue) ? ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
                         )
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        T = unwrapinternal(src.ssavaluetypes[i])
+                        T = unwrapinternal(ssavaluetypes[i])
                         symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
@@ -534,7 +540,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 args = if is_apply_iterate(stmt) && iarg >= 4 && isa(_arg, SSAValue) && is_tuple_stmt(src.code[_arg.id])
                     # In vararg (_apply_iterate) calls, any non-`...` args are bundled in a tuple.
                     # Split the tuple to extract the complete argument list.
-                    tuplestmt = src.code[_arg.id]
+                    tuplestmt = src.code[_arg.id]::Expr
                     tuplestmt.args[2:end]
                 else
                     (_arg,)
@@ -556,7 +562,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                             # Second or later matched argument
                             # A matching caller node needs to use all `stmt.args`,
                             # so we `intersect` to find the common node(s)
-                            intersect!(stmtmapping, map(t->skipped_parent(t), argmapping))
+                            intersect!(stmtmapping, map(skipped_parent, argmapping))
                         end
                     end
                     empty!(argmapping)
@@ -601,7 +607,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                             if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
                                 empty!(mapped)
                                 break
-                            elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] == SSAValue(i)
+                            elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] === SSAValue(i)
                                 push!(mappings[inext], node)
                                 empty!(mapped)
                                 break
@@ -615,16 +621,16 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
                 if stmt.head == :(=) && is_slot(stmt.args[1])
                     # Tag the LHS of this expression
-                    arg = stmt.args[1]
+                    arg = stmt.args[1]::Union{SlotNumber, TypedSlot}
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node
-                        while !is_prec_assignment(lhsnode) && lhsnode.parent !== nothing
-                            lhsnode = lhsnode.parent
+                        while !is_prec_assignment(lhsnode) && (lhsparent = lhsnode.parent; lhsparent !== nothing)
+                            lhsnode = lhsparent
                         end
                         lhsnode, found = find_identifier_or_tuplechild(child(lhsnode, 1), sym)
                         if found
-                            symtyps[lhsnode] = src.ssavaluetypes[i]
+                            symtyps[lhsnode] = ssavaluetypes[i]
                         end
                     end
                     # Now process the RHS
@@ -639,13 +645,14 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         _arg, j = follow_back(src, _arg)
                         argjs = if is_apply_iterate(stmt) && iarg >= 4 && j > 0 && is_tuple_stmt(src.code[j])
                             # Split the non-va types in the call to _apply_iterate
-                            tuplestmt = src.code[j]
+                            tuplestmt = src.code[j]::Expr
                             Tuple{Any,Int}[follow_back(src, arg) for arg in tuplestmt.args[2:end]]
                         else
                             Tuple{Any,Int}[(_arg, j)]
                         end
                         for (arg, j) in argjs
                             if is_slot(arg)
+                                arg = arg::Union{SlotNumber, TypedSlot}
                                 sym = src.slotnames[arg.id]
                                 itr = get(symlocs, symloc_key(sym), nothing)
                                 itr === nothing && continue
@@ -654,10 +661,10 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
                                         symtyps[t] = unwrapinternal(if j > 0
-                                            src.ssavaluetypes[j]
+                                            ssavaluetypes[j]
                                         elseif have_slottypes
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
-                                            src.slottypes[arg.id]
+                                            slottypes[arg.id]
                                         else
                                             nothing
                                         end)
@@ -665,7 +672,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     end
                                 end
                             elseif isexpr(arg, :static_parameter)
-                                id = arg.args[1]
+                                id = arg.args[1]::Int
                                 name = sparam_name(mi, id)
                                 for t in symlocs[name]
                                     T = mi.sparam_vals[id]
@@ -720,7 +727,7 @@ function follow_back(src, arg)
     j = 0
     while isa(arg, SSAValue)
         j = arg.id
-        arg = src.ssavaluetypes[j]
+        arg = (src.ssavaluetypes::Vector{Any})[j]
     end
     return arg, j
 end
@@ -756,10 +763,9 @@ end
 function skipped_parent(node::SyntaxNode)
     pnode = node.parent
     pnode === nothing && return node
-    if pnode.parent !== nothing
-        if kind(pnode) ∈ KSet"... quote"   # might need to add more things here
-            pnode = pnode.parent
-        end
+    ppnode = pnode.parent
+    if ppnode !== nothing && kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+        return ppnode
     end
     return pnode
 end
@@ -788,10 +794,10 @@ function symloc_key(sym::Symbol)
 end
 
 function getline(lt, j)
-    linfo = j == 0 ? first(lt) : lt[j]
+    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
     linfo.inlined_at == 0 && return linfo.line
-    @assert linfo.method == Symbol("macro expansion")
-    linfo = lt[linfo.inlined_at]
+    @assert linfo.method === Symbol("macro expansion")
+    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
     return linfo.line
 end
 
@@ -799,15 +805,15 @@ function getnextline(lt, j, Δline)
     j == 0 && return typemax(Int)
     j += 1
     while j <= length(lt)
-        linfo = lt[j]
+        linfo = lt[j]::Core.LineInfoNode
         linfo.inlined_at == 0 && return linfo.line + Δline
         j += 1
     end
     return typemax(Int)
 end
 
-function find_identifier_or_tuplechild(node, sym)
-    kind(node) == K"Identifier" && node.val == sym && return node, true
+function find_identifier_or_tuplechild(node::AbstractSyntaxNode, sym)
+    kind(node) == K"Identifier" && node.val === sym && return node, true
     if kind(node) == K"tuple"   # tuple destructuring
         for child in children(node)
             tmpnode, found = find_identifier_or_tuplechild(child, sym)

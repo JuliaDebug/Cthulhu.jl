@@ -50,14 +50,14 @@ end
 build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
     vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
 function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
-    reduced_displaysize = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
-    nd = nothing
+    reduced_displaysize::Int = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
+    nd::Int = -1
 
     shown_callsites = map(callsites) do node
         if isa(node, Callsite)
             show_as_line(node, with_effects, optimize, iswarn)
         else
-            if nd === nothing
+            if nd == -1
                 nd = TypedSyntax.ndigits_linenumbers(node)
                 reduced_displaysize -= nd + 1
             end

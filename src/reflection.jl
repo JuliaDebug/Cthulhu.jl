@@ -320,10 +320,14 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     ulocs = Pair{Tuple{Symbol,Symbol,Int},Vector{Int}}[]
     if !isempty(locs)
         for (loc, depth) in locs
-            idx = get(prlookup, (loc.method, loc.file), nothing)
+            locname = loc.method
+            if isa(locname, MethodInstance)
+                locname = locname.def.name
+            end
+            idx = get(prlookup, (locname, loc.file), nothing)
             if idx === nothing
-                push!(ulocs, (loc.method, loc.file, depth) => Int[])
-                prlookup[(loc.method, loc.file)] = idx = length(ulocs)
+                push!(ulocs, (locname, loc.file, depth) => Int[])
+                prlookup[(locname, loc.file)] = idx = length(ulocs)
             end
             lines = ulocs[idx][2]
             line = loc.line
