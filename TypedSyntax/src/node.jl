@@ -35,7 +35,7 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
 end
 
 function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
-    rootnode = JuliaSyntax.parse(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
         if !is_function_def(rootnode)
@@ -590,8 +590,11 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 if isexpr(rhs, :call) && (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :Generator)
                     # Generator calls
                     pnode = node.parent
-                    if pnode !== nothing && kind(pnode) == K"generator"
-                        mapped[1] = node = pnode
+                    if pnode !== nothing
+                        ppnode = pnode.parent
+                        if kind(pnode) == K"generator" && ppnode !== nothing && kind(ppnode) == K"comprehension"
+                            mapped[1] = node = pnode
+                        end
                     end
                 end
                 if kind(node) == K"dotcall" && isexpr(rhs, :call) &&  (f = rhs.args[1]; isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted)
