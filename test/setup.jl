@@ -20,3 +20,9 @@ end
 macro find_callsites_by_ftt(ex0...)
     return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
 end
+
+@static if isdefined(Core.Compiler, :is_foldable_nothrow)
+    using Core.Compiler: is_foldable_nothrow
+else
+    const is_foldable_nothrow = Core.Compiler.is_total
+end

@@ -11,36 +11,14 @@ using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
 using WidthLimitedIO
 
-import Core: MethodInstance
+using Core: MethodInstance, MethodMatch
 const CC = Core.Compiler
-import .CC: MethodMatch, LimitedAccuracy, ignorelimited
-import Base: unwrapva, isvarargtype, unwrap_unionall, rewrap_unionall
+using .CC: Effects, EFFECTS_TOTAL, LimitedAccuracy,
+    compileable_specialization, ignorelimited, specialize_method
+using Base: @constprop, default_tt, isvarargtype, unwrapva, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
-using Base: typesof    # workaround for https://github.com/JuliaLang/julia/issues/47606
-
 const ArgTypes = Vector{Any}
-
-@static if !isdefined(CC, :Effects)
-    const Effects = Nothing
-    const EFFECTS_TOTAL = nothing
-    const EFFECTS_ENABLED = false
-else
-    const Effects = CC.Effects
-    const EFFECTS_TOTAL = CC.EFFECTS_TOTAL
-    const EFFECTS_ENABLED = true
-end
-
-import Base: @constprop
-
-@static if hasmethod(CC.specialize_method, (Method,Any,Core.SimpleVector,), (:preexisting,))
-    import .CC: specialize_method, compileable_specialization
-else
-    specialize_method(@nospecialize(args...); preexisting::Bool=false) =
-        CC.specialize_method(args..., preexisting)
-    compileable_specialization(@nospecialize(args...)) =
-        CC.specialize_method(args..., compilesig=true)
-end
 
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
@@ -97,8 +75,6 @@ module DInfo
 end
 using .DInfo: DebugInfo
 const AnyDebugInfo = Union{DebugInfo,Symbol}
-
-@static @isdefined(LazyString) || include("strings/lazy.jl")
 
 include("interpreter.jl")
 include("callsite.jl")
@@ -209,19 +185,6 @@ julia> descend_code_warntype() do
 descend_code_warntype(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-@static if isdefined(Base, :default_tt)
-import Base: default_tt
-else
-function default_tt(@nospecialize(f))
-    ms = methods(f)
-    if length(ms) == 1
-        return Base.tuple_type_tail(only(ms).sig)
-    else
-        return Tuple
-    end
-end
-end
-
 function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = default_tt(f)); kwargs...)
     ft = Core.Typeof(f)
     if isa(argtypes, Type)
@@ -282,25 +245,15 @@ function codeinst_rt(code::CodeInstance)
     end
 end
 
-@static if EFFECTS_ENABLED
-    get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
-    get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
-    get_effects(src::InferredSource) = src.effects
-    get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
-        haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
-    get_effects(result::InferenceResult) = result.ipo_effects
-    @static if VERSION ≥ v"1.9.0-DEV.409"
-        get_effects(result::CC.ConstPropResult) = get_effects(result.result)
-        get_effects(result::CC.ConcreteResult) = result.effects
-    else
-        get_effects(result::CC.ConstResult) = result.effects
-    end
-    @static if VERSION ≥ v"1.9.0-DEV.1248"
-        get_effects(result::CC.SemiConcreteResult) = result.effects
-    end
-else
-    get_effects(_...) = nothing
-end
+get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
+get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
+get_effects(src::InferredSource) = src.effects
+get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
+    haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
+get_effects(result::InferenceResult) = result.ipo_effects
+get_effects(result::CC.ConstPropResult) = get_effects(result.result)
+get_effects(result::CC.ConcreteResult) = result.effects
+get_effects(result::CC.SemiConcreteResult) = result.effects
 
 # `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
 @constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
@@ -738,11 +691,8 @@ function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
-    # and show it in the UI in some way ?
-    # branch on https://github.com/JuliaLang/julia/pull/42082
-    frame = @static hasmethod(InferenceState, (InferenceResult,Symbol,AbstractInterpreter)) ?
-            InferenceState(result, #=cache=# :global, interp)::InferenceState :
-            InferenceState(result, #=cached=# true, interp)::InferenceState
+    # and show it in the UI in some way?
+    frame = InferenceState(result, #=cache=#:global, interp)::InferenceState
     CC.typeinf(interp, frame)
     return nothing
 end

@@ -198,7 +198,7 @@ end
             @test occursin("\nBody\e[", lines)
             @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", lines)
             @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", lines)
-            warncolor = if Cthulhu.is_expected_union(Union{Float32, Int64})
+            warncolor = if Cthulhu.InteractiveUtils.is_expected_union(Union{Float32, Int64})
                 Base.text_colors[Base.warn_color()]
             else
                 Base.text_colors[Base.error_color()]

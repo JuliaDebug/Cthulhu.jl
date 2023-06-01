@@ -161,7 +161,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
-    @static Cthulhu.EFFECTS_ENABLED && @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+    @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
@@ -182,13 +182,11 @@ end
         @test length(callsites) == 1
         ci = first(callsites).info
         @test isa(ci, Cthulhu.UncachedCallInfo)
-        @static if Cthulhu.EFFECTS_ENABLED
-            effects = Cthulhu.get_effects(ci)
-            @test !Core.Compiler.is_consistent(effects)
-            @test Core.Compiler.is_effect_free(effects)
-            @test !Core.Compiler.is_nothrow(effects)
-            @test !Core.Compiler.is_terminates(effects)
-        end
+        effects = Cthulhu.get_effects(ci)
+        @test !Core.Compiler.is_consistent(effects)
+        @test Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test !Core.Compiler.is_terminates(effects)
         @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
         io = IOBuffer()
         show(io, first(callsites))
@@ -261,59 +259,57 @@ end
     end
 end
 
-@static if isdefined(Base, Symbol("@assume_effects"))
-    Base.@assume_effects :terminates_locally function issue41694(x)
-        res = 1
-        1 < x < 20 || throw("bad")
-        while x > 1
-            res *= x
-            x -= 1
-        end
-        return res
+Base.@assume_effects :terminates_locally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
     end
-    @static isdefined(Core.Compiler, :ConstResult) && @testset "ConstResult" begin
-        # constant prop' on all the splits
-        let callsites = find_callsites_by_ftt(; optimize = false) do
-                issue41694(12)
-            end
-            callinfo = only(callsites).info
-            @test isa(callinfo, Cthulhu.ConcreteCallInfo)
-            @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
-            @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
-            io = IOBuffer()
-            print(io, only(callsites))
-            @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
+    return res
+end
+@testset "ConstResult" begin
+    # constant prop' on all the splits
+    let callsites = find_callsites_by_ftt(; optimize = false) do
+            issue41694(12)
         end
+        callinfo = only(callsites).info
+        @test isa(callinfo, Cthulhu.ConcreteCallInfo)
+        @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
+        @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+        io = IOBuffer()
+        print(io, only(callsites))
+        @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
     end
+end
 
-    let # check the performance benefit of semi concrete evaluation
-        param = 1000
-        ex = Expr(:block)
-        var = gensym()
-        push!(ex.args, :($var = x))
-        for _ = 1:param
-            newvar = gensym()
-            push!(ex.args, :($newvar = sin($var)))
-            var = newvar
-        end
-        @eval global Base.@constprop :aggressive Base.@assume_effects :nothrow function semi_concrete_eval(x::Int, _::Int)
-            out = $ex
-            out
-        end
+let # check the performance benefit of semi concrete evaluation
+    param = 1000
+    ex = Expr(:block)
+    var = gensym()
+    push!(ex.args, :($var = x))
+    for _ = 1:param
+        newvar = gensym()
+        push!(ex.args, :($newvar = sin($var)))
+        var = newvar
     end
-    @static isdefined(Core.Compiler, :SemiConcreteResult) && @testset "SemiConcreteResult" begin
-        # constant prop' on all the splits
-        let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
-                semi_concrete_eval(42, x)
-            end
-            callinfo = only(callsites).info
-            @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
-            @test Cthulhu.get_rt(callinfo) == Core.Const(semi_concrete_eval(42, 0))
-            # @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_semiconcrete_eligible
-            io = IOBuffer()
-            print(io, only(callsites))
-            @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
+    @eval global Base.@constprop :aggressive Base.@assume_effects :nothrow function semi_concrete_eval(x::Int, _::Int)
+        out = $ex
+        out
+    end
+end
+@testset "SemiConcreteResult" begin
+    # constant prop' on all the splits
+    let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
+            semi_concrete_eval(42, x)
         end
+        callinfo = only(callsites).info
+        @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
+        @test Cthulhu.get_rt(callinfo) == Core.Const(semi_concrete_eval(42, 0))
+        # @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_semiconcrete_eligible
+        io = IOBuffer()
+        print(io, only(callsites))
+        @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
     end
 end
 
@@ -345,10 +341,9 @@ struct SingletonPureCallable{N} end
     s = sprint(Cthulhu.show_callinfo, c2)
     @test occursin("SingletonPureCallable{1}()(::Float64)::Float64", s)
 
-    @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(c1) |> is_foldable_nothrow
-        @test Cthulhu.get_effects(c2) |> is_foldable_nothrow
-    end
+
+    @test Cthulhu.get_effects(c1) |> is_foldable_nothrow
+    @test Cthulhu.get_effects(c2) |> is_foldable_nothrow
 end
 
 @testset "ReturnTypeCallInfo" begin
@@ -380,10 +375,8 @@ end
     print(io, callsites[2])
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
-    @static if Cthulhu.EFFECTS_ENABLED
-        @test Cthulhu.get_effects(callinfo1) |> is_foldable_nothrow
-        @test Cthulhu.get_effects(callinfo2) |> is_foldable_nothrow
-    end
+    @test Cthulhu.get_effects(callinfo1) |> is_foldable_nothrow
+    @test Cthulhu.get_effects(callinfo2) |> is_foldable_nothrow
 end
 
 @testset "OCCallInfo" begin
@@ -394,10 +387,8 @@ end
         @test length(callsites) == 1
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
-        @static if Cthulhu.EFFECTS_ENABLED
-            @test Cthulhu.get_effects(callinfo) |> !is_foldable_nothrow
-            # TODO not sure what these effects are (and neither is Base.infer_effects yet)
-        end
+        @test Cthulhu.get_effects(callinfo) |> !is_foldable_nothrow
+        # TODO not sure what these effects are (and neither is Base.infer_effects yet)
         @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
             sin(a) + cos(b)
         end |> only === Float64
@@ -411,7 +402,7 @@ end
     end
 
     # const-prop'ed OC callsite
-    @static hasfield(Core.Compiler.OpaqueClosureCallInfo, :result) && let callsites = find_callsites_by_ftt((Int,); optimize=false) do a
+    let callsites = find_callsites_by_ftt((Int,); optimize=false) do a
             oc = Base.Experimental.@opaque Base.@constprop :aggressive b -> sin(b)
             oc(42)
         end
@@ -454,7 +445,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
         rt = Core.Compiler.Const(:Integer)
         @test info.ci.rt === rt
         buf = IOBuffer()
@@ -467,30 +458,25 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 
     # const prop' / semi-concrete callsite
-    @static hasfield(Core.Compiler.InvokeCallInfo, :result) && let callsites = find_callsites_by_ftt((Any,); optimize=false) do a
+    let callsites = find_callsites_by_ftt((Any,); optimize=false) do a
             Base.@invoke invoke_constcall(a::Any, true::Bool)
         end
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @static Cthulhu.EFFECTS_ENABLED && Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
         inner = info.ci
         rt = Core.Compiler.Const(Any)
         @test Cthulhu.get_rt(info) === rt
         buf = IOBuffer()
         show(buf, callsite)
-        @static if isdefined(Core.Compiler, :SemiConcreteResult)
-            @test isa(inner, Cthulhu.SemiConcreteCallInfo)
-            @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
-        else
-            @test isa(inner, Cthulhu.ConstPropCallInfo)
-            @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
-        end
+        @test isa(inner, Cthulhu.SemiConcreteCallInfo)
+        @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
     end
 end
 
@@ -637,7 +623,7 @@ end
 
 @testset "warntype variables" begin
     src, rettype = code_typed(identity, (Any,); optimize=false)[1]
-    effects = Cthulhu.EFFECTS_ENABLED ? Base.infer_effects(identity, (Any,)) : nothing
+    effects = Base.infer_effects(identity, (Any,))
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
     Cthulhu.cthulhu_warntype(ioctx, :none, src, rettype, effects, nothing)
@@ -963,14 +949,11 @@ end
     i3 = only(findall(iscall((src, push!)), src.code))
     i4 = only(findall(iscall((src, Core.arraysize)), src.code))
     @test i1 < i2 < i3 < i4
-    @static if isdefined(Core.Compiler, :merge_effects!) && hasmethod(
-        Core.Compiler.merge_effects!, (Cthulhu.CthulhuInterpreter, Core.Compiler.InferenceState, Cthulhu.Effects))
-        pc2effects = interp.effects[mi]
-        @test haskey(pc2effects, i1)
-        @test haskey(pc2effects, i2)
-        @test haskey(pc2effects, i3)
-        @test haskey(pc2effects, i4)
-    end
+    pc2effects = interp.effects[mi]
+    @test haskey(pc2effects, i1)
+    @test haskey(pc2effects, i2)
+    @test haskey(pc2effects, i3)
+    @test haskey(pc2effects, i4)
 end
 
 end # module test_Cthulhu

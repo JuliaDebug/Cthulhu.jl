@@ -56,11 +56,3 @@ function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
         return length(code) == 1 && isreturn(code[1])
     end
 end
-
-@static if Cthulhu.EFFECTS_ENABLED
-    @static if isdefined(Core.Compiler, :is_foldable_nothrow)
-        using Core.Compiler: is_foldable_nothrow
-    else
-        const is_foldable_nothrow = Core.Compiler.is_total
-    end
-end

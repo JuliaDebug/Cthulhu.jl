@@ -17,7 +17,7 @@ struct MICallInfo <: CallInfo
 end
 get_mi(ci::MICallInfo) = ci.mi
 get_rt(ci::CallInfo) = ci.rt
-get_effects(ci::MICallInfo) = @static EFFECTS_ENABLED ? ci.effects : Effects()
+get_effects(ci::MICallInfo) = ci.effects
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -90,14 +90,7 @@ struct MultiCallInfo <: CallInfo
 end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-get_effects(mci::MultiCallInfo) = begin
-    @static EFFECTS_ENABLED || return Effects()
-    @static if isdefined(CC, :merge_effects)
-        return mapreduce(get_effects, CC.merge_effects, mci.callinfos)
-    else
-        return mapreduce(get_effects, CC.tristate_merge, mci.callinfos)
-    end
-end
+get_effects(mci::MultiCallInfo) = mapreduce(get_effects, CC.merge_effects, mci.callinfos)
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
@@ -129,7 +122,7 @@ struct ReturnTypeCallInfo <: CallInfo
 end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
-get_effects(::ReturnTypeCallInfo) = @static EFFECTS_ENABLED ? EFFECTS_TOTAL : Effects()
+get_effects(::ReturnTypeCallInfo) = EFFECTS_TOTAL
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -381,9 +374,6 @@ function print_callsite_info(limiter::IO, info::OCCallInfo)
     show_callinfo(limiter, info.ci)
 end
 
-const is_expected_union = @static isdefined(InteractiveUtils, :is_expected_union) ?
-    InteractiveUtils.is_expected_union : Base.is_expected_union
-
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
     cols = limit ? (displaysize(io)::Tuple{Int,Int})[2] : typemax(Int)
@@ -392,7 +382,7 @@ function Base.show(io::IO, c::Callsite)
     info = c.info
     rt = get_rt(info)
     if iswarn && is_type_unstable(rt)
-        color = if rt isa Union && is_expected_union(rt)
+        color = if rt isa Union && InteractiveUtils.is_expected_union(rt)
             Base.warn_color()
         else
             Base.error_color()
