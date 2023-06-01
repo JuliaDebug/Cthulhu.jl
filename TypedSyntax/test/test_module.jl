@@ -213,4 +213,7 @@ const T426 = Dict{Type{<:Dates.Period}, Bool}(
     Dates.Month => false,
 )
 
+# Issue #458
+f458() = return
+
 end
