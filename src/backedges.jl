@@ -103,7 +103,8 @@ instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? CC.Timings.ROOTmi : i
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
 function callstring(io::IO, obj)
-    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), method(obj).name, specTypes(obj))
+    name = isa(method(obj), Method) ? method(obj).name : :toplevel
+    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), name, specTypes(obj))
     return String(take!(io))
 end
 function callstring(io::IO, sfs::Vector{StackTraces.StackFrame})
