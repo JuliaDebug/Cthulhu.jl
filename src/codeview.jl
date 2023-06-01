@@ -20,23 +20,48 @@ function highlight(io, x, lexer, config::CthulhuConfig)
     end
 end
 
-function cthulhu_llvm(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter, config::CthulhuConfig,
-                      dump_module = false)
-    dump = InteractiveUtils._dump_function_linfo_llvm(
-        mi, get_world_counter(interp),
-        #=wrapper=# false, #=strip_ir_metadata=# true,
-        dump_module,
-        optimize, debuginfo != DInfo.none ? :source : :none,
-        Base.CodegenParams())
+function cthulhu_llvm(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter,
+                      config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
+    dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
+        InteractiveUtils._dump_function_llvm(
+            mi, get_world_counter(interp),
+            #=wrapper=# false, !raw,
+            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
+            Base.CodegenParams())
+    else
+        InteractiveUtils._dump_function_linfo_llvm(
+            mi, get_world_counter(interp),
+            #=wrapper=# false, #=strip_ir_metadata=# true,
+            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
+            Base.CodegenParams())
+    end
     highlight(io, dump, "llvm", config)
 end
 
-function cthulhu_native(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter, config::CthulhuConfig)
-    dump = InteractiveUtils._dump_function_linfo_native(
-        mi, get_world_counter(interp),
-        #=wrapper=# false, #=syntax=# config.asm_syntax,
-        debuginfo != DInfo.none ? :source : :none,
-        #=binary=# false)
+function cthulhu_native(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter,
+                        config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
+    dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
+        if dump_module
+            InteractiveUtils._dump_function_native_assembly(
+                mi, get_world_counter(interp),
+                #=wrapper=# false, #=syntax=# config.asm_syntax,
+                debuginfo != DInfo.none ? :source : :none,
+                #=binary=# false, raw,
+                Base.CodegenParams())
+        else
+            InteractiveUtils._dump_function_native_disassembly(
+                mi, get_world_counter(interp),
+                #=wrapper=# false, #=syntax=# config.asm_syntax,
+                debuginfo != DInfo.none ? :source : :none,
+                #=binary=# false)
+        end
+    else
+        InteractiveUtils._dump_function_linfo_native(
+            mi, get_world_counter(interp),
+            #=wrapper=# false, #=syntax=# config.asm_syntax,
+            debuginfo != DInfo.none ? :source : :none,
+            #=binary=# false)
+    end
     highlight(io, dump, "asm", config)
 end
 
@@ -368,6 +393,7 @@ InteractiveUtils.code_llvm(
     optimize = true,
     debuginfo = :source,
     dump_module = false,
+    raw = false,
     config = CONFIG,
 ) = cthulhu_llvm(
     io,
@@ -377,6 +403,7 @@ InteractiveUtils.code_llvm(
     b.interp,
     config,
     dump_module,
+    raw,
 )
 
 InteractiveUtils.code_native(b::Bookmark; kw...) =
@@ -386,5 +413,16 @@ InteractiveUtils.code_native(
     b::Bookmark;
     optimize = true,
     debuginfo = :source,
+    dump_module = false,
+    raw = false,
     config = CONFIG,
-) = cthulhu_native(io, b.mi, optimize, debuginfo === :source, b.interp, config)
+) = cthulhu_native(
+    io,
+    b.mi,
+    optimize,
+    debuginfo === :source,
+    b.interp,
+    config,
+    dump_module,
+    raw,
+)
