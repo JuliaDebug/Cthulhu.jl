@@ -104,7 +104,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
 end
 
 map_signature!(sig::TypedSyntaxNode, src::CodeInfo) =
-    map_signature!(sig, src.slotnames::Vector{Symbol}, src.slottypes::Vector{Any})
+    map_signature!(sig, src.slotnames::Vector{Symbol}, src.slottypes::Union{Nothing,Vector{Any}})
 
 function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottypes::Vector{Any})
     function argidentifier(arg)
