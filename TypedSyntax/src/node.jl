@@ -91,7 +91,8 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
     if kind(tparent) == K"return" && haschildren(tparent)
-        tparent.typ = only(children(tparent)).typ
+        childs = children(tparent)
+        tparent.typ = isempty(childs) ? Nothing : only(childs).typ
     end
     # Replace the entry in `mappings` to be the typed node
     i = get(node2ssa, parent, nothing)

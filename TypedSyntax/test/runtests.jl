@@ -528,6 +528,13 @@ include("test_module.jl")
         @test has_name_typ(child(sig, 2), :itr, Vector{Int})
     end
 
+    # Empty `return` (issue #458)
+    tsn = TypedSyntaxNode(TSN.f458, ())
+    @test tsn.typ === Nothing
+    sig, body = children(tsn)
+    @test kind(body) == K"return"
+    @test body.typ === Nothing
+
     # Counting arguments (needed for Cthulhu)
     # issue #397
     tsn = TypedSyntaxNode(TSN.f397, (typeof(view([1,2,3], 1:2)),))
