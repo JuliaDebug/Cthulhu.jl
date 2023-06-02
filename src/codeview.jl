@@ -154,7 +154,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     if isa(src, CodeInfo)
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
         src = copy(src)
-        src.ssavaluetypes = Base.mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
+        src.ssavaluetypes = mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
         src.rettype = ignorelimited(src.rettype)
 
         if src.slotnames !== nothing
@@ -202,7 +202,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         Returns(nothing)
     end
     _postprinter = if isa(src, CodeInfo) && !isnothing(pc2effects)
-        @static if hasmethod(IRShow.default_expr_type_printer, (IO,))
+        @static if VERSION ≥ v"1.9-"
             function (io::IO; idx::Int, @nospecialize(kws...))
                 __postprinter(io; idx, kws...)
                 local effects = get(pc2effects, idx, nothing)
@@ -225,7 +225,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     postprinter = if isa(src, CodeInfo) && !isnothing(pc2remarks)
         sort!(pc2remarks)
         unique!(pc2remarks) # abstract interpretation may have visited a same statement multiple times
-        @static if hasmethod(IRShow.default_expr_type_printer, (IO,))
+        @static if VERSION ≥ v"1.9-"
             function (io::IO; idx::Int, @nospecialize(kws...))
                 _postprinter(io; idx, kws...)
                 for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
@@ -253,7 +253,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     if iswarn
         print(lambda_io, "Body")
-        @static if hasmethod(InteractiveUtils.warntype_type_printer, (IO,))
+        @static if VERSION ≥ v"1.9-"
             # https://github.com/JuliaLang/julia/pull/46574
             InteractiveUtils.warntype_type_printer(lambda_io; type=rettype, used=true)
         else
@@ -289,7 +289,7 @@ function show_variables(io, src, slotnames)
     for i = 1:length(slotnames)
         print(io, "  ", slotnames[i])
         if isa(slottypes, Vector{Any})
-            @static if hasmethod(InteractiveUtils.warntype_type_printer, (IO,))
+            @static if VERSION ≥ v"1.9-"
                 # https://github.com/JuliaLang/julia/pull/46574
                 InteractiveUtils.warntype_type_printer(io; type=slottypes[i], used=true)
             else

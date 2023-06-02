@@ -113,23 +113,23 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
 
     if isnothing(result)
         return thisinfo
-    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, CC.ConcreteResult)
+    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConcreteCallInfo(mici, argtypes)
-    elseif (@static VERSION ≥ v"1.9.0-DEV.409" && true) && isa(result, CC.ConstPropResult)
+    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConstPropResult)
         result = result.result
         linfo = result.linfo
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-    elseif (@static isdefined(CC, :SemiConcreteResult) && true) && isa(result, CC.SemiConcreteResult)
+    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.SemiConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return SemiConcreteCallInfo(mici, result.ir)
-    elseif (@static isdefined(CC, :ConstResult) && true) && isa(result, CC.ConstResult)
+    elseif (@static !(VERSION ≥ v"1.9-") && true) && isa(result, CC.ConstResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
@@ -180,32 +180,24 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         return mapany(enumerate(info.results)) do (i, result)
             process_const_info(interp, infos[i], argtypes, rt, result, optimize)
         end
-    elseif (@static isdefined(CC, :InvokeCallInfo) && true) && isa(info, CC.InvokeCallInfo)
+    elseif isa(info, CC.InvokeCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        @static if hasfield(CC.InvokeCallInfo, :result)
-            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
-            info = InvokeCallInfo(innerinfo)
-        else
-            info = InvokeCallInfo(thisinfo)
-        end
+        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+        info = InvokeCallInfo(innerinfo)
         return Any[info]
-    elseif (@static isdefined(CC, :OpaqueClosureCallInfo) && true) && isa(info, CC.OpaqueClosureCallInfo)
+    elseif isa(info, CC.OpaqueClosureCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        @static if hasfield(CC.OpaqueClosureCallInfo, :result)
-            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
-            info = OCCallInfo(innerinfo)
-        else
-            info = OCCallInfo(thisinfo)
-        end
+        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+        info = OCCallInfo(innerinfo)
         return Any[info]
-    elseif (@static isdefined(CC, :OpaqueClosureCreateInfo) && true) && isa(info, CC.OpaqueClosureCreateInfo)
+    elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
-    elseif (@static isdefined(CC, :FinalizerInfo) && true) && isa(info, CC.FinalizerInfo)
+    elseif (@static VERSION ≥ v"1.9-" && true) && isa(info, CC.FinalizerInfo)
         # TODO: Add ability to descend into finalizers at creation site
         return []
     elseif isa(info, CC.ReturnTypeCallInfo)
@@ -254,11 +246,7 @@ end
 
 function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::CthulhuConfig)
     if optimize && config.dead_code_elimination
-        @static if VERSION >= v"1.7.0-DEV.705"
-            argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
-        else
-            argtypes = CC.matching_cache_argtypes(mi, nothing)[1]
-        end
+        argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
         @static if VERSION ≥ v"1.10.0-DEV.870"

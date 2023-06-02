@@ -1,11 +1,8 @@
-# Cthulhu.jl <a href="https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster"><img src="https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg"></a>
+# Cthulhu.jl <a href="https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster"><img src="https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg"></a> <a href="https://codecov.io/gh/JuliaDebug/Cthulhu.jl"><img src="https://codecov.io/github/JuliaDebug/Cthulhu.jl/coverage.svg"></a>
 
 *The slow descent into madness*
 
-<!-- [![Build Status](https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg)](https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster) -->
-<!-- [![Codecov](https://codecov.io/github/JuliaDebug/Cthulhu.jl/coverage.svg)](https://codecov.io/gh/JuliaDebug/Cthulhu.jl) -->
-
-:warning: The latest stable version is only compatible with Julia v1.7 and higher.
+:warning: The latest stable version is only compatible with Julia v1.8.5 and higher.
 
 Cthulhu can help you debug type inference issues by recursively showing the
 type-inferred code until you find the exact point where inference gave up,
