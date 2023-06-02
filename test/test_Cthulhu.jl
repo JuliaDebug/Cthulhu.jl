@@ -973,7 +973,7 @@ end
     end
 end
 
-@testset "Bare-bones MIs" begin
+@static VERSION ≥ v"1.9-" && @testset "Bare-bones MIs" begin
     # Get IR for a function, wrap it in a minimal methodinstance
     (ir, rt) = only(Base.code_ircode(sqrt, (Float64,)))
     mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
