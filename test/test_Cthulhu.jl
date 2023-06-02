@@ -298,7 +298,7 @@ let # check the performance benefit of semi concrete evaluation
         out
     end
 end
-@testset "SemiConcreteResult" begin
+@static VERSION ≥ v"1.9-" && @testset "SemiConcreteResult" begin
     # constant prop' on all the splits
     let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
             semi_concrete_eval(42, x)
@@ -475,7 +475,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         @test Cthulhu.get_rt(info) === rt
         buf = IOBuffer()
         show(buf, callsite)
-        @test isa(inner, Cthulhu.SemiConcreteCallInfo)
+        @static VERSION ≥ v"1.9-" && @test isa(inner, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
     end
 end
@@ -941,7 +941,7 @@ function effects_dced(x)
     n = Core.arraysize(a)
     return a, n
 end
-@testset "per-statement effects" begin
+@static VERSION ≥ v"1.9-" && @testset "per-statement effects" begin
     interp, mi = Cthulhu.mkinterp(effects_dced, (Int,));
     src = interp.unopt[mi].src
     i1 = only(findall(iscall((src, isa)), src.code))

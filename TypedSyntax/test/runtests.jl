@@ -522,9 +522,11 @@ include("test_module.jl")
     @test node.typ === Type{Float64}
 
     # UnionAll in signature (issue #409)
-    tsn = TypedSyntaxNode(Core.kwcall, (NamedTuple, typeof(issorted), Vector{Int}))
-    sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :itr, Vector{Int})
+    @static if isdefined(Core, :kwcall)
+        tsn = TypedSyntaxNode(Core.kwcall, (NamedTuple, typeof(issorted), Vector{Int}))
+        sig, body = children(tsn)
+        @test has_name_typ(child(sig, 2), :itr, Vector{Int})
+    end
 
     # Empty `return` (issue #458)
     tsn = TypedSyntaxNode(TSN.f458, ())

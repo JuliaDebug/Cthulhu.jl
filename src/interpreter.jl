@@ -1,7 +1,13 @@
 using .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
     CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue
-const CCCallInfo = CC.CallInfo
-const NoCallInfo = CC.NoCallInfo
+
+@static if VERSION ≥ v"1.9-"
+    const CCCallInfo = CC.CallInfo
+    const NoCallInfo = CC.NoCallInfo
+else
+    const CCCallInfo = Any
+    const NoCallInfo = Nothing
+end
 
 struct InferredSource
     src::CodeInfo
@@ -74,11 +80,13 @@ function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
+@static if VERSION ≥ v"1.9-"
 function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effects::Effects)
     key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
     pc2effects = get!(interp.effects, key, PC2Effects())
     pc2effects[sv.currpc] = CC.merge_effects(get!(pc2effects, sv.currpc, EFFECTS_TOTAL), effects)
     @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
+end
 end
 
 @static if VERSION ≤ v"1.10.0-DEV.221"
@@ -152,11 +160,20 @@ function create_cthulhu_source(@nospecialize(x), effects::Effects)
     return OptimizedSource(ir, x.src, x.src.inlineable, effects)
 end
 
+@static if VERSION ≥ v"1.9-"
 function CC.transform_result_for_cache(interp::CthulhuInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     return create_cthulhu_source(result.src, result.ipo_effects)
 end
+else
+function CC.transform_result_for_cache(interp::CthulhuInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result),
+    ipo_effects::CC.Effects)
+    return create_cthulhu_source(inferred_result, ipo_effects)
+end
+end
 
+@static if VERSION ≥ v"1.9-"
 function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, OptimizedSource)
@@ -171,6 +188,22 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
     end
     return nothing
 end
+else
+function CC.inlining_policy(interp::CthulhuInterpreter,
+    @nospecialize(src), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+    @assert isa(src, OptimizedSource) || isnothing(src)
+    if isa(src, OptimizedSource)
+        if CC.is_stmt_inline(stmt_flag) || src.isinlineable
+            return src.ir
+        end
+    else
+        # the default inlining policy may try additional effor to find the source in a local cache
+        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
+            nothing, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+    end
+    return nothing
+end
+end
 
 @static if isdefined(CC, :AbsIntState)
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
@@ -184,7 +217,7 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                     src.min_world, src.max_world)
 end
-else
+elseif VERSION ≥ v"1.9-"
 function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
     inferred = @atomic :monotonic code.inferred
     inferred === nothing && return nothing
