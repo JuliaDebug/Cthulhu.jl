@@ -248,7 +248,11 @@ end
 function show_callinfo(limiter, mici::MICallInfo)
     mi = mici.mi
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
-    name = (mi.def::Method).name
+    if !isa(mi.def, Method)
+        name = ":toplevel"
+    else
+        name = mi.def.name
+    end
     rt = get_rt(mici)
     __show_limited(limiter, name, tt, rt, get_effects(mici))
 end

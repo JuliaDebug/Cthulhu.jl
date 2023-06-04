@@ -468,7 +468,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     ioctx = IOContext(iostream,
                         :color => true,
                         :displaysize => displaysize(iostream), # displaysize doesn't propagate otherwise
-                        :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
+                        :SOURCE_SLOTNAMES => codeinf === nothing ? false : Base.sourceinfo_slotnames(codeinf),
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
                         cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;

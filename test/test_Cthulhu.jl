@@ -956,4 +956,28 @@ end
     @test haskey(pc2effects, i4)
 end
 
+@static VERSION ≥ v"1.9-" && @testset "Bare-bones MIs" begin
+    # Get IR for a function, wrap it in a minimal methodinstance
+    (ir, rt) = only(Base.code_ircode(sqrt, (Float64,)))
+    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    mi.specTypes = Tuple{map(Core.Compiler.widenconst, ir.argtypes)...}
+    # Just state that the definition of this MI is the module it was defined in
+    mi.def = @__MODULE__
+
+    # Test that `treelist()` works with this `mi`
+    root = Cthulhu.treelist(mi)
+    @test Cthulhu.count_open_leaves(root) == 1
+    @test root.data.callstr == "sqrt(::Float64)"
+    @test isempty(root.children)
+
+    # Create an MICallInfo for this `mi`, ensure it works with `show_callinfo()`
+    callinfo = Cthulhu.MICallInfo(mi, rt, Core.Compiler.Effects())
+    io = IOBuffer()
+    Cthulhu.show_callinfo(io, callinfo)
+
+    # Here, since we have purposefully not filled out the definition of `def`,
+    # the `callinfo()` will say `:toplevel` rather than `sqrt`:
+    @test String(take!(io)) == ":toplevel(::Float64)::Float64"
+end
+
 end # module test_Cthulhu
