@@ -459,7 +459,7 @@ include("test_module.jl")
     src = tsn.typedsource
     @test Symbol("kwargs...") ∈ src.slotnames
     sig, body = children(tsn)
-    @test child(body, 2, 1).typ <: Base.Pairs
+    @test child(body, 2, 1).typ <: Base.Iterators.Pairs
 
     # quoted symbols that could be confused for function definition
     tsn = TypedSyntaxNode(TSN.isexpreq, (Expr,))

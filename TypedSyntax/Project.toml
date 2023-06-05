@@ -1,7 +1,7 @@
 name = "TypedSyntax"
 uuid = "d265eb64-f81a-44ad-a842-4247ee1503de"
 authors = ["Tim Holy <tim.holy@gmail.com> and contributors"]
-version = "1.1.11"
+version = "1.2.0"
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
@@ -10,7 +10,7 @@ JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 [compat]
 CodeTracking = "1.3"
 JuliaSyntax = "0.4"
-julia = "1"
+julia = "1.6"
 
 [extras]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
