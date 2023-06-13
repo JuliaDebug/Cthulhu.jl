@@ -29,10 +29,11 @@ end
 
 ## Custom printing via `printstyled`
 
-function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
-                          type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
-                          with_linenumber::Bool=true,
-                          idxend = last_byte(rootnode))
+function _printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
+                    type_hints=nothing, warn_diagnostics=nothing;
+                    type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
+                    with_linenumber::Bool=true,
+                    idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
@@ -43,19 +44,29 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
         type_annotate, pre, pre2, post = type_annotation_mode(sig, rt; type_annotations, hide_type_stable)
-        position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd)
-        type_annotate && show_annotation(io, rt, post; iswarn)
+        position = show_src_expr(io, sig, position, pre, pre2, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
+        type_annotate && show_annotation(io, rt, post, rootnode.source, position, type_hints, warn_diagnostics; iswarn)
         rootnode = body
     end
-    position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
+    position = show_src_expr(io, rootnode, position, "", "", type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
     catchup(io, rootnode, position, nd, idxend+1)   # finish the node
     return nothing
+end
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
+                        type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
+                        with_linenumber::Bool=true,
+                        idxend = last_byte(rootnode), vscode_integration=false)
+    _printstyled(io, rootnode; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
 ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
-function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
+function _print(io::IO, x, source_node, position, type_hints::Nothing)
+    print(io, x)
+end
+
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String, type_hints, warn_diagnostics; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
     if haschildren(node)
@@ -64,13 +75,13 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
             position = catchup(io, first(children(node)), position, nd)
         end
     end
-    print(io, pre)
+    _print(io, pre, node.source, position, type_hints)
     for (i, child) in enumerate(children(node))
-        i == 2 && print(io, pre2)
+        i == 2 && _print(io, pre2, node.source, position, type_hints)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
-        position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
-        ctype_annotate && show_annotation(io, cT, cpost; iswarn)
+        position = show_src_expr(io, child, position, cpre, cpre2, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
+        ctype_annotate && show_annotation(io, cT, cpost, node.source, position, type_hints, warn_diagnostics; iswarn)
     end
     return catchup(io, node, position, nd, _lastidx+1)
 end
@@ -100,7 +111,7 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
+function show_annotation(io, @nospecialize(T), post, source_node, position, type_hints::Nothing, warn_diagnostics::Nothing; iswarn::Bool)
     print(io, post)
     if iswarn
         color = !is_type_unstable(T) ? :cyan :

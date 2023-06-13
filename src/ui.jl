@@ -71,7 +71,7 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                             print(limiter, "runtime ")
                         end
                     end
-                    printstyled(limiter, node; iswarn, hide_type_stable, with_linenumber=false)
+                    printstyled(limiter, node; iswarn, hide_type_stable, with_linenumber=false, vscode_integration=false)
                 end))
             replace(str, r"\n *" => s" ")  # in case of multiline code, issue #428
         end
