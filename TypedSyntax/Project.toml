@@ -28,4 +28,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VSCodeServer = "9f5989ce-84fe-42d4-91ec-6a7a8d53ed0f"
 
 [targets]
-test = ["Dates", "InteractiveUtils", "Logging", "MethodAnalysis", "ProgressMeter", "Test", "VSCodeServer"]
+test = ["Dates", "InteractiveUtils", "Logging", "MethodAnalysis", "ProgressMeter", "Test"]
