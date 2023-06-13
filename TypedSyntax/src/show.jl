@@ -53,10 +53,23 @@ function _printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
     return nothing
 end
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
-                        type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
-                        with_linenumber::Bool=true,
-                        idxend = last_byte(rootnode), vscode_integration=false)
-    _printstyled(io, rootnode; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
+                          type_annotations::Bool=true, iswarn::Bool=true, 
+                          hide_type_stable::Bool=true, with_linenumber::Bool=true,
+                          idxend = last_byte(rootnode), vscode_integration=true)
+    if vscode_integration && isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
+        type_hints = Dict{String, Vector{InlayHint}}()
+        warn_diagnostics = WarnUnstable[]
+
+        _printstyled(io, rootnode, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
+
+        display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
+        if isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+            display(Main.VSCodeServer.InlineDisplay(false), type_hints)
+        end
+    else
+        _printstyled(io, rootnode; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
+    end
+    return nothing
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
