@@ -59,6 +59,13 @@ vaparam(a::AbstractArray{T,N}, I::NTuple{N,Any}) where {T,N} = N
     return T(Int32(x) + Int32(y))
 end
 
+function val(::Val{N}) where N
+    if N == 2
+        return 4
+    else
+        return 3
+    end
+end
 
 unnamedargs(::Type{<:AbstractMatrix{T}}, ::Type{Int}, c=1; a=1) where T<:Real = a
 unnamedargs2(::Type{Matrix}, op::Symbol; padding::Bool=false) = padding

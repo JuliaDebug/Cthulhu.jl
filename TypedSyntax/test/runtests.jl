@@ -434,6 +434,11 @@ include("test_module.jl")
     @test child(sig, 3, 1).typ === Symbol
     @test has_name_notyp(child(sig, 4, 1, 1, 1), :padding)
 
+    # Values as static_parameters
+    tsn = TypedSyntaxNode(TSN.val, (Val{4},))
+    sig, body = children(tsn)
+    @test TypedSyntax.child(body, 1, 1, 1).typ == Core.Const(4)
+
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
     sig, body = children(tsn)
