@@ -75,9 +75,11 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
 
         _printstyled(io, rootnode, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
 
-        display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
-        if isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
-            display(Main.VSCodeServer.InlineDisplay(false), type_hints)
+        if isdefined(Main.VSCodeServer, :InlineDisplay) # makes testing easier
+            display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
+            if isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+                display(Main.VSCodeServer.InlineDisplay(false), type_hints)
+            end
         end
     else
         _printstyled(io, rootnode; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)

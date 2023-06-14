@@ -1,8 +1,3 @@
-module VSCodeExt
-
-using TypedSyntax: gettyp, ndigits_linenumbers, get_function_def, first_byte, type_annotation_mode, catchup, show_annotation, last_byte, is_function_def, children, MaybeTypedSyntaxNode, haschildren, source_line, source_location, is_type_unstable, is_small_union_or_tunion, _printstyled, WarnUnstable, InlayHint
-import TypedSyntax: show_annotation, _print
-
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", warn_diagnostics::AbstractVector{WarnUnstable})
     return (
         source = "Cthulhu",
@@ -20,7 +15,6 @@ const InlayHintKinds = (
     Type = 1,
     Parameter = 2
 )
-
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
     if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
         return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
@@ -58,5 +52,4 @@ function _print(io::IO, x, source_node, position, type_hints)
     if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
         add_hint!(type_hints, x, source_node, position)
     end
-end
 end

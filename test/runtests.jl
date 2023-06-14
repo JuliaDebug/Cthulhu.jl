@@ -27,8 +27,8 @@ using Test, PerformanceTestTools
     end
 end
 
+module VSCodeServer end
 @testset "runtests.jl VSCodeExt" begin
-    module VSCodeServer end
     @testset "test_Cthulhu.jl" begin
         include("test_Cthulhu.jl")
     end
