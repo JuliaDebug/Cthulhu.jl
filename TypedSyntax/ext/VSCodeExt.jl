@@ -1,13 +1,8 @@
 module VSCodeExt
 
-using TypedSyntax: gettyp, ndigits_linenumbers, get_function_def, first_byte, type_annotation_mode, catchup, show_annotation, last_byte, is_function_def, children, MaybeTypedSyntaxNode, haschildren, source_line, source_location, is_type_unstable, is_small_union_or_tunion, _printstyled
+using TypedSyntax: gettyp, ndigits_linenumbers, get_function_def, first_byte, type_annotation_mode, catchup, show_annotation, last_byte, is_function_def, children, MaybeTypedSyntaxNode, haschildren, source_line, source_location, is_type_unstable, is_small_union_or_tunion, _printstyled, WarnUnstable, InlayHint
 import TypedSyntax: show_annotation, _print
 
-struct WarnUnstable
-    path::String
-    range::Union{Int, Tuple{Tuple{Int, Int}, Tuple{Int, Int}}}
-    severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
-end
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", warn_diagnostics::AbstractVector{WarnUnstable})
     return (
         source = "Cthulhu",
@@ -25,12 +20,6 @@ const InlayHintKinds = (
     Type = 1,
     Parameter = 2
 )
-struct InlayHint
-    line::Int
-    column::Int
-    label::String
-    kind::Union{Nothing, Int}
-end
 if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
     function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
         return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)

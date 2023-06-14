@@ -1,5 +1,18 @@
 ## Extensions of JuliaSyntax to cover TypedSyntaxNode
 
+# Structs used when using VSCode
+struct WarnUnstable
+    path::String
+    range::Union{Int, Tuple{Tuple{Int, Int}, Tuple{Int, Int}}}
+    severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
+end
+struct InlayHint
+    line::Int
+    column::Int
+    label::String
+    kind::Union{Nothing, Int}
+end
+
 function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_offsets=false)
     println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ type")
     JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
