@@ -9,7 +9,7 @@ function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", war
         items = map(warn_diagnostics) do warn_info
             return (; msg = "Unstable Type",
                 path = warn_info.path,
-                range = warn_info.range,
+                line = warn_info.line,
                 severity = warn_info.severity
             )
         end,
@@ -43,7 +43,7 @@ function show_annotation(io, @nospecialize(T), post, source_node, position, type
 
         file_path = source_node.filename
         line, column = source_location(source_node, position)
-        push!(warn_diagnostics, WarnUnstable(file_path, ((line, column-1), (line, column)), is_small_union_or_tunion(T) ? 2 : 1))
+        push!(warn_diagnostics, WarnUnstable(file_path, line, is_small_union_or_tunion(T) ? 2 : 1))
         add_hint!(type_hints, string(post, "::", T), source_node, position; kind=nothing)
     else
         printstyled(io, "::", T; color=:cyan)

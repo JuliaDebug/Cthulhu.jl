@@ -3,7 +3,7 @@
 # Structs used when using VSCode
 struct WarnUnstable
     path::String
-    range::Union{Int, Tuple{Tuple{Int, Int}, Tuple{Int, Int}}}
+    line::Int
     severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
 end
 struct InlayHint
