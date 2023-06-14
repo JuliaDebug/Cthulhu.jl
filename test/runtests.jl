@@ -28,6 +28,8 @@ using Test, PerformanceTestTools
 end
 
 module VSCodeServer end
+module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test
+using Test, PerformanceTestTools
 @testset "runtests.jl VSCodeExt" begin
     @testset "test_Cthulhu.jl" begin
         include("test_Cthulhu.jl")
@@ -54,4 +56,4 @@ module VSCodeServer end
         include("test_AbstractInterpreter.jl")
     end
 end
-
+end
