@@ -20,8 +20,9 @@ const InlayHintKinds = (
     Type = 1,
     Parameter = 2
 )
-if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
-    function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
+
+function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
+    if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
         return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
     end
 end
@@ -54,7 +55,7 @@ end
 
 function _print(io::IO, x, source_node, position, type_hints)
     print(io, x)
-    if !isempty(x)
+    if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
         add_hint!(type_hints, x, source_node, position)
     end
 end
