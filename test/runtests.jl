@@ -27,7 +27,18 @@ using Test, PerformanceTestTools
     end
 end
 
-module VSCodeServer end
+module VSCodeServer
+    struct InlineDisplay
+        is_repl::Bool
+    end
+    const INLAY_HINTS_ENABLED = Ref(true)
+
+    displayed_output = IOBuffer()
+
+    function Base.display(d::InlineDisplay, x)
+        println(displayed_output, x)
+    end
+end
 module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test
 using Test, PerformanceTestTools
 @testset "runtests.jl VSCodeExt" begin

@@ -223,4 +223,10 @@ const T426 = Dict{Type{<:Dates.Period}, Bool}(
 # Issue #458
 f458() = return
 
+function fVSCode(x)
+    y = x + 1
+    z = 2 * y
+    return z + a
+end
+
 end

@@ -635,7 +635,18 @@ if parse(Bool, get(ENV, "CI", "false"))
     include("exhaustive.jl")
 end
 
-module VSCodeServer end
+module VSCodeServer
+    struct InlineDisplay
+        is_repl::Bool
+    end
+    const INLAY_HINTS_ENABLED = Ref(true)
+
+    displayed_output = IOBuffer()
+
+    function Base.display(d::InlineDisplay, x)
+        println(displayed_output, x)
+    end
+end
 @testset "TypedSyntax.jl VSCodeExt" begin
     specializations(m::Method) = isdefined(Base, :specializations) ? Base.specializations(m) : m.specializations
 
@@ -1253,4 +1264,12 @@ module VSCodeServer end
     # issue #435
     tsnc = copy(tsn)
     @test isa(tsnc, TypedSyntaxNode)
-end
+
+    # VSCode
+    tsn = TypedSyntaxNode(TSN.fVSCode, (Float64,))
+    printstyled(tsn)
+    @test occursin(r"""TypedSyntax.WarnUnstable\[TypedSyntax.WarnUnstable\(\\"[^"]+\\", 1, 1\), TypedSyntax.WarnUnstable\(\\"[^"]+\\", 4, 1\), TypedSyntax.WarnUnstable\(\\"[^"]+\\", 4, 1\)\]\nDict\{String, Vector\{TypedSyntax.InlayHint\}\}\(\\"[^"]+\\" => \[TypedSyntax.InlayHint\(0, 13, \\"::Any\\", nothing\), TypedSyntax.InlayHint\(3, 11, \\"\(\\", 1\), TypedSyntax.InlayHint\(3, 16, \\"::Any\\", nothing\), TypedSyntax.InlayHint\(3, 20, \\"\)::Any\\", nothing\)\]\)\n""", String(take!(VSCodeServer.displayed_output)))
+
+    printstyled(tsn; hide_type_stable=false)
+    @test occursin(r"""TypedSyntax.WarnUnstable\[TypedSyntax.WarnUnstable\(\\"[^"]+\\", 1, 1\), TypedSyntax.WarnUnstable\(\\"[^"]+\\", 4, 1\), TypedSyntax.WarnUnstable\(\\"[^"]+\\", 4, 1\)\]\nDict{String, Vector\{TypedSyntax.InlayHint\}\}\(\\"[^"]+\\" => \[TypedSyntax.InlayHint\(0, 12, \"::Float64\", 1\), TypedSyntax.InlayHint\(0, 13, \"::Any\", nothing\), TypedSyntax.InlayHint\(1, 5, \"::Float64\", 1\), TypedSyntax.InlayHint\(1, 8, \"\(\", 1\), TypedSyntax.InlayHint\(1, 9, \"::Float64\", 1\), TypedSyntax.InlayHint\(1, 13, \"\)::Float64\", 1\), TypedSyntax.InlayHint\(2, 5, \"::Float64\", 1\), TypedSyntax.InlayHint\(2, 8, \"\(\", 1\), TypedSyntax.InlayHint\(2, 13, \"::Float64\", 1\), TypedSyntax.InlayHint\(2, 13, \"\)::Float64\", 1\), TypedSyntax.InlayHint\(3, 11, \"\(\", 1\), TypedSyntax.InlayHint\(3, 12, \"::Float64\", 1\), TypedSyntax.InlayHint\(3, 16, \"::Any\", nothing\), TypedSyntax.InlayHint\(3, 20, \"::Float64\", 1\), TypedSyntax.InlayHint\(3, 20, \"\)::Any\", nothing\)\]\)\n""", String(take!(VSCodeServer.displayed_output)))
+end 
