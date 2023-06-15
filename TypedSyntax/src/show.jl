@@ -1,18 +1,5 @@
 ## Extensions of JuliaSyntax to cover TypedSyntaxNode
 
-# Structs used when using VSCode
-struct WarnUnstable
-    path::String
-    line::Int
-    severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
-end
-struct InlayHint
-    line::Int
-    column::Int
-    label::String
-    kind::Union{Nothing, Int}
-end
-
 function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_offsets=false)
     println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ type")
     JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
@@ -65,14 +52,13 @@ function _printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
     catchup(io, rootnode, position, nd, idxend+1)   # finish the node
     return nothing
 end
-function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode, 
+                          type_hints = Dict{String, Vector{InlayHint}}(), 
+                          warn_diagnostics = WarnUnstable[];
                           type_annotations::Bool=true, iswarn::Bool=true, 
                           hide_type_stable::Bool=true, with_linenumber::Bool=true,
                           idxend = last_byte(rootnode), vscode_integration=true)
-    if vscode_integration && isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
-        type_hints = Dict{String, Vector{InlayHint}}()
-        warn_diagnostics = WarnUnstable[]
-
+    if vscode_integration && isvscode()
         _printstyled(io, rootnode, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
 
         display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)

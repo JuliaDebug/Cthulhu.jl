@@ -1,3 +1,10 @@
+isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
+
+struct WarnUnstable
+    path::String
+    line::Int
+    severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
+end
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", warn_diagnostics::AbstractVector{WarnUnstable})
     return (
         source = "Cthulhu",
@@ -15,8 +22,14 @@ const InlayHintKinds = (
     Type = 1,
     Parameter = 2
 )
+struct InlayHint
+    line::Int
+    column::Int
+    label::String
+    kind::Union{Nothing, Int}
+end
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
-    if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+    if isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
         return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
     end
 end

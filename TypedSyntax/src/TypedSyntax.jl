@@ -11,7 +11,7 @@ using CodeTracking
 export TypedSyntaxNode
 
 include("node.jl")
-include("show.jl")
 include("vscode.jl")
+include("show.jl")
 
 end
