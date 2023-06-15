@@ -31,24 +31,21 @@ function add_hint!(type_hints, message, source_node, position; kind=InlayHintKin
 end
 
 function show_annotation(io, @nospecialize(T), post, source_node, position, type_hints, warn_diagnostics; iswarn::Bool)
-    print(io, post)
-    if iswarn && is_type_unstable(T)
-        color = is_small_union_or_tunion(T) ? :yellow : :red
-        printstyled(io, "::", T; color)
+    show_annotation(io, T, post, source_node, position, nothing, nothing; iswarn)
 
+    if iswarn && is_type_unstable(T)
         file_path = source_node.filename
         line, column = source_location(source_node, position)
         push!(warn_diagnostics, WarnUnstable(file_path, line, is_small_union_or_tunion(T) ? 2 : 1))
         add_hint!(type_hints, string(post, "::", T), source_node, position; kind=nothing)
-    else
-        printstyled(io, "::", T; color=:cyan)
-        
+    else        
         add_hint!(type_hints, string(post, "::", T), source_node, position; kind=InlayHintKinds.Type)
     end
 end
 
 function _print(io::IO, x, source_node, position, type_hints)
-    print(io, x)
+    _print(io, x, source_node, position, nothing)
+    
     if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
         add_hint!(type_hints, x, source_node, position)
     end
