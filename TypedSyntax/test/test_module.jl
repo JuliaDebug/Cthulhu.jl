@@ -224,9 +224,9 @@ const T426 = Dict{Type{<:Dates.Period}, Bool}(
 f458() = return
 
 function fVSCode(x)
-    y = x + 1
-    z = 2 * y
-    return z + a
+    z = x + 1
+    y = 2 * z
+    return y + (x > 0 ? -1 : 1.0)
 end
 
 end
