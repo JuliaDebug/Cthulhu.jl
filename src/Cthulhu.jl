@@ -9,6 +9,7 @@ using REPL: REPL, AbstractTerminal
 using JuliaSyntax
 using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
+using TypedSyntax: InlayHint, WarnUnstable
 using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
@@ -471,7 +472,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :SOURCE_SLOTNAMES => codeinf === nothing ? false : Base.sourceinfo_slotnames(codeinf),
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
-                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;
+                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi, callsites;
                                       iswarn, hide_type_stable,
                                       pc2remarks, pc2effects,
                                       inline_cost, type_annotations, annotate_source,
@@ -488,7 +489,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 lambda_io = IOContext(iostream,
                     :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
                     :with_effects => with_effects)
-                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
+                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi, callsites;
                               iswarn, hide_type_stable,
                               pc2remarks, pc2effects,
                               inline_cost, type_annotations, annotate_source,
