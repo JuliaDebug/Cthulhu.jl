@@ -27,7 +27,7 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool, hide_inlay_types_vscode::Bool, hide_warn_diagnostics_vscode::Bool,
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
                      custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
     options = build_options(callsites, with_effects, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")

@@ -508,7 +508,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         shown_callsites = annotate_source ? sourcenodes : callsites
-        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, custom_toggles; menu_options...)
+        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
         usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
