@@ -72,7 +72,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
     end
     return nothing
 end
-Base.printstyled(rootnode::MaybeTypedSyntaxNode, type_hints = Dict{String, Vector{InlayHint}}(), warn_diagnostics = WarnUnstable[]; kwargs...) = printstyled(stdout, rootnode, type_hints, warn_diagnostics; kwargs...)
+Base.printstyled(rootnode::MaybeTypedSyntaxNode, args...; kwargs...) = printstyled(stdout, rootnode, args...; kwargs...)
 
 ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
