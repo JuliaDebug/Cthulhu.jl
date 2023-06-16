@@ -9,7 +9,6 @@ using REPL: REPL, AbstractTerminal
 using JuliaSyntax
 using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
-using TypedSyntax: InlayHint, WarnUnstable
 using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
@@ -37,6 +36,8 @@ Base.@kwdef mutable struct CthulhuConfig
     inline_cost::Bool = false
     type_annotations::Bool = true
     annotate_source::Bool = true   # overrides optimize, although the current setting is preserved
+    hide_inlay_types_vscode::Bool = false
+    hide_warn_diagnostics_vscode::Bool = false
 end
 
 """
@@ -64,6 +65,8 @@ end
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 - `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
+- `hide_inlay_types_vscode::Bool` Initial state of "" toggle. Defaults to `false`
+- `hide_warn_diagnostics_vscode::Bool` Initial state of "" toggle. Defaults to `false`
 """
 const CONFIG = CthulhuConfig()
 
@@ -386,6 +389,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
     annotate_source::Bool                    = CONFIG.annotate_source,               # default is true
+    hide_inlay_types_vscode::Bool            = CONFIG.hide_inlay_types_vscode,       # defulat is false
+    hide_warn_diagnostics_vscode::Bool       = CONFIG.hide_warn_diagnostics_vscode,  # defulat is false
     )
 
     if isnothing(hide_type_stable)
@@ -407,7 +412,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         do_typeinf!(new_interp, new_mi)
         _descend(term, new_interp, new_mi;
                  debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
-                 with_effects, inline_cost, type_annotations, annotate_source)
+                 with_effects, inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode)
     end
     custom_toggles = Cthulhu.custom_toggles(interp)
     if !(custom_toggles isa Vector{CustomToggle})
@@ -475,7 +480,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi, callsites;
                                       iswarn, hide_type_stable,
                                       pc2remarks, pc2effects,
-                                      inline_cost, type_annotations, annotate_source,
+                                      inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
                                       interp)
                     end
                 end
@@ -492,7 +497,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi, callsites;
                               iswarn, hide_type_stable,
                               pc2remarks, pc2effects,
-                              inline_cost, type_annotations, annotate_source,
+                              inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
                               interp)
             end
             view_cmd = cthulhu_typed
@@ -503,8 +508,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         shown_callsites = annotate_source ? sourcenodes : callsites
-        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
-        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
+        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, custom_toggles; menu_options...)
+        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -593,7 +598,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                      override = get_override(info), debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, with_effects, inline_cost, type_annotations, annotate_source)
+                     remarks, with_effects, inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -601,6 +606,16 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             with_effects ⊻= true
         elseif toggle === :hide_type_stable
             hide_type_stable ⊻= true
+        elseif toggle === :hide_inlay_types_vscode
+            hide_inlay_types_vscode ⊻= true
+            if TypedSyntax.inlay_hints_available()
+                display(Main.VSCodeServer.InlineDisplay(false),  Dict{String, Vector{TypedSyntax.InlayHint}}())
+            end
+        elseif toggle === :hide_warn_diagnostics_vscode
+            hide_warn_diagnostics_vscode ⊻= true
+            if TypedSyntax.isvscode()
+                display(Main.VSCodeServer.InlineDisplay(false), TypedSyntax.WarnUnstable[])
+            end
         elseif toggle === :optimize
             optimize ⊻= true
             if !is_cached(get_mi(curs))

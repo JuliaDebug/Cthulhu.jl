@@ -125,6 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     iswarn::Bool=false, hide_type_stable::Bool=false,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
+    hide_inlay_types_vscode::Bool=false, hide_warn_diagnostics_vscode::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -145,15 +146,17 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            type_hints = Dict{String, Vector{InlayHint}}()
-            warn_diagnostics = WarnUnstable[]
-            for callsite in callsites
-                if !isnothing(get_mi(callsite.info)) && !occursin(r"REPL.*", string(get_mi(callsite.info).def.file)) && (get_mi(callsite.info).def.module in (Main, mi.def.module) || get_mi(callsite.info).def.file == mi.def.file)
-                    tsn_call = TypedSyntax.TypedSyntaxNode(get_mi(callsite.info))
-                    printstyled(devnull, tsn_call, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, vscode_display=false)
+            type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
+            warn_diagnostics = TypedSyntax.WarnUnstable[]
+            if TypedSyntax.isvscode()
+                for callsite in callsites
+                    if !isnothing(get_mi(callsite.info)) && !occursin(r"REPL.*", string(get_mi(callsite.info).def.file)) && (get_mi(callsite.info).def.module in (Main, mi.def.module) || get_mi(callsite.info).def.file == mi.def.file)
+                        tsn_call = TypedSyntax.TypedSyntaxNode(get_mi(callsite.info))
+                        printstyled(devnull, tsn_call, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=hide_inlay_types_vscode, hide_warn_diagnostics_vscode=hide_warn_diagnostics_vscode, vscode_display=false)
+                    end
                 end
             end
-            printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend)
+            printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=hide_inlay_types_vscode, hide_warn_diagnostics_vscode=hide_warn_diagnostics_vscode)
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing

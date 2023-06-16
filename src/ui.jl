@@ -27,7 +27,7 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
+function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool, hide_inlay_types_vscode::Bool, hide_warn_diagnostics_vscode::Bool,
                      custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
     options = build_options(callsites, with_effects, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
@@ -92,7 +92,7 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
+function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
     custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
@@ -107,6 +107,14 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
         colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+    if TypedSyntax.inlay_hints_available()
+        print(ioctx, ", [",
+        colorize(hide_inlay_types_vscode, 'v'), "]scode: hide inlay types")
+    end
+    if TypedSyntax.isvscode()
+        print(ioctx, ", [",
+        colorize(hide_warn_diagnostics_vscode, 'V'), "]scode: hide warn diagnostics")
+    end
     if !annotate_source
         print(ioctx, ", [",
             colorize(optimize, 'o'), "]ptimize, [",
@@ -160,6 +168,8 @@ const TOGGLES = Dict(
     UInt32('b') => :bookmark,
     UInt32('R') => :revise,
     UInt32('E') => :edit,
+    UInt32('v') => :hide_inlay_types_vscode,
+    UInt32('V') => :hide_warn_diagnostics_vscode
 )
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)

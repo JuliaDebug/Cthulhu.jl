@@ -1,5 +1,5 @@
 isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
-
+inlay_hints_available() = isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
 struct WarnUnstable
     path::String
     line::Int
@@ -29,7 +29,7 @@ struct InlayHint
     kind::Union{Nothing, Int}
 end
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
-    if isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+    if inlay_hints_available()
         return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
     end
 end

@@ -57,13 +57,17 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
                           warn_diagnostics = WarnUnstable[];
                           type_annotations::Bool=true, iswarn::Bool=true, 
                           hide_type_stable::Bool=true, with_linenumber::Bool=true,
-                          idxend = last_byte(rootnode), vscode_integration=true, vscode_display=true)
-    if vscode_integration && isvscode()
+                          idxend = last_byte(rootnode), vscode_integration=true,
+                          hide_inlay_types_vscode::Bool=false, hide_warn_diagnostics_vscode::Bool=false,
+                          vscode_display=true)
+    if vscode_integration && isvscode() && !(hide_inlay_types_vscode && hide_warn_diagnostics_vscode)
         _printstyled(io, rootnode, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
 
         if vscode_display
-            display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
-            if isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+            if !hide_warn_diagnostics_vscode
+                display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
+            end
+            if inlay_hints_available() &&!hide_inlay_types_vscode
                 display(Main.VSCodeServer.InlineDisplay(false), type_hints)
             end
         end
