@@ -152,7 +152,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 for callsite in callsites
                     if !isnothing(get_mi(callsite.info)) && !occursin(r"REPL.*", string(get_mi(callsite.info).def.file)) && (get_mi(callsite.info).def.module in (Main, mi.def.module) || get_mi(callsite.info).def.file == mi.def.file)
                         tsn_call = TypedSyntax.TypedSyntaxNode(get_mi(callsite.info))
-                        printstyled(devnull, tsn_call, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, vscode_display=false)
+                        printstyled(devnull, tsn_call, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
                     end
                 end
             end
