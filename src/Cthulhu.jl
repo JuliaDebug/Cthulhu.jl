@@ -389,8 +389,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
     annotate_source::Bool                    = CONFIG.annotate_source,               # default is true
-    hide_inlay_types_vscode::Bool            = CONFIG.hide_inlay_types_vscode,       # defulat is false
-    hide_warn_diagnostics_vscode::Bool       = CONFIG.hide_warn_diagnostics_vscode,  # defulat is false
+    hide_inlay_types_vscode::Bool            = CONFIG.hide_inlay_types_vscode,       # default is false
+    hide_warn_diagnostics_vscode::Bool       = CONFIG.hide_warn_diagnostics_vscode,  # default is false
     )
 
     if isnothing(hide_type_stable)
