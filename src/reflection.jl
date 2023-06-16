@@ -18,6 +18,20 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
 end
 
+function find_callsites(interp::AbstractInterpreter, mi::Core.MethodInstance, optimize::Bool=true, annotate_source::Bool=false)
+    Cthulhu.do_typeinf!(interp, mi)
+    (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
+
+    src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
+    if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
+        infos = src.stmts.info
+    else
+        @assert length(src.code) == length(infos)
+    end
+
+    return find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
+end
+
 function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)

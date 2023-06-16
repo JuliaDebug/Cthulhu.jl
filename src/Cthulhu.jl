@@ -477,8 +477,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :SOURCE_SLOTNAMES => codeinf === nothing ? false : Base.sourceinfo_slotnames(codeinf),
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
-                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi, callsites;
-                                      iswarn, hide_type_stable,
+                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;
+                                      iswarn, optimize, hide_type_stable,
                                       pc2remarks, pc2effects,
                                       inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
                                       interp)
@@ -494,8 +494,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 lambda_io = IOContext(iostream,
                     :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
                     :with_effects => with_effects)
-                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi, callsites;
-                              iswarn, hide_type_stable,
+                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
+                              iswarn, optimize, hide_type_stable,
                               pc2remarks, pc2effects,
                               inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
                               interp)

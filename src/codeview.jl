@@ -101,11 +101,12 @@ is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(t
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance}=nothing;
-    hide_type_stable::Bool=false, inline_cost::Bool=false, interp::CthulhuInterpreter=CthulhuInterpreter())
+    hide_type_stable::Bool=false, inline_cost::Bool=false, optimize::Bool=false,
+    interp::CthulhuInterpreter=CthulhuInterpreter())
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, effects, mi; iswarn=true, hide_type_stable, inline_cost, interp)
+    cthulhu_typed(io, debuginfo, src, rt, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
     return nothing
 end
 
@@ -120,9 +121,8 @@ end
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance},
-    callsites=Callsite[];
-    iswarn::Bool=false, hide_type_stable::Bool=false,
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance};
+    iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     hide_inlay_types_vscode::Bool=false, hide_warn_diagnostics_vscode::Bool=false,
@@ -146,17 +146,20 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
-            warn_diagnostics = TypedSyntax.WarnUnstable[]
             if TypedSyntax.isvscode()
-                for callsite in callsites
-                    if !isnothing(get_mi(callsite.info)) && !occursin(r"REPL.*", string(get_mi(callsite.info).def.file)) && (get_mi(callsite.info).def.module in (Main, mi.def.module) || get_mi(callsite.info).def.file == mi.def.file)
-                        tsn_call = TypedSyntax.TypedSyntaxNode(get_mi(callsite.info))
-                        printstyled(devnull, tsn_call, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                    end
+                type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
+                warn_diagnostics = TypedSyntax.WarnUnstable[]
+
+                descend_into_callsites!(type_hints, warn_diagnostics, mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+                if !hide_warn_diagnostics_vscode
+                    display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
                 end
+                if TypedSyntax.inlay_hints_available() && !hide_inlay_types_vscode
+                    display(Main.VSCodeServer.InlineDisplay(false), type_hints)
+                end
+            else
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, idxend)
             end
-            printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, idxend)
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
@@ -288,6 +291,22 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
+function descend_into_callsites!(type_hints, warn_diagnostics, mi, called_mi=mi; iswarn::Bool=false, 
+    hide_type_stable::Bool=false, optimize::Bool=true,
+    type_annotations::Bool=true, annotate_source::Bool=false,
+    interp::AbstractInterpreter=CthulhuInterpreter())
+    if !isnothing(called_mi) && !occursin(r"REPL.*", string(called_mi.def.file)) && (called_mi.def.module in (Main, mi.def.module) || called_mi.def.file == mi.def.file)
+        tsn = TypedSyntax.TypedSyntaxNode(called_mi)
+        printstyled(devnull, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
+
+        for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
+            descend_into_callsites!(type_hints, warn_diagnostics, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+        end
+    end
+
+    return nothing
+end
+
 @static if VERSION >= v"1.10.0-DEV.552"
     using Core.Compiler: VarState
     sptypes(sparams) = VarState[VarState.(sparams, false)...]
@@ -364,7 +383,7 @@ function Base.show(
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, effects, b.mi; iswarn, hide_type_stable, b.interp)
+    cthulhu_typed(io, debuginfo, CI, rt, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
@@ -395,7 +414,7 @@ function InteractiveUtils.code_warntype(
     CI, rt = InteractiveUtils.code_typed(b; kw...)
     (; interp, mi) = b
     (; effects) = lookup(interp, mi, optimize)
-    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; hide_type_stable, b.interp)
+    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; optimize, hide_type_stable, b.interp)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
