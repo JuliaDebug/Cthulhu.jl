@@ -150,7 +150,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
                 warn_diagnostics = TypedSyntax.WarnUnstable[]
 
-                descend_into_callsites!(lambda_io, type_hints, warn_diagnostics, mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+                descend_into_callsites!(lambda_io, type_hints, warn_diagnostics, Set{Tuple{Symbol, Int}}(), mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
                 if !hide_warn_diagnostics_vscode
                     display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
                 end
@@ -291,17 +291,29 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-function descend_into_callsites!(io, type_hints, warn_diagnostics, mi, called_mi=mi; iswarn::Bool=false, 
+function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi=mi; iswarn::Bool=false, 
     hide_type_stable::Bool=false, optimize::Bool=true,
     type_annotations::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
-    if !isnothing(called_mi) && !occursin(r"REPL.*", string(called_mi.def.file)) && called_mi.def.file == mi.def.file
-        tsn = TypedSyntax.TypedSyntaxNode(called_mi)
+    if !isnothing(called_mi) && (mi == called_mi || !occursin(r"REPL.*", string(called_mi.def.file))) && called_mi.def.file == mi.def.file
+        if (called_mi.def.file, called_mi.def.line) in descended_mis
+            return nothing
+        end
+        tsn, _ = get_typed_sourcetext(called_mi)
         if !isnothing(tsn)
-            printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
+            sig, body = children(tsn)
+            # We empty the body when filling kwargs
+            istruncated = isempty(children(body))
+            idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+            if !istruncated # If method only fills in default arguments
+                printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
+                push!(descended_mis, (called_mi.def.file, called_mi.def.line))
+            elseif mi == called_mi
+                printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend, vscode_integration=false)
+            end
         end
         for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
-            descend_into_callsites!(devnull, type_hints, warn_diagnostics, mi, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+            descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
         end
     end
 
