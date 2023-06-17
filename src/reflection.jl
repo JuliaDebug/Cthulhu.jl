@@ -29,13 +29,6 @@ function find_callsites(interp::AbstractInterpreter, mi::Core.MethodInstance, op
         @assert length(src.code) == length(infos)
     end
 
-    if any(iszero, src.codelocs)
-        @warn "Some line information is missing, type-assignment may be incomplete"
-    end
-    if src.slottypes === nothing
-        @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
-    end
-
     return find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
 end
 
