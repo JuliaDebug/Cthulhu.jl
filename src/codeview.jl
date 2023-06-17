@@ -295,12 +295,13 @@ function descend_into_callsites!(type_hints, warn_diagnostics, mi, called_mi=mi;
     hide_type_stable::Bool=false, optimize::Bool=true,
     type_annotations::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
-    if !isnothing(called_mi) && !occursin(r"REPL.*", string(called_mi.def.file)) && (called_mi.def.module in (Main, mi.def.module) || called_mi.def.file == mi.def.file)
+    if !isnothing(called_mi) && !occursin(r"REPL.*", string(called_mi.def.file)) && called_mi.def.file == mi.def.file
         tsn = TypedSyntax.TypedSyntaxNode(called_mi)
-        printstyled(devnull, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-
+        if !isnothing(tsn)
+            printstyled(devnull, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
+        end
         for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
-            descend_into_callsites!(type_hints, warn_diagnostics, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+            descend_into_callsites!(type_hints, warn_diagnostics, mi, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
         end
     end
 
