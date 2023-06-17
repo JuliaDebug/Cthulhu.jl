@@ -313,7 +313,8 @@ function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis
             end
         end
         for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
-            descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, get_mi(callsite); iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+            callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+            descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
         end
     end
 
