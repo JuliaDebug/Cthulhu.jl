@@ -19,7 +19,6 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
 end
 
 function find_callsites(interp::AbstractInterpreter, mi::Core.MethodInstance, optimize::Bool=true, annotate_source::Bool=false)
-    Cthulhu.do_typeinf!(interp, mi)
     (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
 
     src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)

@@ -155,10 +155,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                     printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, vscode_integration=false)
                 else
                     printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                    push!(descended_mis, (mi.def.file, mi.def.line))                    
+                    push!(descended_mis, (mi.def.file, mi.def.line))
                 end
 
-                descend_into_callsites!(lambda_io, type_hints, warn_diagnostics, descended_mis, mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+                for callsite in find_callsites(interp, mi, optimize, annotate_source)[1]
+                    callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+                    descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+                end
+
                 if !hide_warn_diagnostics_vscode
                     display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
                 end
@@ -305,21 +309,19 @@ function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis
     interp::AbstractInterpreter=CthulhuInterpreter())
     if !isnothing(called_mi) && called_mi.def.file == mi.def.file && !occursin(r"REPL.*", string(called_mi.def.file)) 
     # This does prevent us from descending into f with code `map(f, x)`` but it would probably be quite slow to descend into every function in case it calls a function defined in the source file
-        if mi !== called_mi
-            if (called_mi.def.file, called_mi.def.line) in descended_mis
-                return nothing
-            end
+        if (called_mi.def.file, called_mi.def.line) in descended_mis
+            return nothing
+        end
 
-            tsn, _ = get_typed_sourcetext(called_mi; warn=false)
-            if !isnothing(tsn)
-                sig, body = children(tsn)
-                # We empty the body when filling kwargs
-                istruncated = isempty(children(body))
-                idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
-                if !istruncated # If method only fills in default arguments
-                    printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                    push!(descended_mis, (called_mi.def.file, called_mi.def.line))                    
-                end
+        tsn, _ = get_typed_sourcetext(called_mi; warn=false)
+        if !isnothing(tsn)
+            sig, body = children(tsn)
+            # We empty the body when filling kwargs
+            istruncated = isempty(children(body))
+            idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+            if !istruncated # If method only fills in default arguments
+                printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
+                push!(descended_mis, (called_mi.def.file, called_mi.def.line))
             end
         end
 

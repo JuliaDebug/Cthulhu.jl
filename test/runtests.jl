@@ -48,6 +48,7 @@ using Test, PerformanceTestTools
 
     @testset "test_codeview.jl" begin
         include("test_codeview.jl")
+        include("test_codeview_vscode.jl")
     end
 
     # TODO enable this test on nightly
