@@ -10,7 +10,7 @@ mutable struct TypedSyntaxData <: AbstractSyntaxData
 end
 TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd.source, src, sd.raw, sd.position, sd.val, typ, false)
 
-const TypedSyntaxNode = TreeNode{TypedSyntaxData}
+const TypedSyntaxNode = JuliaSyntax.TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 
 struct NoDefaultValue end
@@ -65,7 +65,7 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
-    trootnode = TreeNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, gettyp(node2ssa, rootnode, src)))
+    trootnode = TypedSyntaxNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, gettyp(node2ssa, rootnode, src)))
     addchildren!(trootnode, rootnode, src, node2ssa, symtyps, mappings)
     # Add argtyps to signature
     fnode = get_function_def(trootnode)
@@ -82,7 +82,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
         tparent.children = TypedSyntaxNode[]
     end
     for child in children(parent)
-        tnode = TreeNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, gettyp(node2ssa, child, src)))
+        tnode = TypedSyntaxNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, gettyp(node2ssa, child, src)))
         if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
             tnode.typ = get(symtyps, child, nothing)
         end
