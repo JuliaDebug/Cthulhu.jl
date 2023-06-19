@@ -40,7 +40,7 @@ module VSCodeServer
     end
 end
 module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test
-using Test, PerformanceTestTools
+using Test, PerformanceTestTools, ..VSCodeServer
 @testset "runtests.jl VSCodeExt" begin
     @testset "test_Cthulhu.jl" begin
         include("test_Cthulhu.jl")

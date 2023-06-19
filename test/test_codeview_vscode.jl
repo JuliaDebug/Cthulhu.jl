@@ -1,5 +1,5 @@
 module test_codeview_vscode
-    using Cthulhu, Test, Revise, REPL
+    using Cthulhu, Test, Revise, REPL, ..VSCodeServer
     
     @testset "VSCode descend test" begin
         if !isdefined(@__MODULE__, :fake_terminal)
