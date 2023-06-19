@@ -77,7 +77,7 @@ Base.printstyled(rootnode::MaybeTypedSyntaxNode, args...; kwargs...) = printstyl
 
 ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
-function _print(io::IO, x, source_node, position, type_hints::Nothing)
+function _print(io::IO, x, node, position, type_hints::Nothing)
     print(io, x)
 end
 
@@ -126,7 +126,7 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function show_annotation(io, @nospecialize(T), post, source_node, position, type_hints::Nothing, warn_diagnostics::Nothing; iswarn::Bool)
+function show_annotation(io, @nospecialize(T), post, node, position, type_hints::Nothing, warn_diagnostics::Nothing; iswarn::Bool)
     print(io, post)
     if iswarn
         color = !is_type_unstable(T) ? :cyan :

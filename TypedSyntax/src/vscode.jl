@@ -1,5 +1,6 @@
 isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
 inlay_hints_available() = isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+
 struct WarnUnstable
     path::String
     line::Int
@@ -17,6 +18,11 @@ function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", war
         end,
     )
 end
+function add_diagnostic!(warn_diagnostics, node, position, severity)
+    file_path = node.filename
+    line, column = source_location(node, position)
+    push!(warn_diagnostics, WarnUnstable(file_path, line, severity))
+end
 
 const InlayHintKinds = (
     Type = 1,
@@ -28,14 +34,15 @@ struct InlayHint
     label::String
     kind::Union{Nothing, Int}
 end
-function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{String, Vector{InlayHint}})
+function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{T, <:AbstractVector{InlayHint}}) where T<:AbstractString
     if inlay_hints_available()
-        return Dict(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
+        return Dict{T, Vector{NamedTuple{(:position, :label, :kind), Tuple{Tuple{Int, Int}, String, Union{Nothing, Int}}}}}(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
     end
+    return nothing
 end
-function add_hint!(type_hints, message, source_node, position; kind=InlayHintKinds.Type)
-    filepath = source_node.filename
-    line, column = source_location(source_node, position)
+function add_hint!(type_hints, message, node, position; kind=InlayHintKinds.Type)
+    filepath = node.filename
+    line, column = source_location(node, position)
 
     if filepath ∉ keys(type_hints)
         type_hints[filepath] = InlayHint[]
@@ -43,32 +50,24 @@ function add_hint!(type_hints, message, source_node, position; kind=InlayHintKin
     push!(type_hints[filepath], InlayHint(line-1, column, message, kind))
 end
 
-function show_annotation(io, @nospecialize(T), post, source_node, position, type_hints, warn_diagnostics; iswarn::Bool)
+function show_annotation(io, @nospecialize(T), post, node, position, type_hints, warn_diagnostics; iswarn::Bool)
     print(io, post)
     
     T_str = string(T)
-    if iswarn 
-        if is_type_unstable(T)
-            file_path = source_node.filename
-            line, column = source_location(source_node, position)
-            push!(warn_diagnostics, WarnUnstable(file_path, line, is_small_union_or_tunion(T) ? 2 : 1))
-            add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=nothing)
-
+    if iswarn && is_type_unstable(T)
             printstyled(io, "::", T_str; color=is_small_union_or_tunion(T) ? :yellow : :red)
-        else
-            add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=InlayHintKinds.Type)
-            printstyled(io, "::", T_str; color=:cyan)
-        end
+            add_diagnostic!(warn_diagnostics, node, position, is_small_union_or_tunion(T) ? 2 : 1)
+            add_hint!(type_hints, string(post, "::", T_str), node, position; kind=nothing)
     else        
         printstyled(io, "::", T_str; color=:cyan)
-        add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=InlayHintKinds.Type)
+        add_hint!(type_hints, string(post, "::", T_str), node, position; kind=InlayHintKinds.Type)
     end
 end
 
-function _print(io::IO, x, source_node, position, type_hints)
-    _print(io, x, source_node, position, nothing)
+function _print(io::IO, x, node, position, type_hints)
+    _print(io, x, node, position, nothing)
     
     if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
-        add_hint!(type_hints, x, source_node, position)
+        add_hint!(type_hints, x, node, position)
     end
 end
