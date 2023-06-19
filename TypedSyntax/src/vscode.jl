@@ -44,15 +44,24 @@ function add_hint!(type_hints, message, source_node, position; kind=InlayHintKin
 end
 
 function show_annotation(io, @nospecialize(T), post, source_node, position, type_hints, warn_diagnostics; iswarn::Bool)
-    show_annotation(io, T, post, source_node, position, nothing, nothing; iswarn)
+    print(io, post)
+    
+    T_str = string(T)
+    if iswarn 
+        if is_type_unstable(T)
+            file_path = source_node.filename
+            line, column = source_location(source_node, position)
+            push!(warn_diagnostics, WarnUnstable(file_path, line, is_small_union_or_tunion(T) ? 2 : 1))
+            add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=nothing)
 
-    if iswarn && is_type_unstable(T)
-        file_path = source_node.filename
-        line, column = source_location(source_node, position)
-        push!(warn_diagnostics, WarnUnstable(file_path, line, is_small_union_or_tunion(T) ? 2 : 1))
-        add_hint!(type_hints, string(post, "::", T), source_node, position; kind=nothing)
+            printstyled(io, "::", T_str; color=is_small_union_or_tunion(T) ? :yellow : :red)
+        else
+            add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=InlayHintKinds.Type)
+            printstyled(io, "::", T_str; color=:cyan)
+        end
     else        
-        add_hint!(type_hints, string(post, "::", T), source_node, position; kind=InlayHintKinds.Type)
+        printstyled(io, "::", T_str; color=:cyan)
+        add_hint!(type_hints, string(post, "::", T_str), source_node, position; kind=InlayHintKinds.Type)
     end
 end
 
