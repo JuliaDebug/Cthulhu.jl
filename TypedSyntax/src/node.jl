@@ -35,7 +35,8 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Boo
 end
 
 function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
-    rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=functionloc(m)[1], first_line=lineno, kwargs...)
+    filename = isnothing(functionloc(m)[1]) ? string(m.file) : functionloc(m)[1]
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=filename, first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
         if !is_function_def(rootnode)
