@@ -149,13 +149,13 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if TypedSyntax.isvscode()
                 type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
                 warn_diagnostics = TypedSyntax.WarnUnstable[]
-                descended_mis = Set{Tuple{Symbol, Int}}()
+                descended_mis = Set{MethodInstance}()
 
                 if istruncated
                     printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, vscode_integration=false)
                 else
                     printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                    push!(descended_mis, (mi.def.file, mi.def.line))
+                    push!(descended_mis, mi)
                 end
 
                 for callsite in find_callsites(interp, mi, optimize, annotate_source)[1]
@@ -308,8 +308,7 @@ function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis
     type_annotations::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
     if !isnothing(called_mi) && called_mi.def.file == mi.def.file && !occursin(r"REPL.*", string(called_mi.def.file)) 
-    # This does prevent us from descending into f with code `map(f, x)`` but it would probably be quite slow to descend into every function in case it calls a function defined in the source file
-        if (called_mi.def.file, called_mi.def.line) in descended_mis
+        if called_mi in descended_mis
             return nothing
         end
 
@@ -321,7 +320,7 @@ function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
             if !istruncated # If method only fills in default arguments
                 printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                push!(descended_mis, (called_mi.def.file, called_mi.def.line))
+                push!(descended_mis, called_mi)
             end
         end
 
