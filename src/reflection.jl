@@ -162,7 +162,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         matches = info.results.matches
         return mapany(matches) do match::Core.MethodMatch
             mi = specialize_method(match)
-            effects = get_effects(interp, mi, false)
+            effects = get_effects(interp, mi, optimize)
             mici = MICallInfo(mi, rt, effects)
             return is_cached(mi) ? mici : UncachedCallInfo(mici)
         end
