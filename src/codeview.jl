@@ -147,7 +147,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
             if TypedSyntax.isvscode()
-                type_hints = Dict{String, Vector{TypedSyntax.InlayHint}}()
+                type_hints = Dict{String,Vector{TypedSyntax.InlayHint}}()
                 warn_diagnostics = TypedSyntax.WarnUnstable[]
                 descended_mis = Set{MethodInstance}()
 
@@ -157,11 +157,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                     printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
                     push!(descended_mis, mi)
                 end
-
-                for callsite in find_callsites(interp, mi, optimize, annotate_source)[1]
-                    callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
-                    descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
-                end
+                recurse_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
 
                 if !hide_warn_diagnostics_vscode
                     display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
@@ -303,11 +299,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi=mi; iswarn::Bool=false, 
-    hide_type_stable::Bool=false, optimize::Bool=true,
-    type_annotations::Bool=true, annotate_source::Bool=false,
-    interp::AbstractInterpreter=CthulhuInterpreter())
-    if !isnothing(called_mi) && called_mi.def.file == mi.def.file && !occursin(r"REPL.*", string(called_mi.def.file)) 
+function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi; 
+    iswarn::Bool, hide_type_stable::Bool, optimize::Bool,
+    type_annotations::Bool, annotate_source::Bool,
+    interp::AbstractInterpreter)
+    if !isnothing(called_mi) && called_mi.def.file == mi.def.file && !occursin(r"REPL.*", string(called_mi.def.file))
         if called_mi in descended_mis
             return nothing
         end
@@ -322,15 +318,27 @@ function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis
                 printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
                 push!(descended_mis, called_mi)
             end
+        else # If source of called_mi cannot be found
+            push!(descended_mis, called_mi)
         end
 
-        for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
-            callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
-            descend_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
-        end
+        recurse_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
     end
 
     return nothing
+end
+
+function recurse_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi=mi; 
+    iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
+    type_annotations::Bool=true, annotate_source::Bool=false,
+    interp::AbstractInterpreter=CthulhuInterpreter())
+    for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
+        try
+            callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+            descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+        catch
+        end
+    end
 end
 
 @static if VERSION >= v"1.10.0-DEV.552"
