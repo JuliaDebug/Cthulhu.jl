@@ -170,7 +170,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         code = src isa IRCode ? src.stmts.inst : src.code
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
-        CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), false, params)
+        @static if VERSION ≥ v"1.11.0-DEV.32"
+            CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), params)
+        else
+            CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), false, params)
+        end
         total_cost = sum(cst)
         nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)
