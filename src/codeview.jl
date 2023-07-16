@@ -390,7 +390,7 @@ function InteractiveUtils.code_warntype(
     cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; hide_type_stable, b.interp)
 end
 
-InteractiveUtils.code_llvm(b::Bookmark) = InteractiveUtils.code_llvm(stdout::IO, b)
+InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdout::IO, b; kw...)
 InteractiveUtils.code_llvm(
     io::IO,
     b::Bookmark;
