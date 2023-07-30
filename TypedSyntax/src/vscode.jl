@@ -6,16 +6,11 @@ struct WarnUnstable
     line::Int
     severity::Int # 0: Error, 1: Warning, 2: Information, 3: Hint
 end
+to_vscode_type(x::WarnUnstable) = (msg="Unstable Type", path = x.path, line = x.line, severity = x.severity)
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", warn_diagnostics::AbstractVector{WarnUnstable})
     return (
         source = "Cthulhu",
-        items = map(warn_diagnostics) do warn_info
-            return (; msg = "Unstable Type",
-                path = warn_info.path,
-                line = warn_info.line,
-                severity = warn_info.severity
-            )
-        end,
+        items = to_vscode_type.(warn_diagnostics),
     )
 end
 function add_diagnostic!(warn_diagnostics, node, position, severity)
@@ -34,9 +29,12 @@ struct InlayHint
     label::String
     kind::Union{Nothing, Int}
 end
-function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::Dict{T, <:AbstractVector{InlayHint}}) where T<:AbstractString
+to_vscode_type(x::InlayHint) = (position=(x.line, x.column), label=x.label, kind=x.kind)
+function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", type_hints_by_file::AbstractDict{T, <:AbstractVector{InlayHint}}) where T
     if inlay_hints_available()
-        return Dict{T, Vector{NamedTuple{(:position, :label, :kind), Tuple{Tuple{Int, Int}, String, Union{Nothing, Int}}}}}(filepath => map(x -> (position=(x.line, x.column), label=x.label, kind=x.kind), type_hints) for (filepath, type_hints) in type_hints_by_file)
+        return Dict{T, Vector{NamedTuple{(:position, :label, :kind), Tuple{Tuple{Int, Int}, String, Union{Nothing, Int}}}}}(
+            filepath => to_vscode_type.(type_hints) for (filepath, type_hints) in type_hints_by_file
+        )
     end
     return nothing
 end
