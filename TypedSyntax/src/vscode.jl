@@ -1,6 +1,15 @@
 isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
 inlay_hints_available() = isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
 
+function clearall()
+    if inlay_hints_available()
+        display(Main.VSCodeServer.InlineDisplay(false),  Dict{String, Vector{TypedSyntax.InlayHint}}())
+    end
+    if isvscode()
+        display(Main.VSCodeServer.InlineDisplay(false), TypedSyntax.WarnUnstable[])
+    end
+end
+
 struct WarnUnstable
     path::String
     line::Int

@@ -210,6 +210,7 @@ function __descend_with_error_handling(args...; terminal=default_terminal(), kwa
     try
         _descend(terminal, args...; kwargs...)
     catch x
+        TypedSyntax.clearall()
         if x isa InterruptException
             return nothing
         else
@@ -705,6 +706,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
         println(iostream)
     end
+
+    TypedSyntax.clearall()
 end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
