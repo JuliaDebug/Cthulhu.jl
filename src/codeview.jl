@@ -148,7 +148,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
             # Need a file in VSCode, functionloc will return nothing for file name if not a file
             if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) 
-                vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.WarnUnstable[])
+                vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.Diagnostic[])
 
                 if istruncated
                     printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)

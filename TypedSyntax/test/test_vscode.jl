@@ -2,7 +2,7 @@ module test_vscode
 
 using ..VSCodeServer
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
-using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc, InlayHint, WarnUnstable, InlayHintKinds
+using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc, InlayHint, Diagnostic, InlayHintKinds
 using Dates, InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
@@ -638,12 +638,12 @@ end
     # VSCode
     tsn = TypedSyntaxNode(TSN.fVSCode, (Int64,))
 
-    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>WarnUnstable[])
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
     printstyled(io, tsn)
     @test getproperty.(first(values(io[:inlay_hints])), :kind) == [InlayHintKinds.Nothing, InlayHintKinds.Type, InlayHintKinds.Nothing] && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Union{Float64, Int64}", "(", ")::Union{Float64, Int64}"]
     @test length(io[:diagnostics]) == 2
 
-    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>WarnUnstable[])
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
     printstyled(io, tsn; hide_type_stable=false)
     @test getproperty.(first(values(io[:inlay_hints])), :kind) == vcat(InlayHintKinds.Type, InlayHintKinds.Nothing, repeat([InlayHintKinds.Type], 15), InlayHintKinds.Nothing) && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Int64"
     "::Union{Float64, Int64}"

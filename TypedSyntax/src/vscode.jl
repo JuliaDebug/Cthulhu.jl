@@ -1,18 +1,18 @@
 isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
 inlay_hints_available() = isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
 
-module WarningKinds
-    @enum WarningKindsEnum Error=0 Warning=1 Information=2 Hint=3
+module DiagnosticKinds
+    @enum T Error=0 Warning=1 Information=2 Hint=3
 end
 
-struct WarnUnstable
+struct Diagnostic
     path::String
     line::Int
-    severity::WarningKinds.WarningKindsEnum
+    severity::DiagnosticKinds.T
 end
 
-to_vscode_type(x::WarnUnstable) = (msg="Unstable Type", path = x.path, line = x.line, severity = Int(x.severity))
-function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", diagnostics::AbstractVector{WarnUnstable})
+to_vscode_type(x::Diagnostic) = (msg="Unstable Type", path = x.path, line = x.line, severity = Int(x.severity))
+function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", diagnostics::AbstractVector{Diagnostic})
     return (
         source = "Cthulhu",
         items = to_vscode_type.(diagnostics),
@@ -23,12 +23,12 @@ add_diagnostic!(::Nothing, node, position, severity) = nothing
 function add_diagnostic!(diagnostics, node, position, severity)
     file_path = node.filename
     line, column = source_location(node, position)
-    push!(diagnostics, WarnUnstable(file_path, line, severity))
+    push!(diagnostics, Diagnostic(file_path, line, severity))
 end
 
 function clear_diagnostics_vscode()
     if isvscode()
-        display(Main.VSCodeServer.InlineDisplay(false), TypedSyntax.WarnUnstable[])
+        display(Main.VSCodeServer.InlineDisplay(false), TypedSyntax.Diagnostic[])
     end
 end
 
