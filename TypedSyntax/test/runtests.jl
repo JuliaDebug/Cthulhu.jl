@@ -641,10 +641,8 @@ module VSCodeServer
     end
     const INLAY_HINTS_ENABLED = Ref(true)
 
-    displayed_output = IOBuffer()
-
     function Base.display(d::InlineDisplay, x)
-        println(displayed_output, x)
+        return nothing
     end
 end
 module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test

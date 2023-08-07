@@ -2,7 +2,7 @@ module test_vscode
 
 using ..VSCodeServer
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
-using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc, InlayHint, WarnUnstable
+using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc, InlayHint, WarnUnstable, InlayHintKinds
 using Dates, InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
@@ -638,18 +638,14 @@ end
     # VSCode
     tsn = TypedSyntaxNode(TSN.fVSCode, (Int64,))
 
-    type_hints = Dict{String, Vector{InlayHint}}()
-    warn_diagnostics = WarnUnstable[]
-    printstyled(devnull, tsn, type_hints, warn_diagnostics)
-    @test occursin(r"""TypedSyntax.WarnUnstable\[TypedSyntax.WarnUnstable\([^\)]+\), TypedSyntax.WarnUnstable\([^\)]+\)\]\nDict\{String, Vector\{TypedSyntax.InlayHint\}\}\(\\"[^"]+\\" => \[TypedSyntax.InlayHint\(\d+, \d+, \\"::Union\{Float64, Int64\}\\", nothing\), TypedSyntax.InlayHint\(\d+, \d+, \\"\(\\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \\"\)::Union\{Float64, Int64\}\\", nothing\)""", String(take!(VSCodeServer.displayed_output)))
-    @test getproperty.(first(values(type_hints)), :kind) == [nothing, 1, nothing] && getproperty.(first(values(type_hints)), :label) == ["::Union{Float64, Int64}", "(", ")::Union{Float64, Int64}"]
-    @test length(warn_diagnostics) == 2
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>WarnUnstable[])
+    printstyled(io, tsn)
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == [InlayHintKinds.Nothing, InlayHintKinds.Type, InlayHintKinds.Nothing] && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Union{Float64, Int64}", "(", ")::Union{Float64, Int64}"]
+    @test length(io[:diagnostics]) == 2
 
-    type_hints = Dict{String, Vector{InlayHint}}()
-    warn_diagnostics = WarnUnstable[]
-    printstyled(devnull, tsn, type_hints, warn_diagnostics; hide_type_stable=false)
-    @test occursin(r"""TypedSyntax.WarnUnstable\[TypedSyntax.WarnUnstable\([^\)]+\), TypedSyntax.WarnUnstable\([^\)]+\)\]\nDict{String, Vector{TypedSyntax.InlayHint}}\(\\"[^"]+\\" => \[TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Union{Float64, Int64}\", nothing\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\(\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\)::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\(\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\)::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\(\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\(\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\)::Bool\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Int64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"::Float64\", 1\), TypedSyntax.InlayHint\(\d+, \d+, \"\)::Union{Float64, Int64}\", nothing\)\]\)\n""", String(take!(VSCodeServer.displayed_output)))
-    @test getproperty.(first(values(type_hints)), :kind) == vcat(1, nothing, repeat([1], 15), nothing) && getproperty.(first(values(type_hints)), :label) == ["::Int64"
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>WarnUnstable[])
+    printstyled(io, tsn; hide_type_stable=false)
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == vcat(InlayHintKinds.Type, InlayHintKinds.Nothing, repeat([InlayHintKinds.Type], 15), InlayHintKinds.Nothing) && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Int64"
     "::Union{Float64, Int64}"
     "::Int64"
     "("
@@ -667,6 +663,6 @@ end
     "::Int64"
     "::Float64"
     ")::Union{Float64, Int64}"]
-    @test length(warn_diagnostics) == 2
+    @test length(io[:diagnostics]) == 2
 end
 end

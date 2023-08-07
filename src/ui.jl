@@ -71,7 +71,7 @@ function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bo
                             print(limiter, "runtime ")
                         end
                     end
-                    printstyled(limiter, node; iswarn, hide_type_stable, with_linenumber=false, vscode_integration=false)
+                    printstyled(limiter, node; iswarn, hide_type_stable, with_linenumber=false)
                 end))
             replace(str, r"\n *" => s" ")  # in case of multiline code, issue #428
         end
@@ -92,7 +92,7 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight, hide_inlay_types_vscode, hide_warn_diagnostics_vscode,
+function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight, hide_inlay_types_vscode, hide_diagnostics_vscode,
     custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
@@ -113,7 +113,7 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
     end
     if TypedSyntax.isvscode()
         print(ioctx, ", [",
-        colorize(hide_warn_diagnostics_vscode, 'V'), "]scode: hide warn diagnostics")
+        colorize(hide_diagnostics_vscode, 'V'), "]scode: hide diagnostics")
     end
     if !annotate_source
         print(ioctx, ", [",
@@ -169,7 +169,7 @@ const TOGGLES = Dict(
     UInt32('R') => :revise,
     UInt32('E') => :edit,
     UInt32('v') => :hide_inlay_types_vscode,
-    UInt32('V') => :hide_warn_diagnostics_vscode
+    UInt32('V') => :hide_diagnostics_vscode
 )
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)

@@ -125,7 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
-    hide_inlay_types_vscode::Bool=false, hide_warn_diagnostics_vscode::Bool=false,
+    hide_inlay_types_vscode::Bool=false, hide_diagnostics_vscode::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -146,27 +146,36 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            if TypedSyntax.isvscode()
-                type_hints = Dict{String,Vector{TypedSyntax.InlayHint}}()
-                warn_diagnostics = TypedSyntax.WarnUnstable[]
-                descended_mis = Set{MethodInstance}()
+            # Need a file in VSCode, functionloc will return nothing for file name if not a file
+            if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) 
+                vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.WarnUnstable[])
 
                 if istruncated
-                    printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, vscode_integration=false)
+                    printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
                 else
-                    printstyled(lambda_io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                    push!(descended_mis, mi)
+                    printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
                 end
-                recurse_into_callsites!(devnull, type_hints, warn_diagnostics, descended_mis, mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
+                recurse_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
+                callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                try # Prevents bugs causing too many problems 
+                    add_callsites!(callsite_mis, mi; optimize, annotate_source, interp)
+                catch
+                end
 
-                if !hide_warn_diagnostics_vscode
-                    display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
+                for callsite in values(callsite_mis)
+                    if !isnothing(callsite)
+                        descend_into_callsite!(recurse_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                    end
                 end
-                if TypedSyntax.inlay_hints_available() && !hide_inlay_types_vscode
-                    display(Main.VSCodeServer.InlineDisplay(false), type_hints)
+
+                if !hide_diagnostics_vscode
+                    TypedSyntax.display_diagnostics_vscode(recurse_io)
+                end
+                if !hide_inlay_types_vscode
+                    TypedSyntax.display_inlay_hints_vscode(recurse_io)
                 end
             else
-                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, hide_inlay_types_vscode, hide_warn_diagnostics_vscode, idxend)
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             end
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
@@ -299,44 +308,61 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-function descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi; 
-    iswarn::Bool, hide_type_stable::Bool, optimize::Bool,
-    type_annotations::Bool, annotate_source::Bool,
-    interp::AbstractInterpreter)
-    if !isnothing(called_mi) && called_mi.def.file == mi.def.file && !occursin(r"REPL.*", string(called_mi.def.file))
-        if called_mi in descended_mis
-            return nothing
+function descend_into_callsite!(io, tsn; 
+    iswarn::Bool, hide_type_stable::Bool, type_annotations::Bool)
+    sig, body = children(tsn)
+    # We empty the body when filling kwargs
+    istruncated = isempty(children(body))
+    idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+    if !istruncated # If method only fills in default arguments
+        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
+    end
+end
+
+function add_callsites!(d::AbstractDict, source_mi, mi=source_mi; 
+    optimize::Bool=true, annotate_source::Bool=false,
+    interp::AbstractInterpreter=CthulhuInterpreter())
+    callsites = find_callsites(interp, mi, optimize, annotate_source)[1]
+    for callsite in callsites
+        callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+
+        if isnothing(callsite_mi) || callsite_mi == source_mi
+            continue
         end
 
-        tsn, _ = get_typed_sourcetext(called_mi; warn=false)
+        key = (callsite_mi.def.file, callsite_mi.def.line)
+        if haskey(d, key) && !isnothing(d[key]) && d[key].mi == callsite_mi # If we've already processed callsite_mi
+            continue
+        end
+
+        add_callsites!(d, source_mi, callsite_mi; optimize, annotate_source, interp)
+
+        # Check if callsite is defined in same file as source_mi
+        if callsite_mi.def.file != source_mi.def.file
+            continue
+        end
+
+        # Check if callsite is just filling in default arguments
+        tsn, _ = get_typed_sourcetext(callsite_mi; warn=false)
         if !isnothing(tsn)
             sig, body = children(tsn)
             # We empty the body when filling kwargs
             istruncated = isempty(children(body))
-            idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
-            if !istruncated # If method only fills in default arguments
-                printstyled(io, tsn, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_warn_diagnostics_vscode=true)
-                push!(descended_mis, called_mi)
+            if istruncated
+                continue
             end
-        else # If source of called_mi cannot be found
-            push!(descended_mis, called_mi)
+        else
+            continue
         end
 
-        recurse_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
-    end
-
-    return nothing
-end
-
-function recurse_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, called_mi=mi; 
-    iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
-    type_annotations::Bool=true, annotate_source::Bool=false,
-    interp::AbstractInterpreter=CthulhuInterpreter())
-    for callsite in find_callsites(interp, called_mi, optimize, annotate_source)[1]
-        try
-            callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
-            descend_into_callsites!(io, type_hints, warn_diagnostics, descended_mis, mi, callsite_mi; iswarn, hide_type_stable, optimize, type_annotations, annotate_source, interp)
-        catch
+        # We add new callsites unless we would have multiple callsites for same source definition,
+        # e.g. if f(x) = x is called with different types we print nothing.
+        if haskey(d, key)
+            if !isnothing(d[key]) && callsite_mi != d[key].mi
+                d[key] = nothing
+            end
+        else
+            d[key] = (mi=callsite_mi, tsn=tsn)
         end
     end
 end

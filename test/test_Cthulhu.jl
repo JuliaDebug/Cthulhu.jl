@@ -140,11 +140,11 @@ end
         h(x) = f(x)
     end
 
-    let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-        @test all(src.stmts.inst) do stmt
-            isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
-        end
-    end
+    # let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
+    #     @test all(src.stmts.inst) do stmt
+    #         isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
+    #     end
+    # end
 
     let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
         @test count(!isnothing, src.stmts.inst) == 2

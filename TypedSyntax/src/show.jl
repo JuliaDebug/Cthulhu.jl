@@ -29,11 +29,11 @@ end
 
 ## Custom printing via `printstyled`
 
-function _printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
-                    type_hints=nothing, warn_diagnostics=nothing;
-                    type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
-                    with_linenumber::Bool=true,
-                    idxend = last_byte(rootnode))
+function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
+                          type_annotations::Bool=true, iswarn::Bool=true, 
+                          hide_type_stable::Bool=true, with_linenumber::Bool=true,
+                          hide_inlay_types_vscode::Bool=false, hide_diagnostics_vscode::Bool=false,
+                          idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
@@ -44,44 +44,34 @@ function _printstyled(io::IO, rootnode::MaybeTypedSyntaxNode,
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
         type_annotate, pre, pre2, post = type_annotation_mode(sig, rt; type_annotations, hide_type_stable)
-        position = show_src_expr(io, sig, position, pre, pre2, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
-        type_annotate && show_annotation(io, rt, post, rootnode.source, position, type_hints, warn_diagnostics; iswarn)
+        position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd)
+        type_annotate && show_annotation(io, rt, post, rootnode.source, position; iswarn)
         rootnode = body
     end
-    position = show_src_expr(io, rootnode, position, "", "", type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
+    position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
     catchup(io, rootnode, position, nd, idxend+1)   # finish the node
-    return nothing
-end
-function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode, 
-                          type_hints = Dict{String, Vector{InlayHint}}(), 
-                          warn_diagnostics = WarnUnstable[];
-                          type_annotations::Bool=true, iswarn::Bool=true, 
-                          hide_type_stable::Bool=true, with_linenumber::Bool=true,
-                          hide_inlay_types_vscode::Bool=false, hide_warn_diagnostics_vscode::Bool=false,
-                          idxend = last_byte(rootnode), vscode_integration=true)
-    if vscode_integration && isvscode()
-        _printstyled(io, rootnode, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
 
-        if !hide_warn_diagnostics_vscode
-            display(Main.VSCodeServer.InlineDisplay(false), warn_diagnostics)
-        end
-        if inlay_hints_available() && !hide_inlay_types_vscode
-            display(Main.VSCodeServer.InlineDisplay(false), type_hints)
-        end
-    else
-        _printstyled(io, rootnode; type_annotations, iswarn, hide_type_stable, with_linenumber, idxend)
+    if !hide_diagnostics_vscode
+        display_diagnostics_vscode(io)
+    end
+    if !hide_inlay_types_vscode
+        display_inlay_hints_vscode(io)
     end
     return nothing
 end
-Base.printstyled(rootnode::MaybeTypedSyntaxNode, args...; kwargs...) = printstyled(stdout, rootnode, args...; kwargs...)
+Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)
 
 ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
-function _print(io::IO, x, node, position, type_hints::Nothing)
+function _print(io::IO, x, node, position)
     print(io, x)
+
+    if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
+        add_hint!(get(io, :inlay_hints, nothing), x, node, position)
+    end
 end
 
-function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String, type_hints, warn_diagnostics; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
     if haschildren(node)
@@ -90,13 +80,13 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
             position = catchup(io, first(children(node)), position, nd)
         end
     end
-    _print(io, pre, node.source, position, type_hints)
+    _print(io, pre, node.source, position)
     for (i, child) in enumerate(children(node))
-        i == 2 && _print(io, pre2, node.source, position, type_hints)
+        i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
-        position = show_src_expr(io, child, position, cpre, cpre2, type_hints, warn_diagnostics; type_annotations, iswarn, hide_type_stable, nd)
-        ctype_annotate && show_annotation(io, cT, cpost, node.source, position, type_hints, warn_diagnostics; iswarn)
+        position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
+        ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
     end
     return catchup(io, node, position, nd, _lastidx+1)
 end
@@ -126,14 +116,20 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function show_annotation(io, @nospecialize(T), post, node, position, type_hints::Nothing, warn_diagnostics::Nothing; iswarn::Bool)
+function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
+    diagnostics = get(io, :diagnostics, nothing)
+    inlay_hints = get(io, :inlay_hints, nothing)
+
     print(io, post)
-    if iswarn
-        color = !is_type_unstable(T) ? :cyan :
-                 is_small_union_or_tunion(T) ? :yellow : :red
-        printstyled(io, "::", T; color)
+    T_str = string(T)
+    if iswarn && is_type_unstable(T)
+        color = is_small_union_or_tunion(T) ? :yellow : :red
+        printstyled(io, "::", T_str; color)
+        add_diagnostic!(diagnostics, node, position, is_small_union_or_tunion(T) ? WarningKinds.Information : WarningKinds.Warning)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position; kind=InlayHintKinds.Nothing)
     else
-        printstyled(io, "::", T; color=:cyan)
+        printstyled(io, "::", T_str; color=:cyan)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position; kind=InlayHintKinds.Type)
     end
 end
 
