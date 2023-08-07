@@ -146,7 +146,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            # Need a file in VSCode, functionloc will return nothing for file name if not a file
+            # Need a function defined in a file for VSCode integration
+            # functionloc will return nothing in the first argument if mi not defined in a file.
             if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) 
                 vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.Diagnostic[])
 
