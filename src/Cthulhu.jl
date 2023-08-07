@@ -65,8 +65,8 @@ end
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 - `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
-- `hide_inlay_types_vscode::Bool` Initial state of "" toggle. Defaults to `false`
-- `hide_warn_diagnostics_vscode::Bool` Initial state of "" toggle. Defaults to `false`
+- `hide_inlay_types_vscode::Bool` Initial state of "vscode: hide inlay types" toggle. Defaults to `false`
+- `hide_warn_diagnostics_vscode::Bool` Initial state of "Vscode: hide warn diagnostics" toggle. Defaults to `false`
 """
 const CONFIG = CthulhuConfig()
 
