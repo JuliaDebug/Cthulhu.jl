@@ -148,7 +148,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
             # Need a function defined in a file for VSCode integration
             # functionloc will return nothing in the first argument if mi not defined in a file.
-            if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) 
+            if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) && (!hide_diagnostics_vscode || !hide_inlay_types_vscode)
                 vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.Diagnostic[])
 
                 if istruncated
@@ -158,19 +158,20 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 end
                 recurse_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
-                try # Prevents bugs causing too many problems 
-                    add_callsites!(callsite_mis, mi; optimize, annotate_source, interp)
-                catch
-                end
-
+                visited_mis = Set{MethodInstance}((mi,))
+                callsite_diagnostics = TypedSyntax.Diagnostic[]
+                add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
                 for callsite in values(callsite_mis)
-                    if !isnothing(callsite)
+                    if !isnothing(callsite) && !isnothing(callsite.tsn)
                         descend_into_callsite!(recurse_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
                     end
                 end
 
                 if !hide_diagnostics_vscode
+                    append!(recurse_io[:diagnostics], callsite_diagnostics)
                     TypedSyntax.display_diagnostics_vscode(recurse_io)
+                else
+                    TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
                 end
                 if !hide_inlay_types_vscode
                     TypedSyntax.display_inlay_hints_vscode(recurse_io)
@@ -320,31 +321,37 @@ function descend_into_callsite!(io, tsn;
     end
 end
 
-function add_callsites!(d::AbstractDict, source_mi, mi=source_mi; 
+function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics, mi, source_file=mi.def.file; 
     optimize::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
-    callsites = find_callsites(interp, mi, optimize, annotate_source)[1]
+    callsites = try
+        find_callsites(interp, mi, optimize, annotate_source)[1]
+    catch
+        return nothing
+    end
     for callsite in callsites
         callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
 
-        if isnothing(callsite_mi) || callsite_mi == source_mi
+        if isnothing(callsite_mi) || callsite_mi in visited_mis
             continue
         end
+        push!(visited_mis, callsite_mi)
 
+        add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_file; optimize, annotate_source, interp)
+
+        # Check if callsite is defined in same file as source_mi or if d[key] == nothing, 
+        # following code has no effect so might as well skip.
         key = (callsite_mi.def.file, callsite_mi.def.line)
-        if haskey(d, key) && !isnothing(d[key]) && d[key].mi == callsite_mi # If we've already processed callsite_mi
-            continue
-        end
-
-        add_callsites!(d, source_mi, callsite_mi; optimize, annotate_source, interp)
-
-        # Check if callsite is defined in same file as source_mi
-        if callsite_mi.def.file != source_mi.def.file
+        if callsite_mi.def.file != source_file || (haskey(d, key) && isnothing(d[key]))
             continue
         end
 
         # Check if callsite is just filling in default arguments
-        tsn, _ = get_typed_sourcetext(callsite_mi; warn=false)
+        tsn, _ = try
+            get_typed_sourcetext(callsite_mi; warn=false)
+        catch
+            continue
+        end
         if !isnothing(tsn)
             sig, body = children(tsn)
             # We empty the body when filling kwargs
@@ -356,11 +363,19 @@ function add_callsites!(d::AbstractDict, source_mi, mi=source_mi;
             continue
         end
 
-        # We add new callsites unless we would have multiple callsites for same source definition,
+        # We add new callsites unless we would have multiple callsites for the same source definition,
         # e.g. if f(x) = x is called with different types we print nothing.
         if haskey(d, key)
             if !isnothing(d[key]) && callsite_mi != d[key].mi
                 d[key] = nothing
+                push!(diagnostics, 
+                TypedSyntax.Diagnostic(
+                    isnothing(functionloc(callsite_mi)[1]) ? string(callsite_mi.file) : functionloc(callsite_mi)[1], 
+                    callsite_mi.def.line, 
+                    TypedSyntax.DiagnosticKinds.Information, 
+                    "Cthulhu disabled: This function was called with different argument types"
+                    )
+                )
             end
         else
             d[key] = (mi=callsite_mi, tsn=tsn)

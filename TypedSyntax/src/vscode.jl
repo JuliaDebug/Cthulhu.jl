@@ -9,9 +9,10 @@ struct Diagnostic
     path::String
     line::Int
     severity::DiagnosticKinds.T
+    msg::String
 end
 
-to_vscode_type(x::Diagnostic) = (msg="Unstable Type", path = x.path, line = x.line, severity = Int(x.severity))
+to_vscode_type(x::Diagnostic) = (msg=x.msg, path = x.path, line = x.line, severity = Int(x.severity))
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.diagnostics", diagnostics::AbstractVector{Diagnostic})
     return (
         source = "Cthulhu",
@@ -23,7 +24,7 @@ add_diagnostic!(::Nothing, node, position, severity) = nothing
 function add_diagnostic!(diagnostics, node, position, severity)
     file_path = node.filename
     line, column = source_location(node, position)
-    push!(diagnostics, Diagnostic(file_path, line, severity))
+    push!(diagnostics, Diagnostic(file_path, line, severity, "Unstable Type"))
 end
 
 function clear_diagnostics_vscode()
