@@ -462,7 +462,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         else
             @assert length(src.code) == length(infos)
         end
-        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
+        callsites, sourcenodes, tsn = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
 
         if display_CI
             pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
@@ -482,7 +482,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                                       iswarn, optimize, hide_type_stable,
                                       pc2remarks, pc2effects,
                                       inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_diagnostics_vscode,
-                                      interp)
+                                      interp, tsn)
                     end
                 end
                 # eliminate trailing indentation (see first item in bullet list in PR #189)
@@ -499,7 +499,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                               iswarn, optimize, hide_type_stable,
                               pc2remarks, pc2effects,
                               inline_cost, type_annotations, annotate_source, hide_inlay_types_vscode, hide_diagnostics_vscode,
-                              interp)
+                              interp, tsn)
             end
             view_cmd = cthulhu_typed
         else

@@ -33,11 +33,12 @@ function clear_diagnostics_vscode()
     end
 end
 
-function display_diagnostics_vscode(io::IO)
-    if isvscode() && haskey(io, :diagnostics)
-        display(Main.VSCodeServer.InlineDisplay(false), io[:diagnostics])
+function display_diagnostics_vscode(diagnostics)
+    if isvscode() && !isnothing(diagnostics)
+        display(Main.VSCodeServer.InlineDisplay(false), diagnostics)
     end
 end
+display_diagnostics_vscode(io::IO) = display_diagnostics_vscode(get(io, :diagnostics, nothing))
 
 const InlayHintKinds = (Type=1, Parameter=2, Nothing=nothing)
 
@@ -75,11 +76,12 @@ function clear_inlay_hints_vscode()
     end
 end
 
-function display_inlay_hints_vscode(io::IO)
-    if inlay_hints_available() && haskey(io, :inlay_hints)
-        display(Main.VSCodeServer.InlineDisplay(false), io[:inlay_hints])
+function display_inlay_hints_vscode(inlay_hints)
+    if inlay_hints_available() && !isnothing(inlay_hints)
+        display(Main.VSCodeServer.InlineDisplay(false), inlay_hints)
     end
 end
+display_inlay_hints_vscode(io::IO) = display_inlay_hints_vscode(get(io, :inlay_hints, nothing))
 
 function clear_all_vscode()
     clear_diagnostics_vscode()

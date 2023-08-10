@@ -126,7 +126,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     hide_inlay_types_vscode::Bool=false, hide_diagnostics_vscode::Bool=false,
-    interp::AbstractInterpreter=CthulhuInterpreter())
+    interp::AbstractInterpreter=CthulhuInterpreter(), tsn::Union{Nothing,TypedSyntaxNode}=nothing)
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -134,7 +134,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     lambda_io = IOContext(io, :limit=>true)
 
     if annotate_source && isa(src, CodeInfo)
-        tsn, _ = get_typed_sourcetext(mi, src, rt)
+        if tsn === nothing
+            tsn, _ = get_typed_sourcetext(mi, src, rt)
+        end
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
@@ -146,39 +148,42 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            # Need a function defined in a file for VSCode integration
-            # functionloc will return nothing in the first argument if mi not defined in a file.
-            if TypedSyntax.isvscode() && !isnothing(functionloc(mi)[1]) && (!hide_diagnostics_vscode || !hide_inlay_types_vscode)
-                vscode_io = IOContext(lambda_io, :inlay_hints=>Dict{String,Vector{TypedSyntax.InlayHint}}(), :diagnostics=>TypedSyntax.Diagnostic[])
 
-                if istruncated
-                    printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
-                else
-                    printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
-                end
-                recurse_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
+            hide_diagnostics_vscode |= !iswarn # If warnings are off then no diagnostics are shown
+            if !TypedSyntax.isvscode() || isnothing(functionloc(mi)[1])
+                hide_diagnostics_vscode = true
+                hide_inlay_types_vscode = true
+            end
+  
+            vscode_io = IOContext(
+                lambda_io, 
+                :inlay_hints => hide_inlay_types_vscode ? nothing : Dict{String,Vector{TypedSyntax.InlayHint}}(), 
+                :diagnostics => hide_diagnostics_vscode ? nothing : TypedSyntax.Diagnostic[]
+            )
+
+            if istruncated
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+            else
+                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
+            end
+            
+            callsite_diagnostics = TypedSyntax.Diagnostic[]
+            if (!hide_diagnostics_vscode || !hide_inlay_types_vscode)
+                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
                 visited_mis = Set{MethodInstance}((mi,))
-                callsite_diagnostics = TypedSyntax.Diagnostic[]
                 add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
                 for callsite in values(callsite_mis)
-                    if !isnothing(callsite) && !isnothing(callsite.tsn)
-                        descend_into_callsite!(recurse_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                    if !isnothing(callsite)
+                        descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
                     end
                 end
-
-                if !hide_diagnostics_vscode
-                    append!(recurse_io[:diagnostics], callsite_diagnostics)
-                    TypedSyntax.display_diagnostics_vscode(recurse_io)
-                else
-                    TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
-                end
-                if !hide_inlay_types_vscode
-                    TypedSyntax.display_inlay_hints_vscode(recurse_io)
-                end
-            else
-                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             end
+
+            !isnothing(vscode_io[:diagnostics]) && append!(callsite_diagnostics, vscode_io[:diagnostics])
+            TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
+            TypedSyntax.display_inlay_hints_vscode(vscode_io)
+ 
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
@@ -310,7 +315,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-function descend_into_callsite!(io, tsn; 
+function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode; 
     iswarn::Bool, hide_type_stable::Bool, type_annotations::Bool)
     sig, body = children(tsn)
     # We empty the body when filling kwargs
@@ -321,65 +326,64 @@ function descend_into_callsite!(io, tsn;
     end
 end
 
-function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics, mi, source_file=mi.def.file; 
+function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::AbstractVector,
+    mi::MethodInstance, source_mi::MethodInstance=mi; 
     optimize::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
-    callsites = try
-        find_callsites(interp, mi, optimize, annotate_source)[1]
+    
+    callsites, src, rt = try
+        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
+
+        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
+        if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
+            infos = src.stmts.info
+        else
+            @assert length(src.code) == length(infos)
+        end
+
+        # We pass false as it doesn't affect callsites and skips fetching the method definition 
+        # using CodeTracking which is slow
+        callsites, _ = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, false)
+        callsites, src, rt
     catch
         return nothing
     end
+
     for callsite in callsites
         callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
 
-        if isnothing(callsite_mi) || callsite_mi in visited_mis
-            continue
+        if !isnothing(callsite_mi) && callsite_mi ∉ visited_mis
+            push!(visited_mis, callsite_mi)
+            add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_mi; optimize, annotate_source, interp)
         end
-        push!(visited_mis, callsite_mi)
+    end
 
-        add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_file; optimize, annotate_source, interp)
-
-        # Check if callsite is defined in same file as source_mi or if d[key] == nothing, 
-        # following code has no effect so might as well skip.
-        key = (callsite_mi.def.file, callsite_mi.def.line)
-        if callsite_mi.def.file != source_file || (haskey(d, key) && isnothing(d[key]))
-            continue
-        end
-
-        # Check if callsite is just filling in default arguments
-        tsn, _ = try
-            get_typed_sourcetext(callsite_mi; warn=false)
-        catch
-            continue
-        end
-        if !isnothing(tsn)
-            sig, body = children(tsn)
-            # We empty the body when filling kwargs
-            istruncated = isempty(children(body))
-            if istruncated
-                continue
-            end
-        else
-            continue
-        end
-
-        # We add new callsites unless we would have multiple callsites for the same source definition,
-        # e.g. if f(x) = x is called with different types we print nothing.
-        if haskey(d, key)
-            if !isnothing(d[key]) && callsite_mi != d[key].mi
-                d[key] = nothing
-                push!(diagnostics, 
+    # Check if callsite is not just filling in default arguments and defined in same file as source_mi
+    if mi == source_mi || mi.def.file != source_mi.def.file
+        return nothing
+    end
+    tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
+    isnothing(tsn) && return nothing 
+    sig, body = children(tsn)
+    # We empty the body when filling kwargs
+    istruncated = isempty(children(body))
+    istruncated && return nothing
+    # We add new callsites unless we would have multiple callsites for the same source definition,
+    # e.g. if f(x) = x is called with different types we print nothing.
+    key = (mi.def.file, mi.def.line)
+    if haskey(d, key)
+        if !isnothing(d[key]) && mi != d[key].mi
+            d[key] = nothing
+            push!(diagnostics, 
                 TypedSyntax.Diagnostic(
-                    isnothing(functionloc(callsite_mi)[1]) ? string(callsite_mi.file) : functionloc(callsite_mi)[1], 
-                    callsite_mi.def.line, 
+                    isnothing(functionloc(mi)[1]) ? string(mi.file) : functionloc(mi)[1], mi.def.line, 
                     TypedSyntax.DiagnosticKinds.Information, 
-                    "Cthulhu disabled: This function was called with different argument types"
-                    )
+                    "Cthulhu disabled: This function was called multiple times with different argument types"
                 )
-            end
-        else
-            d[key] = (mi=callsite_mi, tsn=tsn)
+            )
         end
+    else
+        d[key] = (mi=mi, tsn=tsn)
     end
 end
 
