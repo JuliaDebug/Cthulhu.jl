@@ -107,11 +107,11 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
         colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
-    if TypedSyntax.inlay_hints_available()
+    if TypedSyntax.inlay_hints_available_vscode()
         print(ioctx, ", [",
         colorize(hide_inlay_types_vscode, 'v'), "]scode: hide inlay types")
     end
-    if TypedSyntax.isvscode()
+    if TypedSyntax.diagnostics_available_vscode()
         print(ioctx, ", [",
         colorize(hide_diagnostics_vscode, 'V'), "]scode: hide diagnostics")
     end

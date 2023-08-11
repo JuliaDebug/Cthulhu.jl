@@ -150,8 +150,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
 
             hide_diagnostics_vscode |= !iswarn # If warnings are off then no diagnostics are shown
-            if !TypedSyntax.isvscode() || isnothing(functionloc(mi)[1])
+            # Check if diagnostics are avaiable and if mi is defined in a file
+            if !TypedSyntax.diagnostics_available_vscode() || isnothing(functionloc(mi)[1])
                 hide_diagnostics_vscode = true
+            end
+            if !TypedSyntax.inlay_hints_available_vscode() || isnothing(functionloc(mi)[1])
                 hide_inlay_types_vscode = true
             end
   
@@ -164,7 +167,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if istruncated
                 printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             else
-                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
+                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             end
             
             callsite_diagnostics = TypedSyntax.Diagnostic[]
@@ -322,7 +325,7 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     istruncated = isempty(children(body))
     idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
     if !istruncated # If method only fills in default arguments
-        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend, hide_inlay_types_vscode=true, hide_diagnostics_vscode=true)
+        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
     end
 end
 

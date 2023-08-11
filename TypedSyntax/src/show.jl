@@ -30,9 +30,8 @@ end
 ## Custom printing via `printstyled`
 
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
-                          type_annotations::Bool=true, iswarn::Bool=true, 
-                          hide_type_stable::Bool=true, with_linenumber::Bool=true,
-                          hide_inlay_types_vscode::Bool=false, hide_diagnostics_vscode::Bool=false,
+                          type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
+                          with_linenumber::Bool=true,
                           idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
@@ -50,13 +49,6 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
     end
     position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
     catchup(io, rootnode, position, nd, idxend+1)   # finish the node
-
-    if !hide_diagnostics_vscode
-        display_diagnostics_vscode(io)
-    end
-    if !hide_inlay_types_vscode
-        display_inlay_hints_vscode(io)
-    end
     return nothing
 end
 Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout, rootnode; kwargs...)

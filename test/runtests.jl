@@ -32,6 +32,7 @@ module VSCodeServer
         is_repl::Bool
     end
     const INLAY_HINTS_ENABLED = Ref(true)
+    const DIAGNOSTICS_ENABLED = Ref(true)
 
     function Base.display(d::InlineDisplay, x)
         return nothing

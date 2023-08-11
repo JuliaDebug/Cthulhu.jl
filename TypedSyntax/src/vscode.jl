@@ -1,5 +1,5 @@
-isvscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module
-inlay_hints_available() = isvscode() && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED)
+diagnostics_available_vscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :DIAGNOSTICS_ENABLED) && Main.VSCodeServer.DIAGNOSTICS_ENABLED[]
+inlay_hints_available_vscode() = isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :INLAY_HINTS_ENABLED) && Main.VSCodeServer.INLAY_HINTS_ENABLED[]
 
 module DiagnosticKinds
     @enum T Error=0 Warning=1 Information=2 Hint=3
@@ -28,13 +28,14 @@ function add_diagnostic!(diagnostics, node, position, severity)
 end
 
 function clear_diagnostics_vscode()
-    if isvscode()
+    if diagnostics_available_vscode()
         display(Main.VSCodeServer.InlineDisplay(false), TypedSyntax.Diagnostic[])
     end
 end
 
 function display_diagnostics_vscode(diagnostics)
-    if isvscode() && !isnothing(diagnostics)
+    if diagnostics_available_vscode() && !isnothing(diagnostics)
+        # InlineDisplay(false) means we don't print to REPL
         display(Main.VSCodeServer.InlineDisplay(false), diagnostics)
     end
 end
@@ -51,7 +52,7 @@ end
 
 to_vscode_type(x::InlayHint) = (position=(x.line, x.column), label=x.label, kind=x.kind)
 function Base.show(io::IO, ::MIME"application/vnd.julia-vscode.inlayHints", inlay_hints_by_file::Dict{T, Vector{InlayHint}}) where T
-    if inlay_hints_available()
+    if inlay_hints_available_vscode()
         return Dict{T, Vector{NamedTuple{(:position, :label, :kind), Tuple{Tuple{Int, Int}, String, Union{Nothing, Int}}}}}(
             filepath => to_vscode_type.(inlay_hints) for (filepath, inlay_hints) in inlay_hints_by_file
         )
@@ -71,13 +72,14 @@ function add_hint!(inlay_hints, message, node, position; kind=InlayHintKinds.Typ
 end
 
 function clear_inlay_hints_vscode()
-    if inlay_hints_available()
+    if inlay_hints_available_vscode()
         display(Main.VSCodeServer.InlineDisplay(false),  Dict{String, Vector{TypedSyntax.InlayHint}}())
     end
 end
 
 function display_inlay_hints_vscode(inlay_hints)
-    if inlay_hints_available() && !isnothing(inlay_hints)
+    if inlay_hints_available_vscode() && !isnothing(inlay_hints)
+        # InlineDisplay(false) means we don't print to REPL
         display(Main.VSCodeServer.InlineDisplay(false), inlay_hints)
     end
 end

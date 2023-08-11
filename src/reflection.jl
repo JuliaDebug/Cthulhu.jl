@@ -353,7 +353,6 @@ function get_typed_sourcetext(mi::MethodInstance, ::IRCode, @nospecialize(rt); k
     return get_typed_sourcetext(mi, src, rt; kwargs...)
 end
 
-
 # If we're filling in keyword args, just show the signature
 truncate_if_defaultargs!(::Nothing, mappings, meth) = nothing, mappings
 function truncate_if_defaultargs!(tsn, mappings, meth)
