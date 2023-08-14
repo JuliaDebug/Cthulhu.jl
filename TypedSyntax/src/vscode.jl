@@ -7,7 +7,7 @@ end
 
 struct Diagnostic
     path::String
-    line::Int
+    line::Int # 1-based indexing
     severity::DiagnosticKinds.T
     msg::String
 end
@@ -23,7 +23,7 @@ end
 add_diagnostic!(::Nothing, node, position, severity) = nothing
 function add_diagnostic!(diagnostics, node, position, severity)
     file_path = node.filename
-    line, column = source_location(node, position)
+    line = source_line(node, position)
     push!(diagnostics, Diagnostic(file_path, line, severity, "Unstable Type"))
 end
 
@@ -44,8 +44,8 @@ display_diagnostics_vscode(io::IO) = display_diagnostics_vscode(get(io, :diagnos
 const InlayHintKinds = (Type=1, Parameter=2, Nothing=nothing)
 
 struct InlayHint
-    line::Int
-    column::Int
+    line::Int # 1-based indexing
+    column::Int # 1-based indexing
     label::String
     kind::Union{Nothing, Int}
 end
@@ -68,7 +68,7 @@ function add_hint!(inlay_hints, message, node, position; kind=InlayHintKinds.Typ
     if filepath ∉ keys(inlay_hints)
         inlay_hints[filepath] = InlayHint[]
     end
-    push!(inlay_hints[filepath], InlayHint(line-1, column, message, kind))
+    push!(inlay_hints[filepath], InlayHint(line-1, column-1, message, kind))
 end
 
 function clear_inlay_hints_vscode()

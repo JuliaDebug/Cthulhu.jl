@@ -58,8 +58,8 @@ ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigit
 function _print(io::IO, x, node, position)
     print(io, x)
 
-    if !isempty(x) && position > 0 # position > 0 hacky fix not sure what the actual bug is
-        add_hint!(get(io, :inlay_hints, nothing), x, node, position)
+    if !isempty(x)
+        add_hint!(get(io, :inlay_hints, nothing), x, node, position+1)
     end
 end
 
@@ -117,16 +117,16 @@ function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Boo
     if iswarn && is_type_unstable(T)
         color = is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T_str; color)
-        add_diagnostic!(diagnostics, node, position, is_small_union_or_tunion(T) ? DiagnosticKinds.Information : DiagnosticKinds.Warning)
-        add_hint!(inlay_hints, string(post, "::", T_str), node, position; kind=InlayHintKinds.Nothing)
+        add_diagnostic!(diagnostics, node, position+1, is_small_union_or_tunion(T) ? DiagnosticKinds.Information : DiagnosticKinds.Warning)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position+1; kind=InlayHintKinds.Nothing)
     else
         printstyled(io, "::", T_str; color=:cyan)
-        add_hint!(inlay_hints, string(post, "::", T_str), node, position; kind=InlayHintKinds.Type)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position+1; kind=InlayHintKinds.Type)
     end
 end
 
 print_linenumber(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int) =
-    print_linenumber(io, source_line(node.source, position), nd)
+    print_linenumber(io, source_line(node.source, position+1), nd)
 print_linenumber(io::IO, ln::Int, nd::Int) = printstyled(io, lpad(ln, nd), " "; color=:light_black)
 
 # Do any "overdue" printing, generating a line number if needed. Mostly, this catches whitespace.
