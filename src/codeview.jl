@@ -167,7 +167,15 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     # preprinter configuration
     preprinter = if src isa IRCode && inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        code = src isa IRCode ? src.stmts.inst : src.code
+        if isa(src, IRCode)
+            if VERSION < v"1.11.0-DEV.258"
+                code = src.stmts.inst
+            else
+                code = src.stmts.stmt
+            end
+        else
+            code = src.code
+        end
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
         @static if VERSION ≥ v"1.11.0-DEV.32"
