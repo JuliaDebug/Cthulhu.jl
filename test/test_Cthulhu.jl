@@ -141,14 +141,16 @@ end
     end
 
     let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-        @test all(src.stmts.inst) do stmt
+        stmts = VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
+        @test all(stmts) do stmt
             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
         end
     end
 
     let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
-        @test count(!isnothing, src.stmts.inst) == 2
-        stmt = src.stmts.inst[end]
+        stmts = VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
+        @test count(!isnothing, stmts) == 2
+        stmt = stmts[end]
         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
     end
 end

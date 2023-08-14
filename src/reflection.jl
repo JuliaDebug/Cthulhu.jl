@@ -23,7 +23,15 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                         slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
-    stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
+    if isa(CI, IRCode)
+        if VERSION < v"1.11.0-DEV.258"
+            stmts = CI.stmts.inst
+        else
+            stmts = CI.stmts.stmt
+        end
+    else
+        stmts = CI.code
+    end
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
