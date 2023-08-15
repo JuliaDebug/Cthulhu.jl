@@ -940,7 +940,7 @@ function effects_dced(x)
         a = Any[]
     end
     push!(a, x)
-    n = Core.arraysize(a)
+    n = Core.arraysize(a, 1)
     return a, n
 end
 @static VERSION ≥ v"1.9-" && @testset "per-statement effects" begin
