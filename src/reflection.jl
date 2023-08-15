@@ -24,7 +24,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
     if isa(CI, IRCode)
-        if VERSION < v"1.11.0-DEV.258"
+        @static if VERSION < v"1.11.0-DEV.258"
             stmts = CI.stmts.inst
         else
             stmts = CI.stmts.stmt

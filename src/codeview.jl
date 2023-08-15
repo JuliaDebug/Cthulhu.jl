@@ -168,7 +168,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     preprinter = if src isa IRCode && inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         if isa(src, IRCode)
-            if VERSION < v"1.11.0-DEV.258"
+            @static if VERSION < v"1.11.0-DEV.258"
                 code = src.stmts.inst
             else
                 code = src.stmts.stmt

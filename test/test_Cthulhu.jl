@@ -141,14 +141,14 @@ end
     end
 
     let (; src) = cthulhu_info(M.g, Tuple{Vector{Float64}})
-        stmts = VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
+        stmts = @static VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
         @test all(stmts) do stmt
             isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
         end
     end
 
     let (; src) = cthulhu_info(M.h, Tuple{Vector{Float64}})
-        stmts = VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
+        stmts = @static VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
         @test count(!isnothing, stmts) == 2
         stmt = stmts[end]
         @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
@@ -928,7 +928,7 @@ end
     j = only(findall(iscall((src, sin_noconstprop)), src.code))
     @test i < j
     pc2remarks = interp.remarks[mi]
-    Base.VERSION >= v"1.8" && @test any(pc2remarks) do (pc, msg)
+    @test any(pc2remarks) do (pc, msg)
         pc == j && occursin("Disabled by method parameter", msg)
     end
 end
