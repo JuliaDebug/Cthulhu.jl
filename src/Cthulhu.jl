@@ -66,7 +66,7 @@ end
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 - `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
 - `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
-- `hide_warn_diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
+- `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
 """
 const CONFIG = CthulhuConfig()
 
