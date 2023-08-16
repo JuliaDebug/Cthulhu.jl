@@ -125,7 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
-    inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false,
+    inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, jump_always::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -157,7 +157,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
   
             vscode_io = IOContext(
-                lambda_io, 
+                jump_always && inlay_types_vscode ? devnull : lambda_io,
                 :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing , 
                 :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
             )
@@ -185,7 +185,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
             TypedSyntax.display_inlay_hints_vscode(vscode_io)
  
-            println(lambda_io)
+            (jump_always && inlay_types_vscode) || println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
         end
