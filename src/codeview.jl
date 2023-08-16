@@ -125,7 +125,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
-    hide_inlay_types_vscode::Bool=false, hide_diagnostics_vscode::Bool=false, # don't enable by accident
+    inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, # don't enable by accident
     interp::AbstractInterpreter=CthulhuInterpreter(), tsn::Union{Nothing,TypedSyntaxNode}=nothing)
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -149,19 +149,19 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
 
-            hide_diagnostics_vscode |= !iswarn # If warnings are off then no diagnostics are shown
+            diagnostics_vscode &= iswarn # If warnings are off then no diagnostics are shown
             # Check if diagnostics are avaiable and if mi is defined in a file
             if !TypedSyntax.diagnostics_available_vscode() || isnothing(functionloc(mi)[1])
-                hide_diagnostics_vscode = true
+                diagnostics_vscode = false
             end
             if !TypedSyntax.inlay_hints_available_vscode() || isnothing(functionloc(mi)[1])
-                hide_inlay_types_vscode = true
+                inlay_types_vscode = false
             end
   
             vscode_io = IOContext(
                 lambda_io, 
-                :inlay_hints => hide_inlay_types_vscode ? nothing : Dict{String,Vector{TypedSyntax.InlayHint}}(), 
-                :diagnostics => hide_diagnostics_vscode ? nothing : TypedSyntax.Diagnostic[]
+                :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing , 
+                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
             )
 
             if istruncated
@@ -171,7 +171,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             end
             
             callsite_diagnostics = TypedSyntax.Diagnostic[]
-            if (!hide_diagnostics_vscode || !hide_inlay_types_vscode)
+            if (diagnostics_vscode || inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
                 visited_mis = Set{MethodInstance}((mi,))
