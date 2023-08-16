@@ -28,14 +28,29 @@ using Test, PerformanceTestTools
 end
 
 module VSCodeServer
+    using TypedSyntax
+
     struct InlineDisplay
         is_repl::Bool
     end
     const INLAY_HINTS_ENABLED = Ref(true)
     const DIAGNOSTICS_ENABLED = Ref(true)
 
+    inlay_hints = []
+    diagnostics = []
+
     function Base.display(d::InlineDisplay, x)
+        if x isa Dict{String, Vector{TypedSyntax.InlayHint}}
+            push!(inlay_hints, x)
+        elseif eltype(x) == TypedSyntax.Diagnostic
+            push!(diagnostics, x)
+        end
         return nothing
+    end
+
+    function reset_test_containers()
+        empty!(inlay_hints)
+        empty!(diagnostics)
     end
 end
 module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test
