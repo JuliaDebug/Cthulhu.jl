@@ -25,7 +25,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
     stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
     nstmts = length(stmts)
-    tsn, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
+    _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
     for id = 1:nstmts
         stmt = stmts[id]
@@ -104,7 +104,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             end
         end
     end
-    return callsites, sourcenodes, tsn
+    return callsites, sourcenodes
 end
 
 function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),

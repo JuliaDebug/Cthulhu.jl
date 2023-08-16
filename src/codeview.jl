@@ -126,7 +126,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, # don't enable by accident
-    interp::AbstractInterpreter=CthulhuInterpreter(), tsn::Union{Nothing,TypedSyntaxNode}=nothing)
+    interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -134,9 +134,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     lambda_io = IOContext(io, :limit=>true)
 
     if annotate_source && isa(src, CodeInfo)
-        if tsn === nothing
-            tsn, _ = get_typed_sourcetext(mi, src, rt)
-        end
+        tsn, _ = get_typed_sourcetext(mi, src, rt)
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
