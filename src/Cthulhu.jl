@@ -36,6 +36,8 @@ Base.@kwdef mutable struct CthulhuConfig
     inline_cost::Bool = false
     type_annotations::Bool = true
     annotate_source::Bool = true   # overrides optimize, although the current setting is preserved
+    inlay_types_vscode::Bool = true
+    diagnostics_vscode::Bool = true
 end
 
 """
@@ -63,6 +65,8 @@ end
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 - `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
+- `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
+- `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
 """
 const CONFIG = CthulhuConfig()
 
@@ -206,6 +210,7 @@ function __descend_with_error_handling(args...; terminal=default_terminal(), kwa
     try
         _descend(terminal, args...; kwargs...)
     catch x
+        TypedSyntax.clear_all_vscode()
         if x isa InterruptException
             return nothing
         else
@@ -385,6 +390,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
     type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
     annotate_source::Bool                    = CONFIG.annotate_source,               # default is true
+    inlay_types_vscode::Bool                 = CONFIG.inlay_types_vscode,            # default is true
+    diagnostics_vscode::Bool                 = CONFIG.diagnostics_vscode,            # default is true
     )
 
     if isnothing(hide_type_stable)
@@ -406,7 +413,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         do_typeinf!(new_interp, new_mi)
         _descend(term, new_interp, new_mi;
                  debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
-                 with_effects, inline_cost, type_annotations, annotate_source)
+                 with_effects, inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode)
     end
     custom_toggles = Cthulhu.custom_toggles(interp)
     if !(custom_toggles isa Vector{CustomToggle})
@@ -472,9 +479,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :with_effects => with_effects)
                     stringify(ioctx) do lambda_io
                         cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;
-                                      iswarn, hide_type_stable,
+                                      iswarn, optimize, hide_type_stable,
                                       pc2remarks, pc2effects,
-                                      inline_cost, type_annotations, annotate_source,
+                                      inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
                                       interp)
                     end
                 end
@@ -489,9 +496,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
                     :with_effects => with_effects)
                 cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
-                              iswarn, hide_type_stable,
+                              iswarn, optimize, hide_type_stable,
                               pc2remarks, pc2effects,
-                              inline_cost, type_annotations, annotate_source,
+                              inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
                               interp)
             end
             view_cmd = cthulhu_typed
@@ -503,7 +510,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
         shown_callsites = annotate_source ? sourcenodes : callsites
         menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
-        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
+        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, inlay_types_vscode, diagnostics_vscode, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -592,7 +599,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                      override = get_override(info), debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, with_effects, inline_cost, type_annotations, annotate_source)
+                     remarks, with_effects, inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode)
 
         elseif toggle === :warn
             iswarn ⊻= true
@@ -600,6 +607,12 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             with_effects ⊻= true
         elseif toggle === :hide_type_stable
             hide_type_stable ⊻= true
+        elseif toggle === :inlay_types_vscode
+            inlay_types_vscode ⊻= true
+            TypedSyntax.clear_inlay_hints_vscode()
+        elseif toggle === :diagnostics_vscode
+            diagnostics_vscode ⊻= true
+            TypedSyntax.clear_diagnostics_vscode()
         elseif toggle === :optimize
             optimize ⊻= true
             if !is_cached(get_mi(curs))
@@ -689,6 +702,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
         println(iostream)
     end
+
+    TypedSyntax.clear_all_vscode()
 end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)

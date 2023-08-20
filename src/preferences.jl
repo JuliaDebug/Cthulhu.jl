@@ -36,6 +36,8 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "inline_cost" => config.inline_cost,
         "type_annotations" => config.type_annotations,
         "annotate_source" => config.annotate_source,
+        "inlay_types_vscode" => config.inlay_types_vscode,
+        "diagnostics_vscode" => config.diagnostics_vscode,
     )
 end
 
@@ -53,4 +55,6 @@ function read_config!(config::CthulhuConfig)
     config.inline_cost = @load_preference("inline_cost", config.inline_cost)
     config.type_annotations = @load_preference("type_annotations", config.type_annotations)
     config.annotate_source = @load_preference("annotate_source", config.annotate_source)
+    config.inlay_types_vscode = @load_preference("inlay_types_vscode", config.inlay_types_vscode)
+    config.diagnostics_vscode = @load_preference("diagnostics_vscode", config.diagnostics_vscode)
 end

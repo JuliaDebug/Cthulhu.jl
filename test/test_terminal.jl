@@ -1,6 +1,9 @@
 module test_terminal
 
 using Test, REPL, Cthulhu, Revise
+if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
+    using ..VSCodeServer
+end
 
 if !isdefined(@__MODULE__, :fake_terminal)
     @eval (@__MODULE__) begin

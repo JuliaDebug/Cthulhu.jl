@@ -101,11 +101,12 @@ is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(t
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance}=nothing;
-    hide_type_stable::Bool=false, inline_cost::Bool=false, interp::CthulhuInterpreter=CthulhuInterpreter())
+    hide_type_stable::Bool=false, inline_cost::Bool=false, optimize::Bool=false,
+    interp::CthulhuInterpreter=CthulhuInterpreter())
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, effects, mi; iswarn=true, hide_type_stable, inline_cost, interp)
+    cthulhu_typed(io, debuginfo, src, rt, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
     return nothing
 end
 
@@ -121,9 +122,10 @@ cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance};
-    iswarn::Bool=false, hide_type_stable::Bool=false,
+    iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
+    inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
 
     debuginfo = IRShow.debuginfo(debuginfo)
@@ -144,7 +146,45 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
-            printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+
+            diagnostics_vscode &= iswarn # If warnings are off then no diagnostics are shown
+            # Check if diagnostics are avaiable and if mi is defined in a file
+            if !TypedSyntax.diagnostics_available_vscode() || isnothing(functionloc(mi)[1])
+                diagnostics_vscode = false
+            end
+            if !TypedSyntax.inlay_hints_available_vscode() || isnothing(functionloc(mi)[1])
+                inlay_types_vscode = false
+            end
+  
+            vscode_io = IOContext(
+                lambda_io, 
+                :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing , 
+                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
+            )
+
+            if istruncated
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+            else
+                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+            end
+            
+            callsite_diagnostics = TypedSyntax.Diagnostic[]
+            if (diagnostics_vscode || inlay_types_vscode)
+                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
+                callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                visited_mis = Set{MethodInstance}((mi,))
+                add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
+                for callsite in values(callsite_mis)
+                    if !isnothing(callsite)
+                        descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                    end
+                end
+            end
+
+            !isnothing(vscode_io[:diagnostics]) && append!(callsite_diagnostics, vscode_io[:diagnostics])
+            TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
+            TypedSyntax.display_inlay_hints_vscode(vscode_io)
+ 
             println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
@@ -288,6 +328,78 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
+function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode; 
+    iswarn::Bool, hide_type_stable::Bool, type_annotations::Bool)
+    sig, body = children(tsn)
+    # We empty the body when filling kwargs
+    istruncated = isempty(children(body))
+    idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+    if !istruncated # If method only fills in default arguments
+        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+    end
+end
+
+function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::AbstractVector,
+    mi::MethodInstance, source_mi::MethodInstance=mi; 
+    optimize::Bool=true, annotate_source::Bool=false,
+    interp::AbstractInterpreter=CthulhuInterpreter())
+    
+    callsites, src, rt = try
+        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
+
+        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
+        if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
+            infos = src.stmts.info
+        else
+            @assert length(src.code) == length(infos)
+        end
+
+        # We pass false as it doesn't affect callsites and skips fetching the method definition 
+        # using CodeTracking which is slow
+        callsites, _ = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, false)
+        callsites, src, rt
+    catch
+        return nothing
+    end
+
+    for callsite in callsites
+        callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+
+        if !isnothing(callsite_mi) && callsite_mi ∉ visited_mis
+            push!(visited_mis, callsite_mi)
+            add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_mi; optimize, annotate_source, interp)
+        end
+    end
+
+    # Check if callsite is not just filling in default arguments and defined in same file as source_mi
+    if mi == source_mi || mi.def.file != source_mi.def.file
+        return nothing
+    end
+    tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
+    isnothing(tsn) && return nothing 
+    sig, body = children(tsn)
+    # We empty the body when filling kwargs
+    istruncated = isempty(children(body))
+    istruncated && return nothing
+    # We add new callsites unless we would have multiple callsites for the same source definition,
+    # e.g. if f(x) = x is called with different types we print nothing.
+    key = (mi.def.file, mi.def.line)
+    if haskey(d, key)
+        if !isnothing(d[key]) && mi != d[key].mi
+            d[key] = nothing
+            push!(diagnostics, 
+                TypedSyntax.Diagnostic(
+                    isnothing(functionloc(mi)[1]) ? string(mi.file) : functionloc(mi)[1], mi.def.line, 
+                    TypedSyntax.DiagnosticKinds.Information, 
+                    "Cthulhu disabled: This function was called multiple times with different argument types"
+                )
+            )
+        end
+    else
+        d[key] = (mi=mi, tsn=tsn)
+    end
+end
+
 @static if VERSION >= v"1.10.0-DEV.552"
     using Core.Compiler: VarState
     sptypes(sparams) = VarState[VarState.(sparams, false)...]
@@ -364,7 +476,7 @@ function Base.show(
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, effects, b.mi; iswarn, hide_type_stable, b.interp)
+    cthulhu_typed(io, debuginfo, CI, rt, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
@@ -395,7 +507,7 @@ function InteractiveUtils.code_warntype(
     CI, rt = InteractiveUtils.code_typed(b; kw...)
     (; interp, mi) = b
     (; effects) = lookup(interp, mi, optimize)
-    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; hide_type_stable, b.interp)
+    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; optimize, hide_type_stable, b.interp)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdout::IO, b; kw...)

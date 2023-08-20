@@ -1,5 +1,8 @@
+module test_vscode
+
+using ..VSCodeServer
 using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
-using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc
+using TypedSyntax: TypedSyntax, TypedSyntaxNode, getsrc, InlayHint, Diagnostic, InlayHintKinds
 using Dates, InteractiveUtils, Test
 
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
@@ -562,9 +565,9 @@ include("test_module.jl")
     # bound more tightly to the object than the type-assertion in the signature,
     # and is valid syntax that is a bit more sparing in its use of ().
     @test occursin("function (\$f)(x::Int64::Real)::Float64", str) ||
-          occursin("function (\$f)((x::Int64)::Real)::Float64", str) ||
-          occursin("function (\$f)(x::Real::Int64)::Float64", str) ||
-          occursin("function (\$f)((x::Real)::Int64)::Float64", str)
+      occursin("function (\$f)((x::Int64)::Real)::Float64", str) ||
+      occursin("function (\$f)(x::Real::Int64)::Float64", str) ||
+      occursin("function (\$f)((x::Real)::Int64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Any},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
@@ -631,27 +634,35 @@ include("test_module.jl")
     @test isa(tsnc, TypedSyntaxNode)
 end
 
-if parse(Bool, get(ENV, "CI", "false"))
-    include("exhaustive.jl")
-end
+@testset "test_vscode.jl" begin
+    # VSCode
+    tsn = TypedSyntaxNode(TSN.fVSCode, (Int64,))
 
-module VSCodeServer
-    struct InlineDisplay
-        is_repl::Bool
-    end
-    const INLAY_HINTS_ENABLED = Ref(true)
-    const DIAGNOSTICS_ENABLED = Ref(true)
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
+    printstyled(io, tsn)
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == [InlayHintKinds.Nothing, InlayHintKinds.Type, InlayHintKinds.Nothing] && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Union{Float64, Int64}", "(", ")::Union{Float64, Int64}"]
+    @test length(io[:diagnostics]) == 2
 
-    function Base.display(d::InlineDisplay, x)
-        return nothing
-    end
-end
-module TestVSCodeExt # stops modules defined in test files from overwriting stuff from previous test
-using Test, ..VSCodeServer
-
-@testset "VSCode TypedSyntax.jl" begin
-    @testset "test_vscode.jl" begin
-        include("test_vscode.jl")
-    end
+    io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
+    printstyled(io, tsn; hide_type_stable=false)
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == vcat(InlayHintKinds.Type, InlayHintKinds.Nothing, repeat([InlayHintKinds.Type], 15), InlayHintKinds.Nothing) && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Int64"
+    "::Union{Float64, Int64}"
+    "::Int64"
+    "("
+    "::Int64"
+    ")::Int64"
+    "::Int64"
+    "("
+    "::Int64"
+    ")::Int64"
+    "("
+    "::Int64"
+    "("
+    "::Int64"
+    ")::Bool"
+    "::Int64"
+    "::Float64"
+    ")::Union{Float64, Int64}"]
+    @test length(io[:diagnostics]) == 2
 end
 end

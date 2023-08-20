@@ -1,6 +1,9 @@
 module test_AbstractInterpreter
 
 using Test, Cthulhu
+if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
+    using ..VSCodeServer
+end
 
 const CC = Core.Compiler
 import Core: MethodInstance, CodeInstance

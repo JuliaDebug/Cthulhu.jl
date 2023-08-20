@@ -1,4 +1,7 @@
 using Test, Cthulhu, InteractiveUtils
+if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
+    using ..VSCodeServer
+end
 
 function cthulhu_info(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(Core.Compiler.NativeInterpreter(), f, TT)
