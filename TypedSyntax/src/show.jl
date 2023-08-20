@@ -99,6 +99,12 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
     pre = pre2 = post = ""
     if type_annotate
+        if T <: Type
+            # Don't annotate `String::Type{String}`
+            if replace(sourcetext(node), r"\s" => "") == replace(sprint(show, T.parameters[1]), r"\s" => "")
+                return false, pre, pre2, post
+            end
+        end
         if kind(node) ∈ KSet":: where" || is_infix_op_call(node) || (is_prec_assignment(node) && kind(node) != K"=")
             pre, post = "(", ")"
         elseif is_prefix_op_call(node) # insert parens after prefix op and before type-annotating
