@@ -229,4 +229,9 @@ function fVSCode(x)
     return y + (x > 0 ? -1 : 1.0)
 end
 
+# Issue #482 & #465
+MyDict{T} = Dict{T,Any}
+f482a(x) = MyDict{String}(x)
+f482b(x) = Dict{String,Any}(x)
+
 end

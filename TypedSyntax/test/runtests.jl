@@ -616,6 +616,18 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test occursin("-(x::Float64)::Float64", str)
+    # Issue #482
+    arg = ["key"=>7]
+    tsn = TypedSyntaxNode(TSN.f482a, (typeof(arg),))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test occursin("::Type{Dict{String, Any}}", str)
+    tsn = TypedSyntaxNode(TSN.f482b, (typeof(arg),))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test !occursin("::Type{Dict{String, Any}}", str)
 
     # issue #413
     @test TypedSyntax.is_small_union_or_tunion(Union{})
