@@ -14,7 +14,7 @@ include("test_vscode_example_functions.jl")
     end
 
     function equal_upto_ordering(x, y)
-        if length(x) != length(y) 
+        if length(x) != length(y)
             return false
         end
 
@@ -41,7 +41,7 @@ include("test_vscode_example_functions.jl")
                 write(in, 'q')
                 wait(t)
             end
-            
+
             if inlay_types_vscode
                 @test length(VSCodeServer.inlay_hints) == 2
                 @test isempty(VSCodeServer.inlay_hints[2])
@@ -90,7 +90,7 @@ include("test_vscode_example_functions.jl")
                 write(in, 'q')
                 wait(t)
             end
-            
+
             if inlay_types_vscode
                 @test length(VSCodeServer.inlay_hints) == 2
                 @test isempty(VSCodeServer.inlay_hints[2])
@@ -168,7 +168,7 @@ include("test_vscode_example_functions.jl")
                         TypedSyntax.InlayHint(7, 19, "::Union{Float64, Int64}", 1)
                         TypedSyntax.InlayHint(10, 11, "(", 1)
                         TypedSyntax.InlayHint(10, 33, ")::Union{Float64, Int64}", 1)
-                    ])                
+                    ])
                 end
             end
         end
@@ -185,7 +185,7 @@ include("test_vscode_example_functions.jl")
                 write(in, 'q')
                 wait(t)
             end
-            
+
             if inlay_types_vscode
                 @test length(VSCodeServer.inlay_hints) == 2
                 @test isempty(VSCodeServer.inlay_hints[2])
@@ -207,7 +207,6 @@ include("test_vscode_example_functions.jl")
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::Float64", 1)
                     TypedSyntax.InlayHint(14, 19, "::Int64", 1)
-                    TypedSyntax.InlayHint(15, 13, "::Type{Int64}", 1)
                     TypedSyntax.InlayHint(15, 15, "::Float64", 1)
                     TypedSyntax.InlayHint(15, 16, "::Int64", 1)
                     TypedSyntax.InlayHint(16, 9, "::Float64", 1)
@@ -230,7 +229,7 @@ include("test_vscode_example_functions.jl")
                 write(in, 'q')
                 wait(t)
             end
-            
+
             if inlay_types_vscode
                 @test length(VSCodeServer.inlay_hints) == 2
                 @test isempty(VSCodeServer.inlay_hints[2])
@@ -251,7 +250,6 @@ include("test_vscode_example_functions.jl")
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::Int64", 1)
                     TypedSyntax.InlayHint(14, 19, "::Int64", 1)
-                    TypedSyntax.InlayHint(15, 13, "::Type{Int64}", 1)
                     TypedSyntax.InlayHint(15, 15, "::Int64", 1)
                     TypedSyntax.InlayHint(15, 16, "::Int64", 1)
                     TypedSyntax.InlayHint(16, 9, "::Int64", 1)
