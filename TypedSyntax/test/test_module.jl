@@ -234,4 +234,7 @@ MyDict{T} = Dict{T,Any}
 f482a(x) = MyDict{String}(x)
 f482b(x) = Dict{String,Any}(x)
 
+# Issue 487
+f487(x) = 1
+
 end
