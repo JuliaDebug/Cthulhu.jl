@@ -641,6 +641,15 @@ include("test_module.jl")
     # issue #435
     tsnc = copy(tsn)
     @test isa(tsnc, TypedSyntaxNode)
+
+    # issue 487
+    m = which(TSN.f487, (Int,))
+    src, rt = getsrc(TSN.f487, (Int,))
+    rt = Core.Const(1)
+    tsn, _ = TypedSyntax.tsn_and_mappings(m, src, rt)
+    @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
