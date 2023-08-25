@@ -1,4 +1,3 @@
-
 mutable struct TypedSyntaxData <: AbstractSyntaxData
     source::SourceFile
     typedsource::CodeInfo
@@ -12,6 +11,12 @@ TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd
 
 const TypedSyntaxNode = JuliaSyntax.TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
+
+@static if VERSION ≥ v"1.11.0-DEV.337"
+    const SlotType = Core.SlotNumber
+else
+    const SlotType = Union{Core.SlotNumber, Core.Compiler.TypedSlot}
+end
 
 struct NoDefaultValue end
 const no_default_value = NoDefaultValue()
@@ -443,7 +448,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     function get_targets(@nospecialize(arg))
         return if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
-            name = src.slotnames[(arg::Union{SlotNumber,TypedSlot}).id]
+            name = src.slotnames[(arg::SlotType).id]
             is_gensym(name) ? nothing : get(symlocs, symloc_key(name), nothing)
             # get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
@@ -499,7 +504,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
                         symtyps[only(mapped)] = unwrapinternal(
-                                                (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::Union{SlotNumber,TypedSlot}).id] :
+                                                (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::SlotType).id] :
                                                 isa(stmt, SSAValue) ? ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
                         )
                     end
@@ -626,7 +631,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
                 if stmt.head == :(=) && is_slot(stmt.args[1])
                     # Tag the LHS of this expression
-                    arg = stmt.args[1]::Union{SlotNumber, TypedSlot}
+                    arg = stmt.args[1]::SlotType
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node
@@ -657,7 +662,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         end
                         for (arg, j) in argjs
                             if is_slot(arg)
-                                arg = arg::Union{SlotNumber, TypedSlot}
+                                arg = arg::SlotType
                                 sym = src.slotnames[arg.id]
                                 itr = get(symlocs, symloc_key(sym), nothing)
                                 itr === nothing && continue
@@ -759,7 +764,7 @@ function is_indexed_iterate(arg)
     return arg.name == :indexed_iterate
 end
 
-is_slot(@nospecialize(arg)) = isa(arg, SlotNumber) || isa(arg, TypedSlot)
+is_slot(@nospecialize(arg)) = isa(arg, SlotType)
 
 is_src_literal(x) = isa(x, Integer) || isa(x, AbstractFloat) || isa(x, String) || isa(x, Char) || isa(x, Symbol)
 
