@@ -99,7 +99,7 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
     pre = pre2 = post = ""
     if type_annotate
-        if T isa Type && T <: Type
+        if T isa Type && T <: Type && T !== Union{} && isassigned(T.parameters, 1)
             # Don't annotate `String::Type{String}`
             if replace(sourcetext(node), r"\s" => "") == replace(sprint(show, T.parameters[1]), r"\s" => "")
                 return false, pre, pre2, post
