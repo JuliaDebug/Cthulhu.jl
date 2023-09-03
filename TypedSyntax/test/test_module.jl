@@ -237,4 +237,9 @@ f482b(x) = Dict{String,Any}(x)
 # Issue 487
 f487(x) = 1
 
+function f493()
+    T = rand() > 0.5 ? Int64 : Float64
+    sum(rand(T, 100))
+end
+
 end
