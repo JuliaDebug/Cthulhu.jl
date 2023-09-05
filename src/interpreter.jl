@@ -175,7 +175,9 @@ end
 
 @static if VERSION ≥ v"1.9-"
 function CC.inlining_policy(interp::CthulhuInterpreter,
-    @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CCCallInfo),
+    stmt_flag::(@static VERSION ≥ v"1.11.0-DEV.377" ? UInt32 : UInt8),
+    mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, OptimizedSource)
         if CC.is_stmt_inline(stmt_flag) || src.isinlineable
             return src.ir
@@ -184,7 +186,9 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
         @assert src isa CC.SemiConcreteResult || src === nothing "invalid Cthulhu code cache"
         # the default inlining policy may try additional effor to find the source in a local cache
         return @invoke CC.inlining_policy(interp::AbstractInterpreter,
-            src::Any, info::CCCallInfo, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
+            src::Any, info::CCCallInfo,
+            stmt_flag::(@static VERSION ≥ v"1.11.0-DEV.377" ? UInt32 : UInt8),
+            mi::MethodInstance, argtypes::Vector{Any})
     end
     return nothing
 end
