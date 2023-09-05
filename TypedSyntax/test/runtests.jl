@@ -650,6 +650,22 @@ include("test_module.jl")
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
+
+    # issue 491
+    tsn = TypedSyntaxNode(+, (Int, Int)) # need a node, not important what it is
+    @test_nowarn TypedSyntax.type_annotation_mode(tsn, Union{}; type_annotations=true, hide_type_stable=false)
+
+    # issue 492
+    tsn = TypedSyntaxNode(Base._tuple_unique_fieldtypes, (Any,))
+    @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+
+    # issue 493
+    tsn = TypedSyntaxNode(TSN.f493, ())
+    @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
