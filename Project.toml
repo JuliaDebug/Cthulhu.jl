@@ -22,7 +22,7 @@ FoldingTrees = "1"
 JuliaSyntax = "0.4"
 Preferences = "1"
 PrecompileTools = "1"
-TypedSyntax = "1.1.7"
+TypedSyntax = "1.2.2"
 WidthLimitedIO = "1"
 julia = "1.8.5"
 
