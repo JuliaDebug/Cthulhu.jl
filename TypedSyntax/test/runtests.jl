@@ -666,6 +666,12 @@ include("test_module.jl")
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
+
+    # issue 506
+    tsn, _ = TypedSyntax.tsn_and_mappings(collect, (typeof(Base.Generator(+, 1:2)),))
+    @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
