@@ -230,6 +230,14 @@ function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
 end
 end
 
+@static if VERSION ≥ v"1.11.0-DEV.737"
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
+    result = caller.result
+    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    return nothing
+end
+else
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     caller.src = create_cthulhu_source(caller.src, caller.ipo_effects)
+end
 end
