@@ -121,6 +121,10 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
 
     if isnothing(result)
         return thisinfo
+    elseif (@static VERSION ≥ v"1.11.0-DEV.851" && true) && result isa CC.VolatileInferenceResult
+        # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
+        #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
+        return thisinfo
     elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConcreteResult)
         linfo = result.mi
         effects = get_effects(result)

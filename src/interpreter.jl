@@ -53,7 +53,12 @@ import .CC: InferenceParams, OptimizationParams, get_world_counter,
 using Base: @invoke
 
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
+@static if VERSION ≥ v"1.11.0-DEV.851"
+CC.OptimizationParams(interp::CthulhuInterpreter) =
+    OptimizationParams(OptimizationParams(interp.native); preserve_local_sources=true)
+else
 CC.OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
+end
 CC.get_world_counter(interp::CthulhuInterpreter) = get_world_counter(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
