@@ -656,9 +656,11 @@ include("test_module.jl")
     @test_nowarn TypedSyntax.type_annotation_mode(tsn, Union{}; type_annotations=true, hide_type_stable=false)
 
     # issue 492
+    @static if isdefined(Base, :_tuple_unique_fieldtypes)
     tsn = TypedSyntaxNode(Base._tuple_unique_fieldtypes, (Any,))
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
+    end
     end
 
     # issue 493

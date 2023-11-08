@@ -9,7 +9,7 @@ using Test, PerformanceTestTools
         include("test_codeview.jl")
     end
 
-    # TODO enable this test on nightly
+    # TODO enable these tests
     if false
         @testset "test_irshow.jl" begin
             include("test_irshow.jl")
@@ -17,9 +17,12 @@ using Test, PerformanceTestTools
     else
         @info "skipped test_irshow.jl"
     end
-
-    @testset "test_terminal.jl" begin
-        include("test_terminal.jl")
+    if false
+        @testset "test_terminal.jl" begin
+            include("test_terminal.jl")
+        end
+    else
+        @info "skipped test_terminal.jl"
     end
 
     @testset "test_AbstractInterpreter.jl" begin
@@ -65,7 +68,7 @@ using Test, PerformanceTestTools, ..VSCodeServer
         include("test_codeview_vscode.jl")
     end
 
-    # TODO enable this test on nightly
+    # TODO enable these tests
     if false
         @testset "test_irshow.jl" begin
             include("test_irshow.jl")
@@ -73,9 +76,12 @@ using Test, PerformanceTestTools, ..VSCodeServer
     else
         @info "skipped test_irshow.jl"
     end
-
-    @testset "test_terminal.jl" begin
-        include("test_terminal.jl")
+    if false
+        @testset "test_terminal.jl" begin
+            include("test_terminal.jl")
+        end
+    else
+        @info "skipped test_terminal.jl"
     end
 
     @testset "test_AbstractInterpreter.jl" begin

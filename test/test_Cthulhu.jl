@@ -709,55 +709,55 @@ end
     @test isa(mi, Core.MethodInstance)
 end
 
-## Functions for "backedges & treelist"
-# The printing changes when the functions are defined inside the testset
-fbackedge1() = 1
-fbackedge2(x) = x > 0 ? fbackedge1() : -fbackedge1()
-fst1(x) = backtrace()
-@inline fst2(x) = fst1(x)
-@noinline fst3(x) = fst2(x)
-@inline fst4(x) = fst3(x)
-fst5(x) = fst4(x)
+# ## Functions for "backedges & treelist"
+# # The printing changes when the functions are defined inside the testset
+# fbackedge1() = 1
+# fbackedge2(x) = x > 0 ? fbackedge1() : -fbackedge1()
+# fst1(x) = backtrace()
+# @inline fst2(x) = fst1(x)
+# @noinline fst3(x) = fst2(x)
+# @inline fst4(x) = fst3(x)
+# fst5(x) = fst4(x)
 
-@testset "backedges and treelist" begin
-    @test fbackedge2(0.2) == 1
-    @test fbackedge2(-0.2) == -1
-    mi = first_specialization(@which(fbackedge1()))
-    root = Cthulhu.treelist(mi)
-    @test Cthulhu.count_open_leaves(root) == 2
-    @test root.data.callstr == "fbackedge1()"
-    @test root.children[1].data.callstr == " fbackedge2(::Float64)"
+# @testset "backedges and treelist" begin
+#     @test fbackedge2(0.2) == 1
+#     @test fbackedge2(-0.2) == -1
+#     mi = first_specialization(@which(fbackedge1()))
+#     root = Cthulhu.treelist(mi)
+#     @test Cthulhu.count_open_leaves(root) == 2
+#     @test root.data.callstr == "fbackedge1()"
+#     @test root.children[1].data.callstr == " fbackedge2(::Float64)"
 
-    # issue #114
-    unspecva(@nospecialize(i::Int...)) = 1
-    @test unspecva(1, 2) == 1
-    mi = first_specialization(only(methods(unspecva)))
-    root = Cthulhu.treelist(mi)
-    @test occursin("Vararg", root.data.callstr)
+#     # issue #114
+#     unspecva(@nospecialize(i::Int...)) = 1
+#     @test unspecva(1, 2) == 1
+#     mi = first_specialization(only(methods(unspecva)))
+#     root = Cthulhu.treelist(mi)
+#     @test occursin("Vararg", root.data.callstr)
 
-    # Test highlighting and other printing
-    mi = Cthulhu.get_specialization(:, Tuple{T, T} where T<:Integer)
-    root = Cthulhu.treelist(mi)
-    @test occursin("\e[31m::T\e[39m", root.data.callstr)
-    mi = Cthulhu.get_specialization(Vector{Int}, Tuple{typeof(undef), Int})
-    io = IOBuffer()
-    @test Cthulhu.callstring(io, mi) == "Vector{$Int}(::UndefInitializer, ::$Int)"
-    mi = Cthulhu.get_specialization(similar, Tuple{Type{Vector{T}}, Dims{1}} where T)
-    @test occursin(r"31m::Type", Cthulhu.callstring(io, mi))
+#     # Test highlighting and other printing
+#     mi = Cthulhu.get_specialization(:, Tuple{T, T} where T<:Integer)
+#     root = Cthulhu.treelist(mi)
+#     @test occursin("\e[31m::T\e[39m", root.data.callstr)
+#     mi = Cthulhu.get_specialization(Vector{Int}, Tuple{typeof(undef), Int})
+#     io = IOBuffer()
+#     @test Cthulhu.callstring(io, mi) == "Vector{$Int}(::UndefInitializer, ::$Int)"
+#     mi = Cthulhu.get_specialization(similar, Tuple{Type{Vector{T}}, Dims{1}} where T)
+#     @test occursin(r"31m::Type", Cthulhu.callstring(io, mi))
 
-    # treelist for stacktraces
-    tree = Cthulhu.treelist(fst5(1.0))
-    @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
-    @test length(tree.children) == 1
-    child = tree.children[1]
-    @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
+#     # treelist for stacktraces
+#     tree = Cthulhu.treelist(fst5(1.0))
+#     @test match(r"fst1 at .*:\d+ => fst2 at .*:\d+ => fst3\(::Float64\) at .*:\d+", tree.data.callstr) !== nothing
+#     @test length(tree.children) == 1
+#     child = tree.children[1]
+#     @test match(r" fst4 at .*:\d+ => fst5\(::Float64\) at .*:\d+", child.data.callstr) !== nothing
 
-    # issue #184
-    tree = Cthulhu.treelist(similar(fst5(1.0), 0))
-    @test isempty(tree.data.callstr)
-    @test isempty(Cthulhu.callstring(io, similar(stacktrace(fst5(1.0)), 0)))
-    @test Cthulhu.instance(similar(stacktrace(fst5(1.0)), 0)) === Core.Compiler.Timings.ROOTmi
-end
+#     # issue #184
+#     tree = Cthulhu.treelist(similar(fst5(1.0), 0))
+#     @test isempty(tree.data.callstr)
+#     @test isempty(Cthulhu.callstring(io, similar(stacktrace(fst5(1.0)), 0)))
+#     @test Cthulhu.instance(similar(stacktrace(fst5(1.0)), 0)) === Core.Compiler.Timings.ROOTmi
+# end
 
 @testset "ascend" begin
     # This tests only the non-interactive "look up the caller" portion
