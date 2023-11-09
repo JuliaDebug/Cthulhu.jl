@@ -178,7 +178,22 @@ function CC.transform_result_for_cache(interp::CthulhuInterpreter,
 end
 end
 
-@static if VERSION ≥ v"1.9-"
+@static if VERSION ≥ v"1.11.0-DEV.879"
+function CC.inlining_policy(interp::CthulhuInterpreter,
+    @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt32)
+    if isa(src, OptimizedSource)
+        if CC.is_stmt_inline(stmt_flag) || src.isinlineable
+            return src.ir
+        end
+    else
+        @assert src isa CC.IRCode || src === nothing "invalid Cthulhu code cache"
+        # the default inlining policy may try additional effor to find the source in a local cache
+        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
+            src::Any, info::CCCallInfo, stmt_flag::UInt32)
+    end
+    return nothing
+end
+elseif VERSION ≥ v"1.9-"
 function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo),
     stmt_flag::(@static VERSION ≥ v"1.11.0-DEV.377" ? UInt32 : UInt8),
