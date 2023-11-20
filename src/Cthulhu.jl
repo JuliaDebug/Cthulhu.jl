@@ -234,22 +234,23 @@ const descend = descend_code_typed
 descend_code_typed(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
     _descend_with_error_handling(interp, mi; iswarn=false, kwargs...)
 
-function codeinst_rt(code::CodeInstance)
+@static if VERSION ≥ v"1.11.0-DEV.207"
+    using .CC: cached_return_type
+else
+function cached_return_type(code::CodeInstance)
     rettype = code.rettype
-    if isdefined(code, :rettype_const)
-        rettype_const = code.rettype_const
-        if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-            return Core.PartialStruct(rettype, rettype_const)
-        elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
-            return rettype_const
-        elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
-            return rettype_const
-        else
-            return Const(rettype_const)
-        end
+    isdefined(code, :rettype_const) || return rettype
+    rettype_const = code.rettype_const
+    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+        return Core.PartialStruct(rettype, rettype_const)
+    elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
+        return rettype_const
     else
-        return rettype
+        return Const(rettype_const)
     end
+end
 end
 
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
@@ -277,7 +278,7 @@ end
 
 function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_no_src::Bool=false)
     codeinst = interp.opt[mi]
-    rt = codeinst_rt(codeinst)
+    rt = cached_return_type(codeinst)
     opt = codeinst.inferred
     if opt !== nothing
         opt = opt::OptimizedSource
