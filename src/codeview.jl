@@ -20,17 +20,17 @@ function highlight(io, x, lexer, config::CthulhuConfig)
     end
 end
 
-function cthulhu_llvm(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter,
+function cthulhu_llvm(io::IO, mi, optimize::Bool, debuginfo, world::UInt,
                       config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
     dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
         InteractiveUtils._dump_function_llvm(
-            mi, get_world_counter(interp),
+            mi, world,
             #=wrapper=# false, !raw,
             dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
             Base.CodegenParams())
     else
         InteractiveUtils._dump_function_linfo_llvm(
-            mi, get_world_counter(interp),
+            mi, world,
             #=wrapper=# false, #=strip_ir_metadata=# true,
             dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
             Base.CodegenParams())
@@ -38,26 +38,26 @@ function cthulhu_llvm(io::IO, mi, optimize, debuginfo, interp::CthulhuInterprete
     highlight(io, dump, "llvm", config)
 end
 
-function cthulhu_native(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpreter,
+function cthulhu_native(io::IO, mi, ::Bool, debuginfo, world::UInt,
                         config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
     dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
         if dump_module
             InteractiveUtils._dump_function_native_assembly(
-                mi, get_world_counter(interp),
+                mi, world,
                 #=wrapper=# false, #=syntax=# config.asm_syntax,
                 debuginfo != DInfo.none ? :source : :none,
                 #=binary=# false, raw,
                 Base.CodegenParams())
         else
             InteractiveUtils._dump_function_native_disassembly(
-                mi, get_world_counter(interp),
+                mi, world,
                 #=wrapper=# false, #=syntax=# config.asm_syntax,
                 debuginfo != DInfo.none ? :source : :none,
                 #=binary=# false)
         end
     else
         InteractiveUtils._dump_function_linfo_native(
-            mi, get_world_counter(interp),
+            mi, world,
             #=wrapper=# false, #=syntax=# config.asm_syntax,
             debuginfo != DInfo.none ? :source : :none,
             #=binary=# false)
@@ -65,7 +65,7 @@ function cthulhu_native(io::IO, mi, optimize, debuginfo, interp::CthulhuInterpre
     highlight(io, dump, "asm", config)
 end
 
-function cthulhu_ast(io::IO, mi, optimize, debuginfo, ::CthulhuInterpreter, config::CthulhuConfig)
+function cthulhu_ast(io::IO, mi, ::Bool, debuginfo, ::UInt, config::CthulhuConfig)
     meth = mi.def::Method
     ast = definition(Expr, meth)
     if ast!==nothing
@@ -155,10 +155,10 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             if !TypedSyntax.inlay_hints_available_vscode() || isnothing(functionloc(mi)[1])
                 inlay_types_vscode = false
             end
-  
+
             vscode_io = IOContext(
                 jump_always && inlay_types_vscode ? devnull : lambda_io,
-                :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing , 
+                :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing ,
                 :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
             )
 
@@ -167,7 +167,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             else
                 printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             end
-            
+
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
@@ -184,7 +184,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             !isnothing(vscode_io[:diagnostics]) && append!(callsite_diagnostics, vscode_io[:diagnostics])
             TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
             TypedSyntax.display_inlay_hints_vscode(vscode_io)
- 
+
             (jump_always && inlay_types_vscode) || println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
             return nothing
@@ -328,7 +328,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     return nothing
 end
 
-function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode; 
+function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     iswarn::Bool, hide_type_stable::Bool, type_annotations::Bool)
     sig, body = children(tsn)
     # We empty the body when filling kwargs
@@ -340,10 +340,10 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
 end
 
 function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::AbstractVector,
-    mi::MethodInstance, source_mi::MethodInstance=mi; 
+    mi::MethodInstance, source_mi::MethodInstance=mi;
     optimize::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
-    
+
     callsites, src, rt = try
         (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
 
@@ -354,7 +354,7 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
             @assert length(src.code) == length(infos)
         end
 
-        # We pass false as it doesn't affect callsites and skips fetching the method definition 
+        # We pass false as it doesn't affect callsites and skips fetching the method definition
         # using CodeTracking which is slow
         callsites, _ = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, false)
         callsites, src, rt
@@ -376,7 +376,7 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
         return nothing
     end
     tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
-    isnothing(tsn) && return nothing 
+    isnothing(tsn) && return nothing
     sig, body = children(tsn)
     # We empty the body when filling kwargs
     istruncated = isempty(children(body))
@@ -387,10 +387,10 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
     if haskey(d, key)
         if !isnothing(d[key]) && mi != d[key].mi
             d[key] = nothing
-            push!(diagnostics, 
+            push!(diagnostics,
                 TypedSyntax.Diagnostic(
-                    isnothing(functionloc(mi)[1]) ? string(mi.file) : functionloc(mi)[1], mi.def.line, 
-                    TypedSyntax.DiagnosticKinds.Information, 
+                    isnothing(functionloc(mi)[1]) ? string(mi.file) : functionloc(mi)[1], mi.def.line,
+                    TypedSyntax.DiagnosticKinds.Information,
                     "Cthulhu disabled: This function was called multiple times with different argument types"
                 )
             )
@@ -524,7 +524,7 @@ InteractiveUtils.code_llvm(
     b.mi,
     optimize,
     debuginfo === :source,
-    b.interp,
+    get_world_counter(b.interp),
     config,
     dump_module,
     raw,
@@ -545,7 +545,7 @@ InteractiveUtils.code_native(
     b.mi,
     optimize,
     debuginfo === :source,
-    b.interp,
+    get_world_counter(b.interp),
     config,
     dump_module,
     raw,
