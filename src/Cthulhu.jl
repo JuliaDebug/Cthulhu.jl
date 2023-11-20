@@ -521,7 +521,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
 
         shown_callsites = annotate_source ? sourcenodes : callsites
         menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
-        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, 
+        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations,
                     CONFIG.enable_highlighter, inlay_types_vscode, diagnostics_vscode, jump_always, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
@@ -611,8 +611,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                      override = get_override(info), debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, with_effects, inline_cost, 
-                     type_annotations, annotate_source, 
+                     remarks, with_effects, inline_cost,
+                     type_annotations, annotate_source,
                      inlay_types_vscode, diagnostics_vscode,
                      jump_always)
 
@@ -696,8 +696,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             display_CI = true
         elseif toggle === :ast || toggle === :llvm || toggle === :native
             view_cmd = CODEVIEWS[toggle]
+            world = get_world_counter(interp)
             println(iostream)
-            view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
+            view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
             display_CI = false
         else
             local i = findfirst(ct->ct.toggle === toggle, custom_toggles)
