@@ -1015,4 +1015,22 @@ end
     @test String(take!(io)) == ":toplevel(::Float64)::Float64"
 end
 
+@static if VERSION ≥ v"1.9"
+@inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
+let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
+        countvars50037(1, var)
+    end
+    key = nothing
+    for (mi, codeinst) in interp.opt
+        if mi.def.name === :countvars50037
+            key = mi
+            break
+        end
+    end
+    codeinst = interp.opt[key]
+    inferred = @atomic :monotonic codeinst.inferred
+    @test length(inferred.ir.cfg.blocks) == 1
+end
+end
+
 end # module test_Cthulhu
