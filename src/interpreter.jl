@@ -159,10 +159,15 @@ function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
     return res
 end
 
-function create_cthulhu_source(@nospecialize(x), effects::Effects)
-    isa(x, OptimizationState) || return x
-    ir = x.ir::IRCode
-    return OptimizedSource(ir, x.src, x.src.inlineable, effects)
+function create_cthulhu_source(@nospecialize(opt), effects::Effects)
+    isa(opt, OptimizationState) || return opt
+    # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
+    @static if VERSION ≥ v"1.9-"
+        ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
+    else
+        ir = CC.copy(opt.ir::IRCode)
+    end
+    return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
 @static if VERSION ≥ v"1.9-"
@@ -253,7 +258,11 @@ end
 @static if VERSION ≥ v"1.11.0-DEV.737"
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
     result = caller.result
-    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    opt = result.src
+    result.src = create_cthulhu_source(opt, result.ipo_effects)
+    if opt isa CC.OptimizationState
+        CC.ir_to_codeinf!(opt)
+    end
     return nothing
 end
 else
