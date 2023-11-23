@@ -735,15 +735,10 @@ function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     return nothing
 end
 
-function get_specialization(@nospecialize(TT))
-    match = Base._which(TT)
-    mi = specialize_method(match)
-    return mi
-end
+get_specialization(@nospecialize tt::Type{<:Tuple}) = specialize_method(Base._which(tt))
 
-function get_specialization(@nospecialize(F), @nospecialize(TT))
-    return get_specialization(Base.signature_type(F, TT))
-end
+get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
+    get_specialization(Base.signature_type(f, tt))
 
 function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
     interp′ = CthulhuInterpreter(interp)
