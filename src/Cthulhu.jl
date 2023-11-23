@@ -259,13 +259,9 @@ get_effects(src::InferredSource) = src.effects
 get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
     haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
 get_effects(result::InferenceResult) = result.ipo_effects
-@static if VERSION ≥ v"1.9-"
-    get_effects(result::CC.ConstPropResult) = get_effects(result.result)
-    get_effects(result::CC.ConcreteResult) = result.effects
-    get_effects(result::CC.SemiConcreteResult) = result.effects
-else
-    get_effects(result::CC.ConstResult) = result.effects
-end
+get_effects(result::CC.ConstPropResult) = get_effects(result.result)
+get_effects(result::CC.ConcreteResult) = result.effects
+get_effects(result::CC.SemiConcreteResult) = result.effects
 
 # `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
 @constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)

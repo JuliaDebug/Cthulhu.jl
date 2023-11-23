@@ -333,7 +333,7 @@ let # check the performance benefit of semi concrete evaluation
         out
     end
 end
-@static VERSION ≥ v"1.9-" && @testset "SemiConcreteResult" begin
+@testset "SemiConcreteResult" begin
     # constant prop' on all the splits
     let callsites = find_callsites_by_ftt((Int,); optimize = false) do x
             semi_concrete_eval(42, x)
@@ -510,7 +510,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         @test Cthulhu.get_rt(info) === rt
         buf = IOBuffer()
         show(buf, callsite)
-        @static VERSION ≥ v"1.9-" && @test isa(inner, Cthulhu.SemiConcreteCallInfo)
+        @test isa(inner, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
     end
 end
@@ -976,7 +976,7 @@ function effects_dced(x)
     n = Core.arraysize(a, 1)
     return a, n
 end
-@static VERSION ≥ v"1.9-" && @testset "per-statement effects" begin
+@testset "per-statement effects" begin
     interp, mi = Cthulhu.mkinterp(effects_dced, (Int,));
     src = interp.unopt[mi].src
     i1 = only(findall(iscall((src, isa)), src.code))
@@ -991,7 +991,7 @@ end
     @test haskey(pc2effects, i4)
 end
 
-@static VERSION ≥ v"1.9-" && @testset "Bare-bones MIs" begin
+@testset "Bare-bones MIs" begin
     # Get IR for a function, wrap it in a minimal methodinstance
     (ir, rt) = only(Base.code_ircode(sqrt, (Float64,)))
     mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
@@ -1015,7 +1015,6 @@ end
     @test String(take!(io)) == ":toplevel(::Float64)::Float64"
 end
 
-@static if VERSION ≥ v"1.9"
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
 let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
         countvars50037(1, var)
@@ -1030,7 +1029,6 @@ let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
     codeinst = interp.opt[key]
     inferred = @atomic :monotonic codeinst.inferred
     @test length(inferred.ir.cfg.blocks) == 1
-end
 end
 
 end # module test_Cthulhu
