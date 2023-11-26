@@ -90,9 +90,7 @@ struct MultiCallInfo <: CallInfo
 end
 # actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-get_effects(mci::MultiCallInfo) = @static VERSION ≥ v"1.9-" ?
-    mapreduce(get_effects, CC.merge_effects, mci.callinfos) :
-    mapreduce(get_effects, CC.tristate_merge, mci.callinfos)
+get_effects(mci::MultiCallInfo) = mapreduce(get_effects, CC.merge_effects, mci.callinfos)
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
@@ -380,8 +378,7 @@ function print_callsite_info(limiter::IO, info::OCCallInfo)
     show_callinfo(limiter, info.ci)
 end
 
-const is_expected_union = @static VERSION ≥ v"1.9-" ?
-    InteractiveUtils.is_expected_union : Base.is_expected_union
+const is_expected_union = InteractiveUtils.is_expected_union
 
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool

@@ -125,27 +125,22 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
         #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
         return thisinfo
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConcreteResult)
+    elseif isa(result, CC.ConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConcreteCallInfo(mici, argtypes)
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConstPropResult)
+    elseif isa(result, CC.ConstPropResult)
         result = result.result
         linfo = result.linfo
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.SemiConcreteResult)
+    elseif isa(result, CC.SemiConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects)
         return SemiConcreteCallInfo(mici, result.ir)
-    elseif (@static !(VERSION ≥ v"1.9-") && true) && isa(result, CC.ConstResult)
-        linfo = result.mi
-        effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
-        return ConcreteCallInfo(mici, argtypes)
     else
         @assert isa(result, CC.InferenceResult)
         linfo = result.linfo
@@ -209,7 +204,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
     elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return []
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(info, CC.FinalizerInfo)
+    elseif isa(info, CC.FinalizerInfo)
         # TODO: Add ability to descend into finalizers at creation site
         return []
     elseif isa(info, CC.ReturnTypeCallInfo)

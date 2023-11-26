@@ -1,13 +1,8 @@
 using .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
     CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue
 
-@static if VERSION ≥ v"1.9-"
-    const CCCallInfo = CC.CallInfo
-    const NoCallInfo = CC.NoCallInfo
-else
-    const CCCallInfo = Any
-    const NoCallInfo = Nothing
-end
+const CCCallInfo = CC.CallInfo
+const NoCallInfo = CC.NoCallInfo
 
 struct InferredSource
     src::CodeInfo
@@ -85,13 +80,11 @@ function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
-@static if VERSION ≥ v"1.9-"
 function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effects::Effects)
     key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
     pc2effects = get!(interp.effects, key, PC2Effects())
     pc2effects[sv.currpc] = CC.merge_effects(get!(pc2effects, sv.currpc, EFFECTS_TOTAL), effects)
     @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
-end
 end
 
 @static if VERSION ≤ v"1.10.0-DEV.221"
@@ -162,25 +155,13 @@ end
 function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     isa(opt, OptimizationState) || return opt
     # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
-    @static if VERSION ≥ v"1.9-"
-        ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
-    else
-        ir = CC.copy(opt.ir::IRCode)
-    end
+    ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
-@static if VERSION ≥ v"1.9-"
 function CC.transform_result_for_cache(interp::CthulhuInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     return create_cthulhu_source(result.src, result.ipo_effects)
-end
-else
-function CC.transform_result_for_cache(interp::CthulhuInterpreter,
-    linfo::MethodInstance, valid_worlds::WorldRange, @nospecialize(inferred_result),
-    ipo_effects::CC.Effects)
-    return create_cthulhu_source(inferred_result, ipo_effects)
-end
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.879"
@@ -198,7 +179,7 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
     end
     return nothing
 end
-elseif VERSION ≥ v"1.9-"
+else
 function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo),
     stmt_flag::(@static VERSION ≥ v"1.11.0-DEV.377" ? UInt32 : UInt8),
@@ -217,21 +198,6 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
     end
     return nothing
 end
-else
-function CC.inlining_policy(interp::CthulhuInterpreter,
-    @nospecialize(src), stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
-    @assert isa(src, OptimizedSource) || isnothing(src)
-    if isa(src, OptimizedSource)
-        if CC.is_stmt_inline(stmt_flag) || src.isinlineable
-            return src.ir
-        end
-    else
-        # the default inlining policy may try additional effor to find the source in a local cache
-        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
-            nothing, stmt_flag::UInt8, mi::MethodInstance, argtypes::Vector{Any})
-    end
-    return nothing
-end
 end
 
 @static if isdefined(CC, :AbsIntState)
@@ -246,7 +212,7 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                     src.min_world, src.max_world)
 end
-elseif VERSION ≥ v"1.9-"
+else
 function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
     inferred = @atomic :monotonic code.inferred
     inferred === nothing && return nothing
