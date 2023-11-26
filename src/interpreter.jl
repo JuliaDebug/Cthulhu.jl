@@ -65,6 +65,13 @@ end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
+struct CthulhuCacheToken
+    native::Any
+end
+@static if isdefined(CC, :cache_owner)
+    CC.cache_owner(interp::CthulhuInterpreter) = CthulhuCacheToken(CC.cache_owner(interp.native))
+end
+
 # No need to do any locking since we're not putting our results into the runtime cache
 CC.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
@@ -73,7 +80,9 @@ struct CthulhuCache
     cache::OptimizationDict
 end
 
-CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_inference_world(interp)))
+@static if !isdefined(CC, :cache_owner)
+    CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_inference_world(interp)))
+end
 CC.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
 CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
 CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
