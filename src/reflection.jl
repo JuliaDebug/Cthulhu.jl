@@ -336,7 +336,12 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
 end
 
 function add_sourceline!(locs, CI, stmtidx::Int)
-    if isa(CI, IRCode)
+    if isdefined(CI, :debuginfo) # VERSION >= v"1.12"
+        stack = Base.IRShow.buildLineInfoNode(CI.debuginfo, :var"n/a", i)
+        for (i, di) in enumerate(stack)
+            push!(locs, (di, i-1))
+        end
+    elseif isa(CI, IRCode)
         stack = Base.IRShow.compute_loc_stack(CI.linetable, CI.stmts.line[stmtidx])
         for (i, idx) in enumerate(stack)
             line = CI.linetable[idx]

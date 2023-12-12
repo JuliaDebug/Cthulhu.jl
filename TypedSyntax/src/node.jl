@@ -439,6 +439,74 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
     return symlocs
 end
 
+## utility function to extract the line number at a particular program counter (ignoring inlining).
+## return <= 0 if there is no line number change caused by this statement
+if VERSION >= v"1.12" || isdefined(Core, :DebugInfo)
+function getline(lt::Core.DebugInfo, i::Int)
+    while true
+        codeloc = Base.IRShow.getdebugidx(lt, i)
+        line::Int = codeloc[1]
+        line < 0 && return 0 # broken or disabled debug info?
+        line == 0 && return 0 # no line number update (though maybe inlining changed)
+        i = line
+        ltnext = lt.linetable
+        if ltnext === nothing
+            break
+        end
+        lt = ltnext
+    end
+    return i
+end
+
+function getnextline(lt::Core.DebugInfo, i::Int, Δline)
+    while true
+        codeloc = Base.IRShow.getdebugidx(lt, i)
+        line::Int = codeloc[1]
+        line < 0 && return 0 # broken or disabled debug info?
+        line == 0 && return 0 # no line number update (though maybe inlining changed)
+        i = line
+        ltnext = lt.linetable
+        if ltnext === nothing
+            break
+        end
+        lt = ltnext
+    end
+    # now that we have line i and a list of all lines with code on them lt
+    # find the next largest line number in this list greater than i, or return typemax(Int)
+    j = i
+    for k = 0:typemax(Int)
+        codeloc = Base.IRShow.getdebugidx(lt, k)
+        line::Int = codeloc[1]
+        line < 0 && break
+        if j == i || i < line < j
+            j = line
+        end
+    end
+    return j == i ? typemax(Int) : j + Δline
+end
+
+else
+
+function getline(lt, j)
+    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
+    linfo.inlined_at == 0 && return linfo.line
+    @assert linfo.method === Symbol("macro expansion")
+    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
+    return linfo.line
+end
+
+function getnextline(lt, j, Δline)
+    j == 0 && return typemax(Int)
+    j += 1
+    while j <= length(lt)
+        linfo = lt[j]::Core.LineInfoNode
+        linfo.inlined_at == 0 && return linfo.line + Δline
+        j += 1
+    end
+    return typemax(Int)
+end
+end
+
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
@@ -471,8 +539,13 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
-        j = src.codelocs[i]
-        lt = src.linetable::Vector
+        if isdefined(src, :debuginfo)
+            j = i
+            lt = src.debuginfo
+        else
+            j = src.codelocs[i]
+            lt = src.linetable::Vector
+        end
         start = getline(lt, j) + Δline
         stop = getnextline(lt, j, Δline) - 1
         linerange = start : stop
@@ -851,25 +924,6 @@ function symloc_key(sym::Symbol)
     ssym = string(sym)
     endswith(ssym, "...") && return Symbol(ssym[1:end-3])
     return sym
-end
-
-function getline(lt, j)
-    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
-    linfo.inlined_at == 0 && return linfo.line
-    @assert linfo.method === Symbol("macro expansion")
-    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
-    return linfo.line
-end
-
-function getnextline(lt, j, Δline)
-    j == 0 && return typemax(Int)
-    j += 1
-    while j <= length(lt)
-        linfo = lt[j]::Core.LineInfoNode
-        linfo.inlined_at == 0 && return linfo.line + Δline
-        j += 1
-    end
-    return typemax(Int)
 end
 
 function find_identifier_or_tuplechild(node::AbstractSyntaxNode, sym)
