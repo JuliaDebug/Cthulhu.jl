@@ -106,7 +106,7 @@ function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
+    cthulhu_typed(io, debuginfo, src, rt, nothing, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
     return nothing
 end
 
@@ -121,9 +121,12 @@ end
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance};
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), @nospecialize(exct),
+    effects::Effects, mi::Union{Nothing,MethodInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
-    pc2remarks::Union{Nothing,PC2Remarks}=nothing, pc2effects::Union{Nothing,PC2Effects}=nothing,
+    pc2remarks::Union{Nothing,PC2Remarks}=nothing,
+    pc2effects::Union{Nothing,PC2Effects}=nothing,
+    pc2excts::Union{Nothing,PC2Excts}=nothing,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, jump_always::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
@@ -248,17 +251,27 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
     end
     # postprinter configuration
-    __postprinter = if type_annotations
+    ___postprinter = if type_annotations
         iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
     else
         Returns(nothing)
     end
-    _postprinter = if isa(src, CodeInfo) && !isnothing(pc2effects)
+    __postprinter = if isa(src, CodeInfo) && !isnothing(pc2effects)
         function (io::IO; idx::Int, @nospecialize(kws...))
-            __postprinter(io; idx, kws...)
+            ___postprinter(io; idx, kws...)
             local effects = get(pc2effects, idx, nothing)
             effects === nothing && return
             print(io, ' ', effects)
+        end
+    else
+        ___postprinter
+    end
+    _postprinter = if isa(src, CodeInfo) && !isnothing(pc2excts)
+        function (io::IO; idx::Int, @nospecialize(kws...))
+            __postprinter(io; idx, kws...)
+            local exct = get(pc2excts, idx, nothing)
+            exct === nothing && return
+            print(io, ' ', ExctWrapper(exct))
         end
     else
         __postprinter
@@ -293,7 +306,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         cfg = src isa IRCode ? src.cfg : Core.Compiler.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
-        callsite = Callsite(0, MICallInfo(mi, rettype, effects), :invoke)
+        callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
         println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
     end
 
@@ -444,7 +457,7 @@ function Base.show(
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
+    cthulhu_typed(io, debuginfo, CI, rt, nothing, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)

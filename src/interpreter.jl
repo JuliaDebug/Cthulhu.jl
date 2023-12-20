@@ -9,8 +9,10 @@ struct InferredSource
     stmt_info::Vector{CCCallInfo}
     effects::Effects
     rt::Any
-    InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt)) =
-        new(src, stmt_info, effects, rt)
+    exct::Any
+    InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt),
+                   @nospecialize(exct)) =
+        new(src, stmt_info, effects, rt, exct)
 end
 
 struct OptimizedSource
@@ -20,26 +22,31 @@ struct OptimizedSource
     effects::Effects
 end
 
+const InferenceKey = Union{MethodInstance,InferenceResult}
+const InferenceDict{T} = Dict{InferenceKey, T}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
+const PC2Excts = Dict{Int, Any}
 
 struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
 
-    unopt::Dict{Union{MethodInstance,InferenceResult}, InferredSource}
+    unopt::InferenceDict{InferredSource}
     opt::Dict{MethodInstance, CodeInstance}
 
-    remarks::Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}
-    effects::Dict{Union{MethodInstance,InferenceResult}, PC2Effects}
+    remarks::InferenceDict{PC2Remarks}
+    effects::InferenceDict{PC2Effects}
+    exception_types::InferenceDict{PC2Excts}
 end
 
 function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
     return CthulhuInterpreter(
         interp,
-        Dict{Union{MethodInstance,InferenceResult}, InferredSource}(),
+        InferenceDict{InferredSource}(),
         Dict{MethodInstance, CodeInstance}(),
-        Dict{Union{MethodInstance,InferenceResult}, PC2Remarks}(),
-        Dict{Union{MethodInstance,InferenceResult}, PC2Effects}())
+        InferenceDict{PC2Remarks}(),
+        InferenceDict{PC2Effects}(),
+        InferenceDict{PC2Excts}())
 end
 
 import .CC: InferenceParams, OptimizationParams, get_world_counter,
@@ -138,11 +145,13 @@ function InferredSource(state::InferenceState)
             slottypes === nothing ? nothing : copy(slottypes)
         end
     end
+    exct = @static VERSION ≥ v"1.11.0-DEV.207" ? state.result.exc_result : nothing
     return InferredSource(
         unoptsrc,
         copy(state.stmt_info),
         isdefined(CC, :Effects) ? state.ipo_effects : nothing,
-        state.result.result)
+        state.result.result,
+        exct)
 end
 
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
@@ -234,5 +243,16 @@ end
 else
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
     caller.src = create_cthulhu_source(caller.src, caller.ipo_effects)
+end
+end
+
+@static if VERSION ≥ v"1.11.0-DEV.1127"
+function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct),
+                                  frame::InferenceState)
+    key = CC.any(frame.result.overridden_by_const) ? frame.result : frame.linfo
+    pc2excts = get!(PC2Excts, interp.exception_types, key)
+    pc2excts[frame.currpc] = CC.tmerge(CC.typeinf_lattice(interp), exct, get(pc2excts, frame.currpc, Union{}))
+    return @invoke CC.update_exc_bestguess!(interp::AbstractInterpreter, exct::Any,
+                                            frame::InferenceState)
 end
 end
