@@ -357,11 +357,7 @@ end
         callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
-
         @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
-
-        @test Cthulhu.get_remarks(interp, callsites[1].info) == Cthulhu.PC2Remarks()
-        @test Cthulhu.get_effects(interp, callsites[1].info) == Cthulhu.PC2Effects()
     end
 end
 
@@ -677,9 +673,9 @@ end
         end
     end
     function doprint(f)
-        (; src, mi, rt, effects) = cthulhu_info(f)
+        (; src, mi, rt, exct, effects) = cthulhu_info(f)
         io = IOBuffer()
-        Cthulhu.cthulhu_typed(io, :none, src, rt, effects, mi; iswarn=false)
+        Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; iswarn=false)
         return String(take!(io))
     end
     @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))

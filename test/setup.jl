@@ -5,11 +5,11 @@ end
 
 function cthulhu_info(@nospecialize(f), @nospecialize(TT=()); optimize=true)
     (interp, mi) = Cthulhu.mkinterp(Core.Compiler.NativeInterpreter(), f, TT)
-    (; src, rt, infos, slottypes, effects) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
+    (; src, rt, exct, infos, slottypes, effects) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
     if src !== nothing
         src = Cthulhu.preprocess_ci!(src, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
     end
-    (; interp, src, infos, mi, rt, slottypes, effects)
+    (; interp, src, infos, mi, rt, exct, slottypes, effects)
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
