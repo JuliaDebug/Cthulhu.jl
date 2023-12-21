@@ -1,4 +1,3 @@
-
 """
 ```julia
 save_config!(config::CthulhuConfig=CONFIG)
@@ -58,5 +57,5 @@ function read_config!(config::CthulhuConfig)
     config.annotate_source = @load_preference("annotate_source", config.annotate_source)
     config.inlay_types_vscode = @load_preference("inlay_types_vscode", config.inlay_types_vscode)
     config.diagnostics_vscode = @load_preference("diagnostics_vscode", config.diagnostics_vscode)
-    config.jump_always = @load_preference("always_edit", config.jump_always)
+    config.jump_always = @load_preference("jump_always", config.jump_always)
 end
