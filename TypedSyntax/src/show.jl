@@ -80,7 +80,7 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
         position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
         ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
     end
-    return catchup(io, node, position, nd, _lastidx+1)
+    return Int(catchup(io, node, position, nd, _lastidx+1))
 end
 
 # should we print a type-annotation?
