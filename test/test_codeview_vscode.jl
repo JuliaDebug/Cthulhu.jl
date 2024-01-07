@@ -203,14 +203,15 @@ include("test_vscode_example_functions.jl")
                 @test VSCodeServer.diagnostics[1][1].msg == "Cthulhu disabled: This function was called multiple times with different argument types"
             end
 
+            println(stdout, first(values(VSCodeServer.inlay_hints[1])))
             if !hide_type_stable && inlay_types_vscode
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::Float64", 1)
                     TypedSyntax.InlayHint(14, 19, "::$Int", 1)
-                    TypedSyntax.InlayHint(15, 15, "::Float64", 1)
-                    TypedSyntax.InlayHint(15, 16, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 7, "::Float64", 1)
-                    TypedSyntax.InlayHint(16, 8, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::Float64", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::Float64", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
                 ])
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
@@ -250,10 +251,10 @@ include("test_vscode_example_functions.jl")
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::$Int", 1)
                     TypedSyntax.InlayHint(14, 19, "::$Int", 1)
-                    TypedSyntax.InlayHint(15, 15, "::$Int", 1)
-                    TypedSyntax.InlayHint(15, 16, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 7, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 8, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
                     TypedSyntax.InlayHint(1, 14, "::$Int", 1)
                     TypedSyntax.InlayHint(1, 15, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 11, "(", 1)
