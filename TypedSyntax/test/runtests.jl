@@ -349,7 +349,7 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.summer_iterate, (Vector{Float64},))
     @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 2, 1), :ret, Union{Nothing, Tuple{Float64, Int64}})
+    @test has_name_typ(child(body, 2, 1), :ret, Union{Nothing, Tuple{Float64, Int}})
     @test has_name_typ(child(body, 3, 2, 1, 1, 1), :x, Float64)
 
     # `where`, unnamed arguments, and types-as-arguments
@@ -552,7 +552,7 @@ include("test_module.jl")
     @test TypedSyntax.num_positional_args(tsn) == 2
 
     # Display
-    tsn = TypedSyntaxNode(TSN.mysin, (Int,))
+    tsn = TypedSyntaxNode(TSN.mysin, (Int64,))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
@@ -602,7 +602,7 @@ include("test_module.jl")
     end
     @test occursin("[1]\e[36m::Float32\e[39m", str)
     @test occursin("[2]\e[36m::Float32\e[39m", str)
-    tsn = TypedSyntaxNode(TSN.simplef, (Int, Float64))
+    tsn = TypedSyntaxNode(TSN.simplef, (Int64, Float64))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
