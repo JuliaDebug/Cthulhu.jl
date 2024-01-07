@@ -209,8 +209,8 @@ include("test_vscode_example_functions.jl")
                     TypedSyntax.InlayHint(14, 19, "::$Int", 1)
                     TypedSyntax.InlayHint(15, 15, "::Float64", 1)
                     TypedSyntax.InlayHint(15, 16, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 9, "::Float64", 1)
-                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 7, "::Float64", 1)
+                    TypedSyntax.InlayHint(16, 8, "::$Int", 1)
                 ])
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
@@ -219,7 +219,7 @@ include("test_vscode_example_functions.jl")
     end
 
     for inlay_types_vscode in (true, false), diagnostics_vscode in (true, false), iswarn in (true, false), hide_type_stable in (true, false)
-        @testset "fibcall $Int inlay_types_vscode=$inlay_types_vscode, diagnostics_vscode=$diagnostics_vscode, iswarn=$iswarn, hide_type_stable=$hide_type_stable" begin
+        @testset "fibcall Int inlay_types_vscode=$inlay_types_vscode, diagnostics_vscode=$diagnostics_vscode, iswarn=$iswarn, hide_type_stable=$hide_type_stable" begin
             VSCodeServer.reset_test_containers()
 
             fake_terminal() do term, in, out, _
@@ -252,8 +252,8 @@ include("test_vscode_example_functions.jl")
                     TypedSyntax.InlayHint(14, 19, "::$Int", 1)
                     TypedSyntax.InlayHint(15, 15, "::$Int", 1)
                     TypedSyntax.InlayHint(15, 16, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 9, "::$Int", 1)
-                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 7, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 8, "::$Int", 1)
                     TypedSyntax.InlayHint(1, 14, "::$Int", 1)
                     TypedSyntax.InlayHint(1, 15, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 11, "(", 1)
