@@ -203,7 +203,6 @@ include("test_vscode_example_functions.jl")
                 @test VSCodeServer.diagnostics[1][1].msg == "Cthulhu disabled: This function was called multiple times with different argument types"
             end
 
-            println(stdout, first(values(VSCodeServer.inlay_hints[1])))
             if !hide_type_stable && inlay_types_vscode
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::Float64", 1)
