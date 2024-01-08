@@ -695,32 +695,32 @@ using TypedSyntax: InlayHint, Diagnostic, InlayHintKinds
 
 @testset "test_vscode.jl" begin
     # VSCode
-    tsn = TypedSyntaxNode(TSN.fVSCode, (Int64,))
+    tsn = TypedSyntaxNode(TSN.fVSCode, (Int,))
 
     io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
     printstyled(io, tsn)
-    @test getproperty.(first(values(io[:inlay_hints])), :kind) == [InlayHintKinds.Nothing, InlayHintKinds.Type, InlayHintKinds.Nothing] && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Union{Float64, Int64}", "(", ")::Union{Float64, Int64}"]
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == [InlayHintKinds.Nothing, InlayHintKinds.Type, InlayHintKinds.Nothing] && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Union{Float64, $Int}", "(", ")::Union{Float64, $Int}"]
     @test length(io[:diagnostics]) == 2
 
     io = IOContext(devnull, :inlay_hints=>Dict{String, Vector{InlayHint}}(), :diagnostics=>Diagnostic[])
     printstyled(io, tsn; hide_type_stable=false)
-    @test getproperty.(first(values(io[:inlay_hints])), :kind) == vcat(InlayHintKinds.Type, InlayHintKinds.Nothing, repeat([InlayHintKinds.Type], 15), InlayHintKinds.Nothing) && getproperty.(first(values(io[:inlay_hints])), :label) == ["::Int64"
-    "::Union{Float64, Int64}"
-    "::Int64"
+    @test getproperty.(first(values(io[:inlay_hints])), :kind) == vcat(InlayHintKinds.Type, InlayHintKinds.Nothing, repeat([InlayHintKinds.Type], 15), InlayHintKinds.Nothing) && getproperty.(first(values(io[:inlay_hints])), :label) == ["::$Int"
+    "::Union{Float64, $Int}"
+    "::$Int"
     "("
-    "::Int64"
-    ")::Int64"
-    "::Int64"
+    "::$Int"
+    ")::$Int"
+    "::$Int"
     "("
-    "::Int64"
-    ")::Int64"
+    "::$Int"
+    ")::$Int"
     "("
-    "::Int64"
+    "::$Int"
     "("
-    "::Int64"
+    "::$Int"
     ")::Bool"
-    "::Int64"
+    "::$Int"
     "::Float64"
-    ")::Union{Float64, Int64}"]
+    ")::Union{Float64, $Int}"]
     @test length(io[:diagnostics]) == 2
 end
