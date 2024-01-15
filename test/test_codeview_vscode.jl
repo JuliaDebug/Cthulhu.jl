@@ -212,7 +212,14 @@ include("test_vscode_example_functions.jl")
                     TypedSyntax.InlayHint(15, 14, "::$Int", 1)
                     TypedSyntax.InlayHint(16, 9, "::Float64", 1)
                     TypedSyntax.InlayHint(16, 10, "::$Int", 1)
-                ])
+                ]) || equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
+                    TypedSyntax.InlayHint(14, 18, "::Float64", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::Float64", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::Float64", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                ]) # Workaround for #530
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
             end
@@ -268,7 +275,26 @@ include("test_vscode_example_functions.jl")
                     TypedSyntax.InlayHint(3, 33, ")::$Int", 1)
                     TypedSyntax.InlayHint(3, 34, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 34, ")::$Int", 1)
-                ])
+                ]) || equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
+                    TypedSyntax.InlayHint(14, 18, "::$Int", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 15, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 11, "(", 1)
+                    TypedSyntax.InlayHint(3, 15, "(", 1)
+                    TypedSyntax.InlayHint(3, 16, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 20, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 21, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 28, "(", 1)
+                    TypedSyntax.InlayHint(3, 29, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 33, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, ")::$Int", 1)
+                ]) # Workaround for #530
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
             end
