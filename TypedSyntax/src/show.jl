@@ -113,6 +113,13 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
+"""
+    type_string(type)
+
+Overload this function to implement custom annotations for types. For example,
+`type_string(::Type{Float32}) = "F32"` would result in `F32` being used to annotate
+any instance of a `Float32`.
+"""
 type_string(T) = string(T)
 
 function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
