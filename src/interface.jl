@@ -81,8 +81,10 @@ get_excts(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.exception_
 # a sensible default cursor for a MethodInstance
 AbstractCursor(interp::AbstractInterpreter, mi::MethodInstance) = CthulhuCursor(mi)
 
-get_effects(interp::CthulhuInterpreter, mi::MethodInstance, opt::Bool) =
-    get_effects(opt ? interp.opt : interp.unopt, mi)
+function get_effects(interp::CthulhuInterpreter, mi::MethodInstance, opt::Bool)
+    effects = opt ? interp.opt : interp.unopt
+    return haskey(effects, mi) ? get_effects(effects[mi]) : Effects()
+end
 
 mutable struct CustomToggle
     onoff::Bool

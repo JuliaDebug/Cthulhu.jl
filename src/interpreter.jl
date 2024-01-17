@@ -23,7 +23,8 @@ struct OptimizedSource
 end
 
 const InferenceKey = Union{MethodInstance,InferenceResult}
-const InferenceDict{T} = Dict{InferenceKey, T}
+const InferenceDict{T} = IdDict{InferenceKey, T}
+const OptimizationDict = IdDict{MethodInstance, CodeInstance}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
@@ -32,7 +33,7 @@ struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
 
     unopt::InferenceDict{InferredSource}
-    opt::Dict{MethodInstance, CodeInstance}
+    opt::OptimizationDict
 
     remarks::InferenceDict{PC2Remarks}
     effects::InferenceDict{PC2Effects}
@@ -43,7 +44,7 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
     return CthulhuInterpreter(
         interp,
         InferenceDict{InferredSource}(),
-        Dict{MethodInstance, CodeInstance}(),
+        OptimizationDict(),
         InferenceDict{PC2Remarks}(),
         InferenceDict{PC2Effects}(),
         InferenceDict{PC2Excts}())
@@ -69,7 +70,7 @@ CC.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
 struct CthulhuCache
-    cache::Dict{MethodInstance, CodeInstance}
+    cache::OptimizationDict
 end
 
 CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_world_counter(interp)))
