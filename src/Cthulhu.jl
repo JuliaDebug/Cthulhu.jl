@@ -266,8 +266,6 @@ end
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
 get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
 get_effects(src::InferredSource) = src.effects
-get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
-    haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
 get_effects(result::InferenceResult) = result.ipo_effects
 get_effects(result::CC.ConstPropResult) = get_effects(result.result)
 get_effects(result::CC.ConcreteResult) = result.effects
