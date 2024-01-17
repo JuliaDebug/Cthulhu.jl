@@ -113,12 +113,14 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
+type_string(T) = string(T)
+
 function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
     diagnostics = get(io, :diagnostics, nothing)
     inlay_hints = get(io, :inlay_hints, nothing)
 
     print(io, post)
-    T_str = string(T)
+    T_str = type_string(T)
     if iswarn && is_type_unstable(T)
         color = is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T_str; color)
