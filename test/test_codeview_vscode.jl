@@ -36,7 +36,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fib, (Int64,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    @test_nowarn descend(fib, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -60,18 +60,18 @@ include("test_vscode_example_functions.jl")
 
             if !hide_type_stable && inlay_types_vscode
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                    TypedSyntax.InlayHint(1, 14, "::Int64", 1)
-                    TypedSyntax.InlayHint(1, 15, "::Int64", 1)
+                    TypedSyntax.InlayHint(1, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 15, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 11, "(", 1)
                     TypedSyntax.InlayHint(3, 15, "(", 1)
-                    TypedSyntax.InlayHint(3, 16, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 20, ")::Int64", 1)
-                    TypedSyntax.InlayHint(3, 21, "::Int64", 1)
+                    TypedSyntax.InlayHint(3, 16, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 20, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 21, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 28, "(", 1)
-                    TypedSyntax.InlayHint(3, 29, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 33, ")::Int64", 1)
-                    TypedSyntax.InlayHint(3, 34, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 34, ")::Int64", 1)
+                    TypedSyntax.InlayHint(3, 29, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 33, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, ")::$Int", 1)
                 ])
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
@@ -85,7 +85,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fVSCode, (Int64,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    @test_nowarn descend(fVSCode, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -114,60 +114,60 @@ include("test_vscode_example_functions.jl")
             if !hide_type_stable && inlay_types_vscode
                 if iswarn
                     @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                        TypedSyntax.InlayHint(7, 18, "::Int64", 1)
-                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, Int64}", nothing)
-                        TypedSyntax.InlayHint(8, 5, "::Int64", 1)
+                        TypedSyntax.InlayHint(7, 18, "::$Int", 1)
+                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, $Int}", nothing)
+                        TypedSyntax.InlayHint(8, 5, "::$Int", 1)
                         TypedSyntax.InlayHint(8, 8, "(", 1)
-                        TypedSyntax.InlayHint(8, 9, "::Int64", 1)
-                        TypedSyntax.InlayHint(8, 13, ")::Int64", 1)
-                        TypedSyntax.InlayHint(9, 5, "::Int64", 1)
+                        TypedSyntax.InlayHint(8, 9, "::$Int", 1)
+                        TypedSyntax.InlayHint(8, 13, ")::$Int", 1)
+                        TypedSyntax.InlayHint(9, 5, "::$Int", 1)
                         TypedSyntax.InlayHint(9, 8, "(", 1)
-                        TypedSyntax.InlayHint(9, 13, "::Int64", 1)
-                        TypedSyntax.InlayHint(9, 13, ")::Int64", 1)
+                        TypedSyntax.InlayHint(9, 13, "::$Int", 1)
+                        TypedSyntax.InlayHint(9, 13, ")::$Int", 1)
                         TypedSyntax.InlayHint(10, 11, "(", 1)
-                        TypedSyntax.InlayHint(10, 12, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 12, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 16, "(", 1)
-                        TypedSyntax.InlayHint(10, 17, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 17, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 21, ")::Bool", 1)
-                        TypedSyntax.InlayHint(10, 26, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 26, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 32, "::Float64", 1)
-                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, Int64}", nothing)
+                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, $Int}", nothing)
                     ])
 
                 else
                     @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                        TypedSyntax.InlayHint(7, 18, "::Int64", 1)
-                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, Int64}", 1)
-                        TypedSyntax.InlayHint(8, 5, "::Int64", 1)
+                        TypedSyntax.InlayHint(7, 18, "::$Int", 1)
+                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, $Int}", 1)
+                        TypedSyntax.InlayHint(8, 5, "::$Int", 1)
                         TypedSyntax.InlayHint(8, 8, "(", 1)
-                        TypedSyntax.InlayHint(8, 9, "::Int64", 1)
-                        TypedSyntax.InlayHint(8, 13, ")::Int64", 1)
-                        TypedSyntax.InlayHint(9, 5, "::Int64", 1)
+                        TypedSyntax.InlayHint(8, 9, "::$Int", 1)
+                        TypedSyntax.InlayHint(8, 13, ")::$Int", 1)
+                        TypedSyntax.InlayHint(9, 5, "::$Int", 1)
                         TypedSyntax.InlayHint(9, 8, "(", 1)
-                        TypedSyntax.InlayHint(9, 13, "::Int64", 1)
-                        TypedSyntax.InlayHint(9, 13, ")::Int64", 1)
+                        TypedSyntax.InlayHint(9, 13, "::$Int", 1)
+                        TypedSyntax.InlayHint(9, 13, ")::$Int", 1)
                         TypedSyntax.InlayHint(10, 11, "(", 1)
-                        TypedSyntax.InlayHint(10, 12, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 12, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 16, "(", 1)
-                        TypedSyntax.InlayHint(10, 17, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 17, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 21, ")::Bool", 1)
-                        TypedSyntax.InlayHint(10, 26, "::Int64", 1)
+                        TypedSyntax.InlayHint(10, 26, "::$Int", 1)
                         TypedSyntax.InlayHint(10, 32, "::Float64", 1)
-                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, Int64}", 1)
+                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, $Int}", 1)
                     ])
                 end
             elseif hide_type_stable && inlay_types_vscode
                 if iswarn
                     @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, Int64}", nothing)
+                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, $Int}", nothing)
                         TypedSyntax.InlayHint(10, 11, "(", 1)
-                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, Int64}", nothing)
+                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, $Int}", nothing)
                     ])
                 else
                     @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, Int64}", 1)
+                        TypedSyntax.InlayHint(7, 19, "::Union{Float64, $Int}", 1)
                         TypedSyntax.InlayHint(10, 11, "(", 1)
-                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, Int64}", 1)
+                        TypedSyntax.InlayHint(10, 33, ")::Union{Float64, $Int}", 1)
                     ])
                 end
             end
@@ -206,12 +206,20 @@ include("test_vscode_example_functions.jl")
             if !hide_type_stable && inlay_types_vscode
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
                     TypedSyntax.InlayHint(14, 18, "::Float64", 1)
-                    TypedSyntax.InlayHint(14, 19, "::Int64", 1)
-                    TypedSyntax.InlayHint(15, 15, "::Float64", 1)
-                    TypedSyntax.InlayHint(15, 16, "::Int64", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 11, "::Type{$Int}", 1)
+                    TypedSyntax.InlayHint(15, 13, "::Float64", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
                     TypedSyntax.InlayHint(16, 9, "::Float64", 1)
-                    TypedSyntax.InlayHint(16, 10, "::Int64", 1)
-                ])
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                ]) || equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
+                    TypedSyntax.InlayHint(14, 18, "::Float64", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::Float64", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::Float64", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                ]) # Workaround for #530
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
             end
@@ -219,12 +227,12 @@ include("test_vscode_example_functions.jl")
     end
 
     for inlay_types_vscode in (true, false), diagnostics_vscode in (true, false), iswarn in (true, false), hide_type_stable in (true, false)
-        @testset "fibcall Int64 inlay_types_vscode=$inlay_types_vscode, diagnostics_vscode=$diagnostics_vscode, iswarn=$iswarn, hide_type_stable=$hide_type_stable" begin
+        @testset "fibcall Int inlay_types_vscode=$inlay_types_vscode, diagnostics_vscode=$diagnostics_vscode, iswarn=$iswarn, hide_type_stable=$hide_type_stable" begin
             VSCodeServer.reset_test_containers()
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fibcall, (Int64,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    @test_nowarn descend(fibcall, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -248,25 +256,45 @@ include("test_vscode_example_functions.jl")
 
             if !hide_type_stable && inlay_types_vscode
                 @test equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
-                    TypedSyntax.InlayHint(14, 18, "::Int64", 1)
-                    TypedSyntax.InlayHint(14, 19, "::Int64", 1)
-                    TypedSyntax.InlayHint(15, 15, "::Int64", 1)
-                    TypedSyntax.InlayHint(15, 16, "::Int64", 1)
-                    TypedSyntax.InlayHint(16, 9, "::Int64", 1)
-                    TypedSyntax.InlayHint(16, 10, "::Int64", 1)
-                    TypedSyntax.InlayHint(1, 14, "::Int64", 1)
-                    TypedSyntax.InlayHint(1, 15, "::Int64", 1)
+                    TypedSyntax.InlayHint(14, 18, "::$Int", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 11, "::Type{$Int}", 1)
+                    TypedSyntax.InlayHint(15, 13, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 15, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 11, "(", 1)
                     TypedSyntax.InlayHint(3, 15, "(", 1)
-                    TypedSyntax.InlayHint(3, 16, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 20, ")::Int64", 1)
-                    TypedSyntax.InlayHint(3, 21, "::Int64", 1)
+                    TypedSyntax.InlayHint(3, 16, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 20, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 21, "::$Int", 1)
                     TypedSyntax.InlayHint(3, 28, "(", 1)
-                    TypedSyntax.InlayHint(3, 29, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 33, ")::Int64", 1)
-                    TypedSyntax.InlayHint(3, 34, "::Int64", 1)
-                    TypedSyntax.InlayHint(3, 34, ")::Int64", 1)
-                ])
+                    TypedSyntax.InlayHint(3, 29, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 33, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, ")::$Int", 1)
+                ]) || equal_upto_ordering(first(values(VSCodeServer.inlay_hints[1])), [
+                    TypedSyntax.InlayHint(14, 18, "::$Int", 1)
+                    TypedSyntax.InlayHint(14, 19, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 13, "::$Int", 1)
+                    TypedSyntax.InlayHint(15, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 9, "::$Int", 1)
+                    TypedSyntax.InlayHint(16, 10, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 14, "::$Int", 1)
+                    TypedSyntax.InlayHint(1, 15, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 11, "(", 1)
+                    TypedSyntax.InlayHint(3, 15, "(", 1)
+                    TypedSyntax.InlayHint(3, 16, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 20, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 21, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 28, "(", 1)
+                    TypedSyntax.InlayHint(3, 29, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 33, ")::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, "::$Int", 1)
+                    TypedSyntax.InlayHint(3, 34, ")::$Int", 1)
+                ]) # Workaround for #530
             elseif hide_type_stable && inlay_types_vscode
                 @test isempty(VSCodeServer.inlay_hints[1])
             end

@@ -13,6 +13,6 @@ end
 
 # exact location in file matters
 function fibcall(n)
-    fib(Int64(n))
+    fib(Int(n))
     fib(n)
 end
