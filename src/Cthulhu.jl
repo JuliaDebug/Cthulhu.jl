@@ -292,7 +292,10 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
     codeinst = CC.getindex(CC.code_cache(interp), mi)
     rt = cached_return_type(codeinst)
     exct = cached_exception_type(codeinst)
-    opt = codeinst.inferred
+    opt = get(interp.opt, codeinst, nothing)
+    if opt === nothing
+        opt = codeinst.inferred
+    end
     if opt !== nothing
         opt = opt::OptimizedSource
         src = CC.copy(opt.ir)

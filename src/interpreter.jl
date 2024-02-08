@@ -24,7 +24,9 @@ end
 
 const InferenceKey = Union{MethodInstance,InferenceResult}
 const InferenceDict{T} = IdDict{InferenceKey, T}
-const OptimizationDict = IdDict{MethodInstance, CodeInstance}
+
+# const OptimizationDict = IdDict{MethodInstance, CodeInstance}
+const OptimizationDict = IdDict{CodeInstance, OptimizedSource}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
@@ -182,6 +184,18 @@ end
 #     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
 #     return create_cthulhu_source(result.src, result.ipo_effects)
 # end
+
+
+
+function CC.CodeInstance(interp::CthulhuInterpreter, result::InferenceResult,
+                valid_worlds::WorldRange)
+    opt_src = create_cthulhu_source(result.src, result.ipo_effects)
+    ci = @invoke CC.CodeInstance(interp::AbstractInterpreter, result, valid_worlds)
+    if opt_src isa OptimizedSource
+        interp.opt[ci] = opt_src
+    end
+    return ci
+end
 
 @static if VERSION ≥ v"1.11.0-DEV.879"
 function CC.inlining_policy(interp::CthulhuInterpreter,
