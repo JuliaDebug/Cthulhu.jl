@@ -20,6 +20,13 @@ const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
 
+@static if VERSION ≥ v"1.11.0-DEV.1498"
+    import .CC: get_inference_world
+    using Base: get_world_counter
+else
+    import .CC: get_world_counter, get_world_counter as get_inference_world
+end
+
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
@@ -728,7 +735,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             display_CI = true
         elseif toggle === :ast || toggle === :llvm || toggle === :native
             view_cmd = CODEVIEWS[toggle]
-            world = get_world_counter(interp)
+            world = get_inference_world(interp)
             println(iostream)
             view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
             display_CI = false
