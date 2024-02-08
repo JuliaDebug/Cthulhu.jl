@@ -22,7 +22,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
                 config = Cthulhu.CONFIG
 
                 io = IOBuffer()
-                codeview(io, mi, optimize, debuginfo, Cthulhu.get_world_counter(interp), config)
+                codeview(io, mi, optimize, debuginfo, Cthulhu.get_inference_world(interp), config)
                 @test !isempty(String(take!(io))) # just check it works
             end
         end

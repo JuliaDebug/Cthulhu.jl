@@ -447,7 +447,7 @@ const BOOKMARKS = Bookmark[]
 function Base.show(
     io::IO, ::MIME"text/plain", b::Bookmark;
     optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
-    world = get_world_counter(b.interp)
+    world = get_inference_world(b.interp)
     CI, rt = InteractiveUtils.code_typed(b; optimize)
     (; interp, mi) = b
     (; effects) = lookup(interp, mi, optimize)
@@ -505,7 +505,7 @@ InteractiveUtils.code_llvm(
     b.mi,
     optimize,
     debuginfo === :source,
-    get_world_counter(b.interp),
+    get_inference_world(b.interp),
     config,
     dump_module,
     raw,
@@ -526,7 +526,7 @@ InteractiveUtils.code_native(
     b.mi,
     optimize,
     debuginfo === :source,
-    get_world_counter(b.interp),
+    get_inference_world(b.interp),
     config,
     dump_module,
     raw,

@@ -87,7 +87,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                         func = args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_world_counter(interp))), head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_inference_world(interp))), head)
                     end
                 end
             end
@@ -99,7 +99,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                 mi = get_mi(info)
                 meth = mi.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_world_counter(interp))
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_inference_world(interp))
                 end
             end
 
