@@ -178,10 +178,10 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
-function CC.transform_result_for_cache(interp::CthulhuInterpreter,
-    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
-    return create_cthulhu_source(result.src, result.ipo_effects)
-end
+# function CC.transform_result_for_cache(interp::CthulhuInterpreter,
+#     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+#     return create_cthulhu_source(result.src, result.ipo_effects)
+# end
 
 @static if VERSION ≥ v"1.11.0-DEV.879"
 function CC.inlining_policy(interp::CthulhuInterpreter,
