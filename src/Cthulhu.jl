@@ -288,7 +288,8 @@ get_effects(result::CC.SemiConcreteResult) = result.effects
 end
 
 function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_no_src::Bool=false)
-    codeinst = interp.opt[mi]
+    # codeinst = interp.opt[mi]
+    codeinst = CC.getindex(CC.code_cache(interp), mi)
     rt = cached_return_type(codeinst)
     exct = cached_exception_type(codeinst)
     opt = codeinst.inferred
