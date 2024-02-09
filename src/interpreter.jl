@@ -150,7 +150,7 @@ function InferredSource(state::InferenceState)
     return InferredSource(
         unoptsrc,
         copy(state.stmt_info),
-        isdefined(CC, :Effects) ? state.ipo_effects : nothing,
+        state.ipo_effects,
         state.result.result,
         exct)
 end
