@@ -7,12 +7,35 @@ end
 
 const CC = Core.Compiler
 
-"""
-    @newinterp NewInterpreter
-
-Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
-from the native code cache, satisfying the minimum interface requirements.
-"""
+if isdefined(CC, :cache_owner)
+macro newinterp(InterpName)
+    InterpCacheName = QuoteNode(Symbol(string(InterpName, "Cache")))
+    InterpName = esc(InterpName)
+    C = Core
+    CC = Core.Compiler
+    quote
+        struct $InterpName <: $CC.AbstractInterpreter
+            meta # additional information
+            world::UInt
+            inf_params::$CC.InferenceParams
+            opt_params::$CC.OptimizationParams
+            inf_cache::Vector{$CC.InferenceResult}
+            function $InterpName(meta = nothing;
+                                 world::UInt = Base.get_world_counter(),
+                                 inf_params::$CC.InferenceParams = $CC.InferenceParams(),
+                                 opt_params::$CC.OptimizationParams = $CC.OptimizationParams(),
+                                 inf_cache::Vector{$CC.InferenceResult} = $CC.InferenceResult[])
+                return new(meta, world, inf_params, opt_params, inf_cache)
+            end
+        end
+        $CC.InferenceParams(interp::$InterpName) = interp.inf_params
+        $CC.OptimizationParams(interp::$InterpName) = interp.opt_params
+        $CC.get_inference_world(interp::$InterpName) = interp.world
+        $CC.get_inference_cache(interp::$InterpName) = interp.inf_cache
+        $CC.cache_owner(::$InterpName) = $InterpCacheName
+    end
+end
+else
 macro newinterp(InterpName)
     InterpCacheName = esc(Symbol(string(InterpName, "Cache")))
     InterpName = esc(InterpName)
@@ -54,6 +77,14 @@ macro newinterp(InterpName)
         $CC.setindex!(wvc::$CC.WorldView{$InterpCacheName}, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
     end
 end
+end # isdefined(CC, :cache_owner)
+
+@doc """
+@newinterp NewInterpreter
+
+Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
+from the native code cache, satisfying the minimum interface requirements.
+""" var"@newinterp"
 
 # `OverlayMethodTable`
 # --------------------
