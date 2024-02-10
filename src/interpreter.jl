@@ -69,6 +69,14 @@ CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.
 CC.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
+
+if isdefined(CC, :cache_owner)
+struct CthulhuCacheToken
+    token
+end
+CC.cache_owner(interp::CthulhuInterpreter) = CthulhuCacheToken(CC.cache_owner(interp.native))
+end
+
 struct CthulhuCache
     cache::OptimizationDict
 end
