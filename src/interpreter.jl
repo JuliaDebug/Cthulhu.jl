@@ -24,7 +24,7 @@ end
 
 const InferenceKey = Union{MethodInstance,InferenceResult}
 const InferenceDict{T} = IdDict{InferenceKey, T}
-const OptimizationDict = IdDict{MethodInstance, CodeInstance}
+const OptimizationDict = @static VERSION ≥ v"1.11.0-DEV.1552" ? Nothing : IdDict{MethodInstance, CodeInstance}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
@@ -65,26 +65,35 @@ end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
-# No need to do any locking since we're not putting our results into the runtime cache
-CC.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
-CC.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
 CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
 
-if isdefined(CC, :cache_owner)
+@static if VERSION ≥ v"1.11.0-DEV.1552"
 struct CthulhuCacheToken
     token
 end
 CC.cache_owner(interp::CthulhuInterpreter) = CthulhuCacheToken(CC.cache_owner(interp.native))
+struct CodeCacheView{CodeCache}
+    code_cache::CodeCache
 end
-
+CodeCacheView(interp::CthulhuInterpreter) = CodeCacheView(CC.code_cache(interp))
+function Base.getproperty(interp::CthulhuInterpreter, name::Symbol)
+    if name === :opt
+        return CodeCacheView(interp)
+    end
+    return getfield(interp, name)
+end
+Base.get(view::CodeCacheView, mi::MethodInstance, default) = CC.get(view.code_cache, mi, default)
+Base.getindex(view::CodeCacheView, mi::MethodInstance) = CC.getindex(view.code_cache, mi)
+Base.haskey(view::CodeCacheView, mi::MethodInstance) = CC.haskey(view.code_cache, mi)
+else
 struct CthulhuCache
     cache::OptimizationDict
 end
-
 CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_inference_world(interp)))
 CC.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
 CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
 CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
+end
 
 CC.may_optimize(interp::CthulhuInterpreter) = true
 CC.may_compress(interp::CthulhuInterpreter) = false
