@@ -1,14 +1,10 @@
 using Core: CodeInfo, ReturnNode, MethodInstance
-using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
+using Core.Compiler: IRCode, IncrementalCompact, singleton_type
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
 argextype(@nospecialize args...) = Core.Compiler.argextype(args...)
-@static if VERSION >= v"1.10.0-DEV.556"
-    argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, VarState[])
-else
-    argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Any[])
-end
+argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Core.Compiler.VarState[])
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
 macro code_typed1(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :code_typed1, ex0)

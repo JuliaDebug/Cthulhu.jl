@@ -22,41 +22,25 @@ end
 
 function cthulhu_llvm(io::IO, mi, optimize::Bool, debuginfo, world::UInt,
                       config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-    dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
-        InteractiveUtils._dump_function_llvm(
-            mi, world,
-            #=wrapper=# false, !raw,
-            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
-            Base.CodegenParams())
-    else
-        InteractiveUtils._dump_function_linfo_llvm(
-            mi, world,
-            #=wrapper=# false, #=strip_ir_metadata=# true,
-            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
-            Base.CodegenParams())
-    end
+    dump = InteractiveUtils._dump_function_llvm(
+        mi, world,
+        #=wrapper=# false, !raw,
+        dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
+        Base.CodegenParams())
     highlight(io, dump, "llvm", config)
 end
 
 function cthulhu_native(io::IO, mi, ::Bool, debuginfo, world::UInt,
                         config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-    dump = @static if VERSION ≥ v"1.10.0-DEV.1386"
-        if dump_module
-            InteractiveUtils._dump_function_native_assembly(
-                mi, world,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false, raw,
-                Base.CodegenParams())
-        else
-            InteractiveUtils._dump_function_native_disassembly(
-                mi, world,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false)
-        end
+    if dump_module
+        dump = InteractiveUtils._dump_function_native_assembly(
+            mi, world,
+            #=wrapper=# false, #=syntax=# config.asm_syntax,
+            debuginfo != DInfo.none ? :source : :none,
+            #=binary=# false, raw,
+            Base.CodegenParams())
     else
-        InteractiveUtils._dump_function_linfo_native(
+        dump = InteractiveUtils._dump_function_native_disassembly(
             mi, world,
             #=wrapper=# false, #=syntax=# config.asm_syntax,
             debuginfo != DInfo.none ? :source : :none,
@@ -221,10 +205,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
+        sparams = CC.VarState[CC.VarState(sparam, false) for sparam in mi.sparam_vals]
         @static if VERSION ≥ v"1.11.0-DEV.32"
-            CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), params)
+            CC.statement_costs!(cst, code, src, sparams, params)
         else
-            CC.statement_costs!(cst, code, src, sptypes(mi.sparam_vals), false, params)
+            CC.statement_costs!(cst, code, src, sparams, false, params)
         end
         total_cost = sum(cst)
         nd = ndigits(total_cost)
@@ -386,13 +371,6 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
     end
 end
 
-@static if VERSION >= v"1.10.0-DEV.552"
-    using Core.Compiler: VarState
-    sptypes(sparams) = VarState[VarState.(sparams, false)...]
-else
-    sptypes(sparams) = Any[sparams...]
-end
-
 function show_variables(io, src, slotnames)
     println(io, "Variables")
     slottypes = src.slottypes
@@ -465,12 +443,7 @@ function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     (; src, rt, codeinf) = lookup(interp, mi, optimize)
     src = preprocess_ci!(src, mi, optimize, CONFIG)
     if src isa IRCode
-        @static if VERSION ≥ v"1.10.0-DEV.870"
-            CC.replace_code_newstyle!(codeinf, src)
-        else
-            nargs = Int((mi.def::Method).nargs) - 1
-            CC.replace_code_newstyle!(codeinf, src, nargs)
-        end
+        CC.replace_code_newstyle!(codeinf, src)
     end
     return codeinf => rt
 end
