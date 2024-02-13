@@ -65,12 +65,18 @@ end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
-# No need to do any locking since we're not putting our results into the runtime cache
-CC.lock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
-CC.unlock_mi_inference(interp::CthulhuInterpreter, mi::MethodInstance) = nothing
+CC.may_optimize(interp::CthulhuInterpreter) = true
+CC.may_compress(interp::CthulhuInterpreter) = false
+CC.may_discard_trees(interp::CthulhuInterpreter) = false
+CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
+
 CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
 
-if isdefined(CC, :cache_owner)
+@static if VERSION ≥ v"1.11.0-DEV.1552"
+# Since the cache for `CthulhuInterpreter` is volatile and does not involve with the
+# internal code cache, technically, there's no requirement to supply `cache_owner` as an
+# identifier for the internal code cache. However, the definition of `cache_owner` is
+# necessary for utilizing the default `CodeInstance` constructor, define the overload here.
 struct CthulhuCacheToken
     token
 end
@@ -80,16 +86,10 @@ end
 struct CthulhuCache
     cache::OptimizationDict
 end
-
 CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_inference_world(interp)))
 CC.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
 CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
 CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
-
-CC.may_optimize(interp::CthulhuInterpreter) = true
-CC.may_compress(interp::CthulhuInterpreter) = false
-CC.may_discard_trees(interp::CthulhuInterpreter) = false
-CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo

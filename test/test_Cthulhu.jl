@@ -268,12 +268,12 @@ end
                 end
                 t[1]
             end
-            @test length(callsites) == 1                                        # getindex(::Union{Vector{Any}, Const(tuple(1,nothing))}, ::Const(1))
+            @test length(callsites) == 1 # getindex(::Union{Vector{Any}, Const(tuple(1,nothing))}, ::Const(1))
             callinfo = callsites[1].info
             @test isa(callinfo, Cthulhu.MultiCallInfo)
             callinfos = callinfo.callinfos
             @test length(callinfos) == 2
-            @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1        # getindex(::Vector{Any}, ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1 # getindex(::Vector{Any}, ::Const(1))
             @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo) || isa(ci, Cthulhu.SemiConcreteCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
         end
 
@@ -1015,12 +1015,10 @@ end
 let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
         countvars50037(1, var)
     end
-    key = nothing
-    for (mi, codeinst) in interp.opt
-        if mi.def.name === :countvars50037
-            key = mi
-            break
-        end
+    @static if VERSION ≥ v"1.10"
+    key = only(Base.specializations(only(methods(countvars50037))))
+    else
+    key = only(methods(countvars50037)).specializations[1]
     end
     codeinst = interp.opt[key]
     inferred = @atomic :monotonic codeinst.inferred
