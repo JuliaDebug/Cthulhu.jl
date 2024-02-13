@@ -1015,7 +1015,11 @@ end
 let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
         countvars50037(1, var)
     end
+    @static if VERSION ≥ v"1.10"
     key = only(Base.specializations(only(methods(countvars50037))))
+    else
+    key = only(methods(countvars50037)).specializations[1]
+    end
     codeinst = interp.opt[key]
     inferred = @atomic :monotonic codeinst.inferred
     @test length(inferred.ir.cfg.blocks) == 1

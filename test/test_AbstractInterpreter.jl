@@ -7,7 +7,7 @@ end
 
 const CC = Core.Compiler
 
-if isdefined(CC, :cache_owner)
+@static if VERSION ≥ v"1.11.0-DEV.1552"
 macro newinterp(InterpName)
     InterpCacheName = QuoteNode(Symbol(string(InterpName, "Cache")))
     InterpName = esc(InterpName)
@@ -77,7 +77,7 @@ macro newinterp(InterpName)
         $CC.setindex!(wvc::$CC.WorldView{$InterpCacheName}, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
     end
 end
-end # isdefined(CC, :cache_owner)
+end # if VERSION ≥ v"1.11.0-DEV.1552"
 
 @doc """
 @newinterp NewInterpreter

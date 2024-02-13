@@ -24,7 +24,7 @@ end
 
 const InferenceKey = Union{MethodInstance,InferenceResult}
 const InferenceDict{T} = IdDict{InferenceKey, T}
-const OptimizationDict = @static VERSION ≥ v"1.11.0-DEV.1552" ? Nothing : IdDict{MethodInstance, CodeInstance}
+const OptimizationDict = IdDict{MethodInstance, CodeInstance}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
@@ -65,27 +65,24 @@ end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
 
+CC.may_optimize(interp::CthulhuInterpreter) = true
+CC.may_compress(interp::CthulhuInterpreter) = false
+CC.may_discard_trees(interp::CthulhuInterpreter) = false
+CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
+
 CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
 
 @static if VERSION ≥ v"1.11.0-DEV.1552"
+# Since the cache for `CthulhuInterpreter` is volatile and does not involve with the
+# internal code cache, technically, there's no requirement to supply `cache_owner` as an
+# identifier for the internal code cache. However, the definition of `cache_owner` is
+# necessary for utilizing the default `CodeInstance` constructor, define the overload here.
 struct CthulhuCacheToken
     token
 end
 CC.cache_owner(interp::CthulhuInterpreter) = CthulhuCacheToken(CC.cache_owner(interp.native))
-struct CodeCacheView{CodeCache}
-    code_cache::CodeCache
 end
-CodeCacheView(interp::CthulhuInterpreter) = CodeCacheView(CC.code_cache(interp))
-function Base.getproperty(interp::CthulhuInterpreter, name::Symbol)
-    if name === :opt
-        return CodeCacheView(interp)
-    end
-    return getfield(interp, name)
-end
-Base.get(view::CodeCacheView, mi::MethodInstance, default) = CC.get(view.code_cache, mi, default)
-Base.getindex(view::CodeCacheView, mi::MethodInstance) = CC.getindex(view.code_cache, mi)
-Base.haskey(view::CodeCacheView, mi::MethodInstance) = CC.haskey(view.code_cache, mi)
-else
+
 struct CthulhuCache
     cache::OptimizationDict
 end
@@ -93,12 +90,6 @@ CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), 
 CC.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
 CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
 CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
-end
-
-CC.may_optimize(interp::CthulhuInterpreter) = true
-CC.may_compress(interp::CthulhuInterpreter) = false
-CC.may_discard_trees(interp::CthulhuInterpreter) = false
-CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
     key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
