@@ -1,8 +1,6 @@
 using .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
-    CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue
-
-const CCCallInfo = CC.CallInfo
-const NoCallInfo = CC.NoCallInfo
+    CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue,
+    CallInfo as CCCallInfo, NoCallInfo
 
 struct InferredSource
     src::CodeInfo
@@ -103,57 +101,8 @@ function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effec
     @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
 end
 
-@static if VERSION ≤ v"1.10.0-DEV.221"
-function CC.type_annotate!(interp::CthulhuInterpreter, sv::InferenceState, run_optimizer::Bool)
-    changemap = @invoke CC.type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
-    changemap === nothing && return nothing
-    key = CC.any(sv.result.overridden_by_const) ? sv.result : sv.linfo
-    pc2remarks = get(interp.remarks, key, nothing)
-    if pc2remarks !== nothing
-        sort!(pc2remarks)
-        unique!(pc2remarks)
-        for (idx, v) in enumerate(changemap)
-            if v == typemin(Int)
-                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
-                    @assert false "remarks found in unreached region"
-                end
-            end
-        end
-        for (idx, v) in enumerate(changemap)
-            if v < 0
-                for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
-                    pc2remarks[i] = pc2remarks[i].first+v => pc2remarks[i].second
-                end
-            end
-        end
-    end
-    pc2effects = get(interp.effects, key, nothing)
-    if pc2effects !== nothing
-        for (idx, v) in enumerate(changemap)
-            if v == typemin(Int)
-                delete!(pc2effects, idx)
-            end
-        end
-        for (idx, v) in enumerate(changemap)
-            if v < 0
-                haskey(pc2effects, idx) || continue
-                pc2effects[idx+v] = pc2effects[idx]
-                delete!(pc2effects, idx)
-            end
-        end
-    end
-    return changemap
-end
-end
-
 function InferredSource(state::InferenceState)
     unoptsrc = copy(state.src)
-    @static if VERSION < v"1.10.0-DEV.1033"
-        # xref: https://github.com/JuliaLang/julia/pull/49378
-        unoptsrc.slottypes = let slottypes = unoptsrc.slottypes
-            slottypes === nothing ? nothing : copy(slottypes)
-        end
-    end
     exct = @static VERSION ≥ v"1.11.0-DEV.207" ? state.result.exc_result : nothing
     return InferredSource(
         unoptsrc,
@@ -218,7 +167,6 @@ function CC.inlining_policy(interp::CthulhuInterpreter,
 end
 end
 
-@static if isdefined(CC, :AbsIntState)
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     inferred = @atomic :monotonic code.inferred
@@ -229,14 +177,6 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     method_info = CC.MethodInfo(src)
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                     src.min_world, src.max_world)
-end
-else
-function CC.codeinst_to_ir(interp::CthulhuInterpreter, code::CodeInstance)
-    inferred = @atomic :monotonic code.inferred
-    inferred === nothing && return nothing
-    inferred = inferred::OptimizedSource
-    return CC.copy(inferred.ir)
-end
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.737"

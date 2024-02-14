@@ -261,11 +261,7 @@ function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::Cthu
         argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
-        @static if VERSION ≥ v"1.10.0-DEV.870"
-            ci = CC.replace_code_newstyle!(ci, ir)
-        else
-            ci = CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
-        end
+        ci = CC.replace_code_newstyle!(ci, ir)
     end
     return ci
 end
@@ -384,11 +380,7 @@ function truncate_if_defaultargs!(tsn, mappings, meth)
     return tsn, mappings
 end
 
-if isdefined(Core, :kwcall)
-    is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
-else
-    is_kw_dispatch(meth::Method) = endswith(string(meth.name), "##kw") || !isempty(Base.kwarg_decl(meth))
-end
+is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
 
 function tag_runtime(node::TypedSyntaxNode, info)
     node.runtime = isa(info, RTCallInfo)

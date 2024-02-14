@@ -352,7 +352,7 @@ function bar346(x::ComplexF64)
     x = ComplexF64(x.re, 1.0)
     return sin(x.im)
 end
-@static VERSION >= v"1.10-" && @testset "issue #346" begin
+@testset "issue #346" begin
     let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
         callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
@@ -373,8 +373,8 @@ struct SingletonPureCallable{N} end
     @test occursin("SingletonPureCallable{1}()(::Float64)::Float64", s)
 
 
-    @test Cthulhu.get_effects(c1) |> is_foldable_nothrow
-    @test Cthulhu.get_effects(c2) |> is_foldable_nothrow
+    @test Cthulhu.get_effects(c1) |> Core.Compiler.is_foldable_nothrow
+    @test Cthulhu.get_effects(c2) |> Core.Compiler.is_foldable_nothrow
 end
 
 @testset "ReturnTypeCallInfo" begin
@@ -406,8 +406,8 @@ end
     print(io, callsites[2])
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
-    @test Cthulhu.get_effects(callinfo1) |> is_foldable_nothrow
-    @test Cthulhu.get_effects(callinfo2) |> is_foldable_nothrow
+    @test Cthulhu.get_effects(callinfo1) |> Core.Compiler.is_foldable_nothrow
+    @test Cthulhu.get_effects(callinfo2) |> Core.Compiler.is_foldable_nothrow
 end
 
 @testset "OCCallInfo" begin
@@ -418,7 +418,7 @@ end
         @test length(callsites) == 1
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
-        @test Cthulhu.get_effects(callinfo) |> !is_foldable_nothrow
+        @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_foldable_nothrow
         # TODO not sure what these effects are (and neither is Base.infer_effects yet)
         @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
             sin(a) + cos(b)
@@ -476,7 +476,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
         rt = Core.Compiler.Const(:Integer)
         @test info.ci.rt === rt
         buf = IOBuffer()
@@ -489,7 +489,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
         @test info.ci.rt === Core.Compiler.Const(:Int)
     end
 
@@ -500,7 +500,7 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
         inner = info.ci
         rt = Core.Compiler.Const(Any)
         @test Cthulhu.get_rt(info) === rt
@@ -1015,11 +1015,7 @@ end
 let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
         countvars50037(1, var)
     end
-    @static if VERSION ≥ v"1.10"
     key = only(Base.specializations(only(methods(countvars50037))))
-    else
-    key = only(methods(countvars50037)).specializations[1]
-    end
     codeinst = interp.opt[key]
     inferred = @atomic :monotonic codeinst.inferred
     @test length(inferred.ir.cfg.blocks) == 1
