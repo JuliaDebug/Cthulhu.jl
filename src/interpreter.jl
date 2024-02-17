@@ -162,10 +162,13 @@ function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
     return res
 end
 
+# Overload me to disable
+cfg_simplify!(ir) = CC.cfg_simplify!(ir)
+
 function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     isa(opt, OptimizationState) || return opt
     # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
-    ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
+    ir = CC.compact!(cfg_simplify!(CC.copy(opt.ir::IRCode)))
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
