@@ -182,7 +182,6 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         # we're working on pre-optimization state, need to ignore `LimitedAccuracy`
         src = copy(src)
         src.ssavaluetypes = mapany(ignorelimited, src.ssavaluetypes::Vector{Any})
-        src.rettype = ignorelimited(src.rettype)
 
         if src.slotnames !== nothing
             slotnames = Base.sourceinfo_slotnames(src)

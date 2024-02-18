@@ -131,9 +131,16 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
+@static if VERSION ≥ v"1.12.0-DEV.15"
+function CC.transform_result_for_cache(interp::CthulhuInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult, can_discard_trees::Bool=false)
+    return create_cthulhu_source(result.src, result.ipo_effects)
+end
+else
 function CC.transform_result_for_cache(interp::CthulhuInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     return create_cthulhu_source(result.src, result.ipo_effects)
+end
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.879"
@@ -181,7 +188,7 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     src = inferred.src
     method_info = CC.MethodInfo(src)
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                    src.min_world, src.max_world)
+                                    code.min_world, code.max_world)
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.737"

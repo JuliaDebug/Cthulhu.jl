@@ -350,9 +350,8 @@ function add_sourceline!(locs, CI, stmtidx::Int)
 end
 
 function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true)
-    meth = mi.def::Method
-    tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
-    return truncate_if_defaultargs!(tsn, mappings, meth)
+    tsn, mappings = TypedSyntax.tsn_and_mappings(mi, src, rt; warn, strip_macros=true)
+    return truncate_if_defaultargs!(tsn, mappings, mi.def::Method)
 end
 
 function get_typed_sourcetext(mi::MethodInstance, ::IRCode, @nospecialize(rt); kwargs...)

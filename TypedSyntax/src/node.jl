@@ -30,16 +30,18 @@ function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     tsn_and_mappings(m, src, rt; kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
     def = definition(String, m)
     if isnothing(def)
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing
     end
-    return tsn_and_mappings(m, src, rt, def...; warn, strip_macros, kwargs...)
+    return tsn_and_mappings(mi, src, rt, def...; warn, strip_macros, kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
     filename = isnothing(functionloc(m)[1]) ? string(m.file) : functionloc(m)[1]
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=filename, first_line=lineno, kwargs...)
     if strip_macros
@@ -50,7 +52,7 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetex
         end
     end
     Δline = lineno - m.line   # offset from original line number (Revise)
-    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+    mappings, symtyps = map_ssas_to_source(src, mi, rootnode, Δline)
     node = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     node.typ = rt
     return node, mappings
@@ -59,9 +61,8 @@ end
 TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
 
 function TypedSyntaxNode(mi::MethodInstance; kwargs...)
-    m = mi.def::Method
     src, rt = getsrc(mi)
-    tsn_and_mappings(m, src, rt; kwargs...)[1]
+    tsn_and_mappings(mi, src, rt; kwargs...)[1]
 end
 
 TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
@@ -397,8 +398,7 @@ end
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
-function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
-    mi = src.parent::MethodInstance
+function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Int)
     slottypes = src.slottypes::Union{Nothing, Vector{Any}}
     have_slottypes = slottypes !== nothing
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
@@ -736,7 +736,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     end
     return mappings, symtyps
 end
-map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, rootnode, Int(Δline))
+map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, mi, rootnode, Int(Δline))
 
 function follow_back(src, arg)
     # Follow SSAValue backward to see if it maps back to a slot
