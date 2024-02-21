@@ -121,8 +121,13 @@ end
 
 function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     isa(opt, OptimizationState) || return opt
-    # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
-    ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
+    @static if VERSION > v"1.10"
+        # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
+        ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
+    else
+        # TODO do the round-trip here?
+        ir = CC.copy(opt.ir::IRCode)
+    end
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
