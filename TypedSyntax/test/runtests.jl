@@ -15,8 +15,8 @@ include("test_module.jl")
     """
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN1.jl")
     TSN.eval(Expr(rootnode))
-    src, _ = getsrc(TSN.f, (Float32, Int, Float64))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, _, mi = getsrc(TSN.f, (Float32, Int, Float64))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     @test children(sig)[2].typ === Float32
     @test children(sig)[3].typ === Int
@@ -33,8 +33,8 @@ include("test_module.jl")
     """
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
-    src, _ = getsrc(TSN.g, (Int16, Int16, Int32))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, _, mi = getsrc(TSN.g, (Int16, Int16, Int32))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     @test length(children(sig)) == 4
     @test children(body)[2].typ === Int32
@@ -46,8 +46,8 @@ include("test_module.jl")
     st = "math(x) = x + sin(x + π / 4)"
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
-    src, _ = getsrc(TSN.math, (Int,))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, _, mi = getsrc(TSN.math, (Int,))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     @test has_name_typ(child(body, 1), :x, Int)
     @test has_name_typ(child(body, 3, 2, 1), :x, Int)
@@ -70,8 +70,8 @@ include("test_module.jl")
     st = "math2(x) = sin(x) + sin(x)"
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN2.jl")
     TSN.eval(Expr(rootnode))
-    src, _ = getsrc(TSN.math2, (Int,))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, _, mi = getsrc(TSN.math2, (Int,))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     @test body.typ === Float64
     @test_broken child(body, 1).typ === Float64
@@ -91,8 +91,8 @@ include("test_module.jl")
         )
         rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN3.jl")
         TSN.eval(Expr(rootnode))
-        src, _ = getsrc(TSN.firstfirst, (Vector{Vector{Real}},))
-        tsn = TypedSyntaxNode(rootnode, src)
+        src, _, mi = getsrc(TSN.firstfirst, (Vector{Vector{Real}},))
+        tsn = TypedSyntaxNode(rootnode, src, mi)
         sig, body = children(tsn)
         @test child(body, idxsinner...).typ === nothing
         @test child(body, idxsouter...).typ === Vector{Real}
@@ -150,8 +150,8 @@ include("test_module.jl")
         """
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN4.jl")
     TSN.eval(Expr(rootnode))
-    src, rt = getsrc(TSN.setlist!, (Vector{Vector{Float32}}, Vector{Vector{UInt8}}, Int, Int))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, rt, mi = getsrc(TSN.setlist!, (Vector{Vector{Float32}}, Vector{Vector{UInt8}}, Int, Int))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     nodelist = child(body, 1, 2, 1, 1)                             # `listget`
     @test sourcetext(nodelist) == "listget" && nodelist.typ === Vector{Vector{UInt8}}
@@ -175,8 +175,8 @@ include("test_module.jl")
     """
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN5.jl")
     TSN.eval(Expr(rootnode))
-    src, rt = getsrc(TSN.callfindmin, (Vector{Float64},))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, rt, mi = getsrc(TSN.callfindmin, (Vector{Float64},))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     t = child(body, 1, 1)
     @test kind(t) == K"tuple"
@@ -280,18 +280,18 @@ include("test_module.jl")
     """
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN6.jl")
     TSN.eval(Expr(rootnode))
-    src, rt = getsrc(TSN.avoidzero, (Int,))
+    src, rt, mi = getsrc(TSN.avoidzero, (Int,))
     # src looks like this:
     #   %1 = Main.TSN.:(var"#avoidzero#6")(true, #self#, x)::Float64
     #        return %1
     # Consequently there is nothing to match, but at least we shouldn't error
-    tsn = TypedSyntaxNode(rootnode, src)
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     @test isa(tsn, TypedSyntaxNode)
     @test rt === Float64
     # Try the kwbodyfunc
     m = which(TSN.avoidzero, (Int,))
-    src, rt = getsrc(Base.bodyfunction(m), (Bool, typeof(TSN.avoidzero), Int,))
-    tsn = TypedSyntaxNode(rootnode, src)
+    src, rt, mi = getsrc(Base.bodyfunction(m), (Bool, typeof(TSN.avoidzero), Int,))
+    tsn = TypedSyntaxNode(rootnode, src, mi)
     sig, body = children(tsn)
     isz = child(body, 2, 1, 1)
     @test kind(isz) == K"call" && child(isz, 1).val == :iszero
@@ -520,8 +520,8 @@ include("test_module.jl")
     @test_broken body.typ == Int
 
     # Construction from MethodInstance
-    src, rt = TypedSyntax.getsrc(TSN.myoftype, (Float64, Int))
-    tsn = TypedSyntaxNode(src.parent)
+    src, rt, mi = TypedSyntax.getsrc(TSN.myoftype, (Float64, Int))
+    tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
     node = child(body, 1)
     @test node.typ === Type{Float64}
@@ -641,10 +641,9 @@ include("test_module.jl")
     @test isa(tsnc, TypedSyntaxNode)
 
     # issue 487
-    m = which(TSN.f487, (Int,))
-    src, rt = getsrc(TSN.f487, (Int,))
+    src, rt, mi = getsrc(TSN.f487, (Int,))
     rt = Core.Const(1)
-    tsn, _ = TypedSyntax.tsn_and_mappings(m, src, rt)
+    tsn, _ = TypedSyntax.tsn_and_mappings(mi, src, rt)
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end

@@ -26,8 +26,8 @@ const no_default_value = NoDefaultValue()
 # where `mappings[i]` corresponds to the list of nodes matching `(src::CodeInfo).code[i]`.
 function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
     m = which(f, t)
-    src, rt = getsrc(f, t)
-    tsn_and_mappings(m, src, rt; kwargs...)
+    src, rt, mi = getsrc(f, t)
+    tsn_and_mappings(mi, src, rt; kwargs...)
 end
 
 function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
@@ -65,8 +65,8 @@ function TypedSyntaxNode(mi::MethodInstance; kwargs...)
     tsn_and_mappings(mi, src, rt; kwargs...)[1]
 end
 
-TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
-    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
+TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mi::MethodInstance, Δline::Integer=0) =
+    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, mi, rootnode, Δline)...)
 
 function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
@@ -307,7 +307,13 @@ end
 
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
-    return only(srcrts)
+    src, rt = only(srcrts)
+    if hasfield(typeof(src), :parent) && src.parent !== nothing
+        mi = src.parent
+    else
+        mi = Base.method_instance(f, t)
+    end
+    return src, rt, mi
 end
 
 function getsrc(mi::MethodInstance)
@@ -315,7 +321,8 @@ function getsrc(mi::MethodInstance)
     isempty(cis) && error("no applicable type-inferred code found for ", mi)
     length(cis) == 1 || error("got $(length(cis)) possible type-inferred results for ", mi,
                               ", you may need a more specialized signature")
-    return cis[1]::Pair{CodeInfo}
+    src::CodeInfo, rt = cis[1]
+    return src, rt
 end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
