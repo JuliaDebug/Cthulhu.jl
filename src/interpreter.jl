@@ -131,12 +131,37 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
+@static if VERSION ≥ v"1.12.0-DEV.15"
+function CC.transform_result_for_cache(interp::CthulhuInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult, can_discard_trees::Bool=false)
+    return create_cthulhu_source(result.src, result.ipo_effects)
+end
+else
 function CC.transform_result_for_cache(interp::CthulhuInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     return create_cthulhu_source(result.src, result.ipo_effects)
 end
+end
 
-@static if VERSION ≥ v"1.11.0-DEV.879"
+@static if VERSION ≥ v"1.12.0-DEV.45"
+function CC.src_inlining_policy(interp::CthulhuInterpreter,
+    @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt32)
+    if isa(src, OptimizedSource)
+        if CC.is_stmt_inline(stmt_flag) || src.isinlineable
+            return true
+        end
+        return false
+    else
+        @assert src isa CC.IRCode || src === nothing "invalid Cthulhu code cache"
+        # the default inlining policy may try additional effor to find the source in a local cache
+        return @invoke CC.src_inlining_policy(interp::AbstractInterpreter,
+            src::Any, info::CCCallInfo, stmt_flag::UInt32)
+    end
+end
+CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) = CC.copy(src.ir)
+CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
+    CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
+elseif VERSION ≥ v"1.11.0-DEV.879"
 function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt32)
     if isa(src, OptimizedSource)
@@ -181,7 +206,7 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     src = inferred.src
     method_info = CC.MethodInfo(src)
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                    src.min_world, src.max_world)
+                                    code.min_world, code.max_world)
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.737"

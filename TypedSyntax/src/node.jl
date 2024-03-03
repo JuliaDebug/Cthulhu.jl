@@ -24,22 +24,23 @@ const no_default_value = NoDefaultValue()
 # These are TypedSyntaxNode constructor helpers
 # Call these directly if you want both the TypedSyntaxNode and the `mappings` list,
 # where `mappings[i]` corresponds to the list of nodes matching `(src::CodeInfo).code[i]`.
-function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
-    m = which(f, t)
-    src, rt = getsrc(f, t)
-    tsn_and_mappings(m, src, rt; kwargs...)
+function tsn_and_mappings(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...)
+    inferred_result = get_inferred_result(f, tt)
+    return tsn_and_mappings(inferred_result.mi, inferred_result.src, inferred_result.rt; kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
     def = definition(String, m)
     if isnothing(def)
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing
     end
-    return tsn_and_mappings(m, src, rt, def...; warn, strip_macros, kwargs...)
+    return tsn_and_mappings(mi, src, rt, def...; warn, strip_macros, kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
     filename = isnothing(functionloc(m)[1]) ? string(m.file) : functionloc(m)[1]
     rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=filename, first_line=lineno, kwargs...)
     if strip_macros
@@ -50,22 +51,26 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetex
         end
     end
     Δline = lineno - m.line   # offset from original line number (Revise)
-    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+    mappings, symtyps = map_ssas_to_source(src, mi, rootnode, Δline)
     node = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     node.typ = rt
     return node, mappings
 end
 
-TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
+TypedSyntaxNode(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = tsn_and_mappings(f, tt; kwargs...)[1]
 
 function TypedSyntaxNode(mi::MethodInstance; kwargs...)
-    m = mi.def::Method
-    src, rt = getsrc(mi)
-    tsn_and_mappings(m, src, rt; kwargs...)[1]
+    src, rt = code_typed1_tsn(mi)
+    tsn_and_mappings(mi, src, rt; kwargs...)[1]
 end
 
-TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
-    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
+function TypedSyntaxNode(rootnode::SyntaxNode, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...)
+    inferred_result = get_inferred_result(f, tt)
+    TypedSyntaxNode(rootnode, inferred_result.src, inferred_result.mi; kwargs...)
+end
+
+TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mi::MethodInstance, Δline::Integer=0) =
+    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, mi, rootnode, Δline)...)
 
 function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
@@ -304,17 +309,57 @@ function sparam_name(mi::MethodInstance, i::Int)
     return sig.var.name
 end
 
-function getsrc(@nospecialize(f), @nospecialize(t))
-    srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
-    return only(srcrts)
+@static if isdefined(Base, :method_instances)
+using Base: method_instances
+else
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
+    tt = Base.signature_type(f, t)
+    results = Core.MethodInstance[]
+    # this make a better error message than the typeassert that follows
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    for match in Base._methods_by_ftype(tt, -1, world)::Vector
+        instance = Core.Compiler.specialize_method(match)
+        push!(results, instance)
+    end
+    return results
+end
 end
 
-function getsrc(mi::MethodInstance)
-    cis = Base.code_typed_by_type(mi.specTypes; debuginfo=:source, optimize=false)
-    isempty(cis) && error("no applicable type-inferred code found for ", mi)
-    length(cis) == 1 || error("got $(length(cis)) possible type-inferred results for ", mi,
-                              ", you may need a more specialized signature")
-    return cis[1]::Pair{CodeInfo}
+struct InferredResult
+    mi::MethodInstance
+    src::CodeInfo
+    rt
+    InferredResult(mi::MethodInstance, src::CodeInfo, @nospecialize(rt)) = new(mi, src, rt)
+end
+function get_inferred_result(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)),
+                             world::UInt=Base.get_world_counter())
+    mis = method_instances(f, tt, world)
+    if isempty(mis)
+        sig = sprint(Base.show_tuple_as_call, Symbol(""), Base.signature_type(f, tt))
+        error("no applicable type-inferred code found for ", sig)
+    elseif length(mis) ≠ 1
+        sig = sprint(Base.show_tuple_as_call, Symbol(""), Base.signature_type(f, tt))
+        error("got $(length(mis)) possible type-inferred results for ", sig,
+              ", you may need a more specialized signature")
+    end
+    mi = only(mis)
+    return InferredResult(mi, code_typed1_tsn(mi)...)
+end
+
+code_typed1_tsn(mi::MethodInstance) = code_typed1_by_method_instance(mi; optimize=false, debuginfo=:source)
+
+function code_typed1_by_method_instance(mi::MethodInstance;
+                                        optimize::Bool=true,
+                                        debuginfo::Symbol=:default,
+                                        world::UInt=Base.get_world_counter(),
+                                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
+        error("code reflection should not be used from generated functions")
+    debuginfo = Base.IRShow.debuginfo(debuginfo)
+    code, rt = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    code isa CodeInfo || error("no code is available for ", mi)
+    debuginfo === :none && Base.remove_linenums!(code)
+    return Pair{CodeInfo,Any}(code, rt)
 end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
@@ -397,8 +442,7 @@ end
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
-function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
-    mi = src.parent::MethodInstance
+function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Int)
     slottypes = src.slottypes::Union{Nothing, Vector{Any}}
     have_slottypes = slottypes !== nothing
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
@@ -428,7 +472,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = src.codelocs[i]
-        lt = src.linetable::Vector{Any}
+        lt = src.linetable::Vector
         start = getline(lt, j) + Δline
         stop = getnextline(lt, j, Δline) - 1
         linerange = start : stop
@@ -736,7 +780,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     end
     return mappings, symtyps
 end
-map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, rootnode, Int(Δline))
+map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, mi, rootnode, Int(Δline))
 
 function follow_back(src, arg)
     # Follow SSAValue backward to see if it maps back to a slot
