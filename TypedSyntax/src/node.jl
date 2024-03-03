@@ -308,7 +308,7 @@ end
 function getsrc(@nospecialize(f), @nospecialize(t))
     srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
     src, rt = only(srcrts)
-    if hasfield(typeof(src), :parent) && src.parent !== nothing
+    if src.parent !== nothing
         mi = src.parent
     else
         mi = Base.method_instance(f, t)
