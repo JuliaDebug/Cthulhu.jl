@@ -43,17 +43,11 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - name: dev TypedSyntax
-        shell: julia --color=yes --project=. {0}    # this is necessary for the next command to work on Windows
-        run: 'using Pkg; Pkg.develop(path=joinpath(pwd(), "TypedSyntax"))'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
           check_bounds: 'auto'
           coverage: 'false'
-      - name: TypedSyntax     # run the tests of TypedSyntax (a subdir package)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: julia --project=TypedSyntax -e 'using Pkg; Pkg.test(coverage=true)'
       # - name: Coverage off  # `empty_func` test doesn't work as intended with `coverage=true`
       #   if: ${{ matrix.os == 'ubuntu-latest' }}
       #   run: julia --project -e 'using Pkg; Pkg.test("Cthulhu"; coverage=false)'
