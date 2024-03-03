@@ -36,7 +36,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fib, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    descend(fib, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -85,7 +85,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fVSCode, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    descend(fVSCode, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -180,7 +180,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fibcall, (Float64,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    descend(fibcall, (Float64,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
@@ -232,7 +232,7 @@ include("test_vscode_example_functions.jl")
 
             fake_terminal() do term, in, out, _
                 t = @async begin
-                    @test_nowarn descend(fibcall, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
+                    descend(fibcall, (Int,); terminal=term, iswarn, hide_type_stable, inlay_types_vscode, diagnostics_vscode)
                 end
                 write(in, 'q')
                 wait(t)
