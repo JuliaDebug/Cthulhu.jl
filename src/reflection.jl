@@ -355,7 +355,7 @@ function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(r
 end
 
 function get_typed_sourcetext(mi::MethodInstance, ::IRCode, @nospecialize(rt); kwargs...)
-    src, rt = TypedSyntax.getsrc(mi)
+    src, rt = TypedSyntax.code_typed1_tsn(mi)
     return get_typed_sourcetext(mi, src, rt; kwargs...)
 end
 

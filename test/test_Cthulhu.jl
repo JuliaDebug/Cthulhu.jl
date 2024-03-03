@@ -52,7 +52,7 @@ end
     # Callsite handling in source-view mode: for kwarg functions, strip the body, and use "typed" callsites
     for m in (@which(anykwargs("animals")), @which(anykwargs("animals"; cat=1, dog=2)))
         mi = first_specialization(m)
-        src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+        src, rt = Cthulhu.TypedSyntax.code_typed1_tsn(mi)
         tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
         str = sprint(printstyled, tsn)
         @test occursin("anykwargs", str) && occursin("kwargs...", str) && !occursin("println", str)
@@ -61,7 +61,7 @@ end
     # Likewise for methods that fill in default positional arguments
     m = @which hasdefaultargs(1)
     mi = first_specialization(m)
-    src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+    src, rt = Cthulhu.TypedSyntax.code_typed1_tsn(mi)
     tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
     str = sprint(printstyled, tsn)
     @test occursin("hasdefaultargs(a, b=2)", str)
@@ -69,7 +69,7 @@ end
     @test isempty(mappings)
     m = @which hasdefaultargs(1, 5)
     mi = first_specialization(m)
-    src, rt = Cthulhu.TypedSyntax.getsrc(mi)
+    src, rt = Cthulhu.TypedSyntax.code_typed1_tsn(mi)
     tsn, mappings = Cthulhu.get_typed_sourcetext(mi, src, rt; warn=false)
     str = sprint(printstyled, tsn)
     @test occursin("hasdefaultargs(a, b=2)", str)
