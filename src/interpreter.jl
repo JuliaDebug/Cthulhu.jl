@@ -1,6 +1,6 @@
-using .CC: AbstractInterpreter, NativeInterpreter, InferenceState, OptimizationState,
-    CodeInfo, CodeInstance, InferenceResult, WorldRange, WorldView, IRCode, SSAValue,
-    CallInfo as CCCallInfo, NoCallInfo
+using .CC: AbstractInterpreter, CallInfo as CCCallInfo, CodeInfo, CodeInstance,
+    InferenceParams, InferenceResult, InferenceState, IRCode, NativeInterpreter,
+    NoCallInfo, OptimizationParams, OptimizationState, SSAValue, WorldRange, WorldView
 
 struct InferredSource
     src::CodeInfo
@@ -48,11 +48,6 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         InferenceDict{PC2Excts}())
 end
 
-import .CC: InferenceParams, OptimizationParams, #=get_inference_world,=#
-    get_inference_cache, code_cache, lock_mi_inference, unlock_mi_inference, method_table,
-    inlining_policy
-using Base: @invoke
-
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 @static if VERSION ≥ v"1.11.0-DEV.851"
 CC.OptimizationParams(interp::CthulhuInterpreter) =
@@ -61,14 +56,14 @@ else
 CC.OptimizationParams(interp::CthulhuInterpreter) = OptimizationParams(interp.native)
 end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
-CC.get_inference_cache(interp::CthulhuInterpreter) = get_inference_cache(interp.native)
+CC.get_inference_cache(interp::CthulhuInterpreter) = CC.get_inference_cache(interp.native)
 
 CC.may_optimize(interp::CthulhuInterpreter) = true
 CC.may_compress(interp::CthulhuInterpreter) = false
 CC.may_discard_trees(interp::CthulhuInterpreter) = false
 CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
 
-CC.method_table(interp::CthulhuInterpreter) = method_table(interp.native)
+CC.method_table(interp::CthulhuInterpreter) = CC.method_table(interp.native)
 
 @static if VERSION ≥ v"1.11.0-DEV.1552"
 # Since the cache for `CthulhuInterpreter` is volatile and does not involve with the
@@ -159,7 +154,7 @@ function CC.src_inlining_policy(interp::CthulhuInterpreter,
     end
 end
 CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) = CC.copy(src.ir)
-CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
+CC.retrieve_ir_for_inlining(mi::MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
     CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
 elseif VERSION ≥ v"1.11.0-DEV.879"
 function CC.inlining_policy(interp::CthulhuInterpreter,
