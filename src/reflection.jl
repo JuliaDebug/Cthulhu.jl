@@ -335,21 +335,24 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     return ulocs
 end
 
-function add_sourceline!(locs, CI, stmtidx::Int)
-    if isdefined(CI, :debuginfo) # VERSION >= v"1.12"
-        stack = Base.IRShow.buildLineInfoNode(CI.debuginfo, :var"n/a", i)
+function add_sourceline!(locs, src, stmtidx::Int)
+    @static if VERSION ≥ v"1.12.0-DEV.173"
+        stack = Base.IRShow.buildLineInfoNode(src.debuginfo, :var"n/a", stmtidx)
         for (i, di) in enumerate(stack)
-            push!(locs, (di, i-1))
-        end
-    elseif isa(CI, IRCode)
-        stack = Base.IRShow.compute_loc_stack(CI.linetable, CI.stmts.line[stmtidx])
-        for (i, idx) in enumerate(stack)
-            line = CI.linetable[idx]
-            line.line == 0 && continue
-            push!(locs, (CI.linetable[idx], i-1))
+            loc = Core.LineInfoNode(Main, di.method, di.file, di.line, zero(Int32))
+            push!(locs, (loc, i-1))
         end
     else
-        push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
+        if isa(src, IRCode)
+            stack = Base.IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
+            for (i, idx) in enumerate(stack)
+                line = src.linetable[idx]
+                line.line == 0 && continue
+                push!(locs, (src.linetable[idx], i-1))
+            end
+        else
+            push!(locs, (src.linetable[src.codelocs[stmtidx]], 0))
+        end
     end
     return locs
 end

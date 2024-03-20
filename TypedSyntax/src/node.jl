@@ -76,7 +76,8 @@ function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
-    trootnode = TypedSyntaxNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, gettyp(node2ssa, rootnode, src)))
+    typ = gettyp(node2ssa, rootnode, src)
+    trootnode = TypedSyntaxNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, typ))
     addchildren!(trootnode, rootnode, src, node2ssa, symtyps, mappings)
     # Add argtyps to signature
     fnode = get_function_def(trootnode)
@@ -441,52 +442,55 @@ end
 
 ## utility function to extract the line number at a particular program counter (ignoring inlining).
 ## return <= 0 if there is no line number change caused by this statement
-if VERSION >= v"1.12" || isdefined(Core, :DebugInfo)
+@static if VERSION ≥ v"1.12.0-DEV.173"
 function getline(lt::Core.DebugInfo, i::Int)
     while true
         codeloc = Base.IRShow.getdebugidx(lt, i)
         line::Int = codeloc[1]
         line < 0 && return 0 # broken or disabled debug info?
         line == 0 && return 0 # no line number update (though maybe inlining changed)
-        i = line
         ltnext = lt.linetable
         if ltnext === nothing
-            break
+            return line
         end
+        i = line
         lt = ltnext
     end
-    return i
 end
-
 function getnextline(lt::Core.DebugInfo, i::Int, Δline)
     while true
         codeloc = Base.IRShow.getdebugidx(lt, i)
         line::Int = codeloc[1]
-        line < 0 && return 0 # broken or disabled debug info?
-        line == 0 && return 0 # no line number update (though maybe inlining changed)
-        i = line
+        line < 0 && return typemax(Int) # broken or disabled debug info?
+        if line == 0
+            i += 1
+            continue
+        end
         ltnext = lt.linetable
         if ltnext === nothing
             break
         end
+        i = line
         lt = ltnext
     end
     # now that we have line i and a list of all lines with code on them lt
     # find the next largest line number in this list greater than i, or return typemax(Int)
-    j = i
-    for k = 0:typemax(Int)
-        codeloc = Base.IRShow.getdebugidx(lt, k)
+    j = i+1
+    currline = Base.IRShow.getdebugidx(lt, i)[1]
+    while j ≤ typemax(Int)
+        codeloc = Base.IRShow.getdebugidx(lt, j)
         line::Int = codeloc[1]
         line < 0 && break
-        if j == i || i < line < j
-            j = line
+        if line == 0 || currline == line
+            j += 1
+        else
+            return line + Δline
         end
     end
-    return j == i ? typemax(Int) : j + Δline
+    return typemax(Int)
 end
 
-else
-
+else # VERSION < v"1.12.0-DEV.173"
 function getline(lt, j)
     linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
     linfo.inlined_at == 0 && return linfo.line
@@ -494,7 +498,6 @@ function getline(lt, j)
     linfo = lt[linfo.inlined_at]::Core.LineInfoNode
     return linfo.line
 end
-
 function getnextline(lt, j, Δline)
     j == 0 && return typemax(Int)
     j += 1
@@ -505,7 +508,7 @@ function getnextline(lt, j, Δline)
     end
     return typemax(Int)
 end
-end
+end # @static if
 
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
@@ -539,7 +542,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
-        if isdefined(src, :debuginfo)
+        @static if VERSION ≥ v"1.12.0-DEV.173"
             j = i
             lt = src.debuginfo
         else
