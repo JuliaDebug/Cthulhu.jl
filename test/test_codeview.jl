@@ -1,6 +1,7 @@
 module test_codeview
 
 using Cthulhu, Test, Revise
+import Cthulhu: type_string
 
 include("setup.jl")
 
@@ -109,6 +110,32 @@ end
             s = prints(; iswarn=true, hide_type_stable=true)
             @test !occursin("globalvar", s)
             @test occursin("undefvar", s)
+        end
+    end
+end
+
+@testset "type aliases" begin
+    let
+        @gensym MyType
+        (; src, infos, mi, rt, exct, effects, slottypes) = @eval Module() begin
+            import Cthulhu: type_string
+            struct $MyType{T}
+                a::T
+            end
+            type_string(::Type{$MyType{T}}) where {T} = "Abracadabra{" * type_string(T) * ",5}"
+            $cthulhu_info() do
+                x = Union{$MyType{Float64},Missing}[]
+                return x
+            end
+        end
+        function prints(; kwargs...)
+            io = IOBuffer()
+            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; kwargs...)
+            return String(take!(io))
+        end
+        let
+            s = prints()
+            @test occursin("Abracadabra{Float64,5}", s)
         end
     end
 end
