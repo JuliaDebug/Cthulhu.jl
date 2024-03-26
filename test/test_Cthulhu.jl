@@ -814,7 +814,6 @@ end
     @test lines == [line2]
 end
 
-
 @testset "ascend interface" begin
     m = Module()
     @eval m begin
