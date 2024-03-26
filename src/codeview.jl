@@ -68,9 +68,13 @@ end
 using Base.IRShow: IRShow, _stmt, _type, should_print_ssa_type, IRShowConfig, show_ir
 
 const __debuginfo = merge(IRShow.__debuginfo, Dict(
-    :compact => src -> src isa CodeInfo ? __debuginfo[:source](src)
-                                        : IRShow.inline_linfo_printer(src)
+    :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
+    :compact => src -> src isa CodeInfo ? __debuginfo[:source](src) : IRShow.inline_linfo_printer(src)
 ))
+@static if VERSION ≥ v"1.12.0-DEV.173"
+    __debuginfo[:source] = src -> Base.IRShow.statementidx_lineinfo_printer(
+        (debuginfo, scope) -> Base.IRShow.DILineInfoPrinter(debuginfo, scope, #=showtypes=#true), src)
+end
 
 function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
     stmt = _stmt(code, idx)

@@ -153,7 +153,8 @@ function CC.src_inlining_policy(interp::CthulhuInterpreter,
             src::Any, info::CCCallInfo, stmt_flag::UInt32)
     end
 end
-CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) = CC.copy(src.ir)
+CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) =
+    CC.retrieve_ir_for_inlining(cached_result.def, src.ir, true)
 CC.retrieve_ir_for_inlining(mi::MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
     CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
 elseif VERSION ≥ v"1.11.0-DEV.879"
