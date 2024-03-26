@@ -309,7 +309,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
         callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)
-        foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
+        foreach(cs -> add_sourceline!(locs, src, cs.id, caller), callsites)
     end
     # Consolidate by method, but preserve the order
     prlookup = Dict{Tuple{Symbol,Symbol},Int}()
@@ -335,17 +335,25 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     return ulocs
 end
 
-function add_sourceline!(locs, CI, stmtidx::Int)
-    if isa(CI, IRCode)
-        stack = Base.IRShow.compute_loc_stack(CI.linetable, CI.stmts.line[stmtidx])
+function add_sourceline!(locs::Vector{Tuple{Core.LineInfoNode,Int}}, src::Union{CodeInfo,IRCode}, stmtidx::Int, caller::MethodInstance)
+    @static if VERSION ≥ v"1.12.0-DEV.173"
+    stack = Base.IRShow.buildLineInfoNode(src.debuginfo, caller, stmtidx)
+    for (i, di) in enumerate(stack)
+        loc = Core.LineInfoNode(Main, di.method, di.file, di.line, zero(Int32))
+        push!(locs, (loc, i-1))
+    end
+    else # VERSION < v"1.12.0-DEV.173"
+    if isa(src, IRCode)
+        stack = Base.IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
         for (i, idx) in enumerate(stack)
-            line = CI.linetable[idx]
+            line = src.linetable[idx]
             line.line == 0 && continue
-            push!(locs, (CI.linetable[idx], i-1))
+            push!(locs, (src.linetable[idx], i-1))
         end
     else
-        push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
+        push!(locs, (src.linetable[src.codelocs[stmtidx]], 0))
     end
+    end # @static if
     return locs
 end
 

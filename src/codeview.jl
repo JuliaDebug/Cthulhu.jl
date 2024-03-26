@@ -127,9 +127,6 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             # We empty the body when filling kwargs
             istruncated = isempty(children(body))
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
-            if any(iszero, src.codelocs)
-                @warn "Some line information is missing, type-assignment may be incomplete"
-            end
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
