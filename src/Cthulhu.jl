@@ -876,13 +876,17 @@ ascend
 
 using PrecompileTools
 @setup_workload begin
-    input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
-    term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
-    write(input.in, 'q')
-    @compile_workload begin
-        descend(gcd, (Int, Int); terminal=term)
-        # declare we are done with streams
-        close(input.in)
+    try
+        input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
+        term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
+        write(input.in, 'q')
+        @compile_workload begin
+            descend(gcd, (Int, Int); terminal=term)
+            # declare we are done with streams
+            close(input.in)
+        end
+    catch err
+        @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
 end
 
