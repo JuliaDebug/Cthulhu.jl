@@ -85,12 +85,12 @@ CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.c
 CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
-    key = (isdefined(CC, :is_constproped) ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
+    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
     push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
 function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effects::Effects)
-    key = (isdefined(CC, :is_constproped) ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
+    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
     pc2effects = get!(interp.effects, key, PC2Effects())
     pc2effects[sv.currpc] = CC.merge_effects(get!(pc2effects, sv.currpc, EFFECTS_TOTAL), effects)
     @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
@@ -109,7 +109,7 @@ end
 
 function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
     res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
-    key = (isdefined(CC, :is_constproped) ? CC.is_constproped(state) : CC.any(state.result.overridden_by_const)) ? state.result : state.linfo
+    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(state) : CC.any(state.result.overridden_by_const)) ? state.result : state.linfo
     interp.unopt[key] = InferredSource(state)
     return res
 end
@@ -224,7 +224,7 @@ end
 @static if VERSION ≥ v"1.11.0-DEV.1127"
 function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct),
                                   frame::InferenceState)
-    key = (isdefined(CC, :is_constproped) ? CC.is_constproped(frame) : CC.any(frame.result.overridden_by_const)) ? frame.result : frame.linfo
+    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(frame) : CC.any(frame.result.overridden_by_const)) ? frame.result : frame.linfo
     pc2excts = get!(PC2Excts, interp.exception_types, key)
     pc2excts[frame.currpc] = CC.tmerge(CC.typeinf_lattice(interp), exct, get(pc2excts, frame.currpc, Union{}))
     return @invoke CC.update_exc_bestguess!(interp::AbstractInterpreter, exct::Any,
