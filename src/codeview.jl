@@ -152,6 +152,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
     lambda_io = IOContext(io, :limit=>true)
+    maxtypedepth = CONFIG.type_depth_limit
 
     if annotate_source && isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, rt)
@@ -180,9 +181,9 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             )
 
             if istruncated
-                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
             else
-                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
             end
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
@@ -219,6 +220,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             show_variables(io, src, slotnames)
         end
     end
+    maxtypedepth = CONFIG.type_depth_limit
 
     # preprinter configuration
     preprinter = if inline_cost
@@ -248,7 +250,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                   idx == -1 ? lpad(total_cost, nd+1) :
                   " "^(nd+1)
             str = sprint(; context=:color=>true) do @nospecialize io
-                printstyled(io, str; color=:green)
+                printstyled(io, str; color=:green, maxtypedepth)
             end
             if debuginfo === :source
                 str *= " "
@@ -296,7 +298,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         function (io::IO; idx::Int, @nospecialize(kws...))
             _postprinter(io; idx, kws...)
             for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
-                printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
+                printstyled(io, ' ', pc2remarks[i].second; color=:light_black, maxtypedepth)
             end
         end
     else
@@ -334,8 +336,9 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     # We empty the body when filling kwargs
     istruncated = isempty(children(body))
     idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+    maxtypedepth = CONFIG.type_depth_limit
     if !istruncated # If method only fills in default arguments
-        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
     end
 end
 

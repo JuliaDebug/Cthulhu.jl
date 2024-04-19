@@ -32,7 +32,9 @@ end
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
                           with_linenumber::Bool=true,
-                          idxend = last_byte(rootnode))
+                          idxend = last_byte(rootnode),
+                          maxtypedepth = 2
+                          )
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
@@ -43,11 +45,11 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
         @assert length(children(rootnode)) == 2
         sig, body = children(rootnode)
         type_annotate, pre, pre2, post = type_annotation_mode(sig, rt; type_annotations, hide_type_stable)
-        position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd)
-        type_annotate && show_annotation(io, rt, post, rootnode.source, position; iswarn)
+        position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd, maxtypedepth)
+        type_annotate && show_annotation(io, rt, post, rootnode.source, position; iswarn, maxtypedepth)
         rootnode = body
     end
-    position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
+    position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd, maxtypedepth)
     catchup(io, rootnode, position, nd, idxend+1)   # finish the node
     return nothing
 end
@@ -63,7 +65,7 @@ function _print(io::IO, x, node, position)
     end
 end
 
-function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
+function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int, maxtypedepth)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
     if haschildren(node)
@@ -77,8 +79,8 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
         i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
-        position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
-        ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
+        position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd, maxtypedepth)
+        ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn, maxtypedepth)
     end
     return Int(catchup(io, node, position, nd, _lastidx+1))
 end
@@ -147,7 +149,20 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
+function type_depth_limit(io::IO, s::String; maxtypedepth::Union{Nothing,Int})
+    sz = get(io, :displaysize, displaysize(io))::Tuple{Int, Int}
+    return Base.type_depth_limit(s, max(sz[2], 120); maxdepth=maxtypedepth)
+end
+
+type_depth_limit(::T; maxtypedepth) where {T} = type_depth_limit(T; maxtypedepth)
+
+function type_depth_limit(::Type{T}; maxtypedepth) where {T}
+    buf = IOBuffer()
+    io = IOContext(buf, :limit => true)
+    type_depth_limit(io, string(T); maxtypedepth)
+end
+
+function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool, maxtypedepth)
     diagnostics = get(io, :diagnostics, nothing)
     inlay_hints = get(io, :inlay_hints, nothing)
 

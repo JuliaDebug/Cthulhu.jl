@@ -59,6 +59,7 @@ Base.@kwdef mutable struct CthulhuConfig
     inlay_types_vscode::Bool = true
     diagnostics_vscode::Bool = true
     jump_always::Bool = false
+    type_depth_limit::Union{Nothing, Int} = 2
 end
 
 """
@@ -486,6 +487,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     inlay_types_vscode::Bool              = CONFIG.inlay_types_vscode,            # default is true
     diagnostics_vscode::Bool              = CONFIG.diagnostics_vscode,            # default is true
     jump_always::Bool                     = CONFIG.jump_always,                   # default is false
+    type_depth_limit::Union{Nothing, Int} = CONFIG.type_depth_limit,              # default is 2
     )
 
     if isnothing(hide_type_stable)
@@ -726,7 +728,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                      remarks, with_effects, exception_type, inline_cost,
                      type_annotations, annotate_source,
                      inlay_types_vscode, diagnostics_vscode,
-                     jump_always)
+                     jump_always, type_depth_limit)
 
         elseif toggle === :warn
             iswarn ⊻= true
