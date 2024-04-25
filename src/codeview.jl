@@ -151,8 +151,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
-    lambda_io = IOContext(io, :limit=>true)
     maxtypedepth = CONFIG.type_depth_limit
+    lambda_io = IOContext(io, :limit=>true, :maxdepth => maxtypedepth)
 
     if annotate_source && isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, rt)
