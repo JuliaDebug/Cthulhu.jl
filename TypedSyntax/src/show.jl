@@ -149,19 +149,6 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function type_depth_limit(io::IO, s::String; maxtypedepth::Union{Nothing,Int})
-    sz = get(io, :displaysize, displaysize(io))::Tuple{Int, Int}
-    return Base.type_depth_limit(s, max(sz[2], 120); maxdepth=maxtypedepth)
-end
-
-type_depth_limit(::T; maxtypedepth) where {T} = type_depth_limit(T; maxtypedepth)
-
-function type_depth_limit(::Type{T}; maxtypedepth) where {T}
-    buf = IOBuffer()
-    io = IOContext(buf, :limit => true)
-    type_depth_limit(io, string(T); maxtypedepth)
-end
-
 function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool, maxtypedepth)
     diagnostics = get(io, :diagnostics, nothing)
     inlay_hints = get(io, :inlay_hints, nothing)
