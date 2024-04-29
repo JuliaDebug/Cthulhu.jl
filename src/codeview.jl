@@ -152,7 +152,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
     maxtypedepth = CONFIG.type_depth_limit
-    lambda_io = IOContext(io, :limit=>true, :maxdepth => maxtypedepth)
+    lambda_io = IOContext(io, :limit=>true, :maxtypedepth => maxtypedepth)
 
     if annotate_source && isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, rt)
@@ -177,18 +177,19 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             vscode_io = IOContext(
                 jump_always && inlay_types_vscode ? devnull : lambda_io,
                 :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing ,
-                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
+                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing,
+                :maxtypedepth => maxtypedepth
             )
 
             if istruncated
-                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
+                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             else
-                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
+                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
             end
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
-                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
+                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics], maxtypedepth=CONFIG.type_depth_limit)
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
                 visited_mis = Set{MethodInstance}((mi,))
                 add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
