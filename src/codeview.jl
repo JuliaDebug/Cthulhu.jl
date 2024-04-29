@@ -189,7 +189,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
-                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics], maxtypedepth=CONFIG.type_depth_limit)
+                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics], :maxtypedepth=>CONFIG.type_depth_limit)
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
                 visited_mis = Set{MethodInstance}((mi,))
                 add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)

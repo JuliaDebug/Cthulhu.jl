@@ -32,8 +32,7 @@ end
 function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
                           type_annotations::Bool=true, iswarn::Bool=true, hide_type_stable::Bool=true,
                           with_linenumber::Bool=true,
-                          idxend = last_byte(rootnode)
-                          )
+                          idxend = last_byte(rootnode))
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
@@ -157,7 +156,9 @@ function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Boo
     if isa(T, Core.Const) && isa(T.val, Type)
         T = Type{T.val}
     end
-    T_str = string(T)
+    T_str_long = string(T)
+    sz = get(io, :displaysize, displaysize(io))::Tuple{Int, Int}
+    T_str = Base.type_depth_limit(T_str_long, max(sz[2], 120); maxdepth=maxtypedepth)
     if iswarn && is_type_unstable(T)
         color = is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T_str; color)
