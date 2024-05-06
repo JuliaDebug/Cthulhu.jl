@@ -201,7 +201,9 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     ir = CC.copy(inferred.ir)
     src = inferred.src
     method_info = CC.MethodInfo(src)
-    if VERSION >= v"1.12.0-DEV.341"
+    if isdefined(Base, :__has_internal_change) && Base.__has_internal_change(v"1.12-alpha", :codeinfonargs)
+        argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
+    elseif VERSION >= v"1.12.0-DEV.341"
         argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, mi)
     end
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
