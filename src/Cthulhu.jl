@@ -342,7 +342,7 @@ function lookup_constproped_optimized(interp::CthulhuInterpreter, override::Infe
         # e.g. when we switch from constant-prop' unoptimized source
         src = CC.copy(opt.ir)
         rt = override.result
-        exct = override.exc_result
+        exct = @static hasfield(InferenceResult, :exc_result) ? override.exc_result : nothing
         infos = src.stmts.info
         slottypes = src.argtypes
         codeinf = opt.src
