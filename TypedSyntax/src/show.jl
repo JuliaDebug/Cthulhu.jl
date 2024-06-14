@@ -113,12 +113,40 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
+"""
+    type_string(type)
+
+Overload this function to implement custom annotations for types. For example,
+`type_string(::Type{Float32}) = "F32"` would result in `F32` being used to annotate
+any instance of a `Float32`.
+"""
+function type_string(T)
+    if T isa DataType
+        if isempty(T.parameters)
+            return string(T)
+        else
+            wrapper = Base.typename(T).wrapper
+            return string(wrapper, '{', join(map(type_string, T.parameters), ','), '}')
+        end
+    elseif T isa Union
+        params = union_to_tuple(T)
+        return string("Union{" * join(map(type_string, params), ",") * "}")
+    elseif T isa UnionAll
+        return string(type_string(T.body), " where ", string(T.var))
+    end
+    return string(T)
+end
+union_to_tuple(T) = (T,)
+function union_to_tuple(U::Union)
+    return (union_to_tuple(U.a)..., union_to_tuple(U.b)...)
+end
+
 function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
     diagnostics = get(io, :diagnostics, nothing)
     inlay_hints = get(io, :inlay_hints, nothing)
 
     print(io, post)
-    T_str = string(T)
+    T_str = type_string(T)
     if iswarn && is_type_unstable(T)
         color = is_small_union_or_tunion(T) ? :yellow : :red
         printstyled(io, "::", T_str; color)

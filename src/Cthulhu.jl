@@ -9,6 +9,7 @@ using REPL: REPL, AbstractTerminal
 using JuliaSyntax
 using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
 using TypedSyntax
+using TypedSyntax: type_string
 using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
