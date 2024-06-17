@@ -107,8 +107,8 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-function CC.finish(state::InferenceState, interp::CthulhuInterpreter)
-    res = @invoke CC.finish(state::InferenceState, interp::AbstractInterpreter)
+function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter)
+    res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter)
     key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(state) : CC.any(state.result.overridden_by_const)) ? state.result : state.linfo
     interp.unopt[key] = InferredSource(state)
     return res
@@ -126,17 +126,43 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
-@static if VERSION ≥ v"1.12.0-DEV.15"
-function CC.transform_result_for_cache(interp::CthulhuInterpreter,
-    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult, can_discard_trees::Bool=false)
+@static if VERSION ≥ v"1.12.0-DEV.734"
+CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState;
+                    can_discard_trees::Bool=false)
+    result = caller.result
+    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState;
+                              can_discard_trees)
+end
+
+elseif VERSION ≥ v"1.11.0-DEV.737"
+CC.finish(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finish, state, interp)
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
+    result = caller.result
+    opt = result.src
+    result.src = create_cthulhu_source(opt, result.ipo_effects)
+    if opt isa CC.OptimizationState
+        CC.ir_to_codeinf!(opt)
+    end
+    return nothing
+end
+function CC.transform_result_for_cache(::CthulhuInterpreter, ::MethodInstance, ::WorldRange,
+                                       result::InferenceResult)
+    return result.src
+end
+
+else # VERSION < v"1.11.0-DEV.737"
+CC.finish(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finish, state, interp)
+function CC.transform_result_for_cache(::CthulhuInterpreter, ::MethodInstance, ::WorldRange,
+                                       result::InferenceResult)
     return create_cthulhu_source(result.src, result.ipo_effects)
 end
-else
-function CC.transform_result_for_cache(interp::CthulhuInterpreter,
-    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
-    return create_cthulhu_source(result.src, result.ipo_effects)
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
+    caller.src = create_cthulhu_source(caller.src, caller.ipo_effects)
 end
-end
+
+end # @static if
 
 @static if VERSION ≥ v"1.12.0-DEV.45"
 function CC.src_inlining_policy(interp::CthulhuInterpreter,
@@ -208,22 +234,6 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     end
     return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
-end
-
-@static if VERSION ≥ v"1.11.0-DEV.737"
-function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
-    result = caller.result
-    opt = result.src
-    result.src = create_cthulhu_source(opt, result.ipo_effects)
-    if opt isa CC.OptimizationState
-        CC.ir_to_codeinf!(opt)
-    end
-    return nothing
-end
-else
-function CC.finish!(interp::CthulhuInterpreter, caller::InferenceResult)
-    caller.src = create_cthulhu_source(caller.src, caller.ipo_effects)
-end
 end
 
 @static if VERSION ≥ v"1.11.0-DEV.1127"
