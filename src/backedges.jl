@@ -129,8 +129,9 @@ function treelist(mi)
     treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
 end
 function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
-    mi ∈ visited && return parent
-    push!(visited, instance(mi))
+    imi = instance(mi)
+    imi ∈ visited && return parent
+    push!(visited, imi)
     indent *= " "
     for edge in backedges(mi)
         str = indent * callstring(io, edge)
