@@ -336,7 +336,8 @@ include("test_module.jl")
     @test has_name_typ(child(body, 2, 1, 1), :x, Float64)
     node = child(body, 2, 2, 1)
     @test kind(node) == K"+="
-    @test has_name_typ(child(node, 1), :s, Float64)   # if this line runs, the LHS now has type `Float64`
+    @test has_name_typ(child(node, 1), :s, Float64) ||   # if this line runs, the LHS now has type `Float64`
+          has_name_typ(child(node, 1), :s, Union{Float64, Int})   # but Julia 1.11 infers this still as the Union
     @test has_name_typ(child(node, 2), :x, Float64)
     @test has_name_typ(child(body, 3, 1), :s, Union{Float64, Int})
     tsn = TypedSyntaxNode(TSN.summer_iterate, (Vector{Float64},))
