@@ -50,10 +50,10 @@ zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
 vaparam(a::AbstractArray{T,N}, I::NTuple{N,Any}) where {T,N} = N
 @inline function myplustv(x::T, y::Integer) where {T<:AbstractChar}  # vendored copy of +(::T, ::Integer) where T<:AbstractChar
     if x isa Char
-        u = Int32((bitcast(UInt32, x) >> 24) % Int8)
+        u = Int32((Base.bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
             z = u + y
-            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
+            return 0 <= z < 0x80 ? Base.bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
         end
     end
     return T(Int32(x) + Int32(y))

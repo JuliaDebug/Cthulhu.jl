@@ -96,6 +96,12 @@ end
 
 function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
     kind(node) == K"return" && return false, "", "", ""
+    if isa(T, Core.Const)
+        val = T.val
+        if isa(val, Type) || isa(val, Function)
+            occursin(replace(string(val), isspace => ""), replace(node.source[node.position:last_byte(node)], isspace => "")) && return false, "", "", ""
+        end
+    end
     type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
     pre = pre2 = post = ""
     if type_annotate
