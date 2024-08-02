@@ -242,4 +242,9 @@ function f493()
     sum(rand(T, 100))
 end
 
+function obfuscated(x)
+    f = sin
+    return f(x)
+end
+
 end

@@ -87,28 +87,48 @@ end
 function is_show_annotation(@nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
     type_annotations || return false
     if isa(T, Core.Const)
-        T = typeof(T.val)
+        T = Core.Typeof(T.val)
     end
     isa(T, Type) || return false
     hide_type_stable || return true
     return isa(T, Type) && is_type_unstable(T)
 end
 
-function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
-    kind(node) == K"return" && return false, "", "", ""
-    if isa(T, Core.Const)
-        val = T.val
-        if isa(val, Type) || isa(val, Function)
-            occursin(replace(string(val), isspace => ""), replace(node.source[node.position:last_byte(node)], isspace => "")) && return false, "", "", ""
+# Is the type equivalent to the source-text?
+is_type_transparent(node, @nospecialize(T)) = replace(sourcetext(node), r"\s" => "") == replace(sprint(show, T), r"\s" => "")
+
+function is_callfunc(node::TypedSyntaxNode, @nospecialize(T))
+    pnode = node.parent
+    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(node)) || node === pnode.children[1])
+        if isa(T, Core.Const)
+            T = T.val
+        end
+        if isa(T, Type) || isa(T, Function)
+            return is_type_transparent(node, T)
         end
     end
+    return false
+end
+
+function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
+    kind(node) == K"return" && return false, "", "", ""
+    is_callfunc(node, T) && return false, "", "", ""
     type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
     pre = pre2 = post = ""
     if type_annotate
-        if T isa DataType && T <: Type && isassigned(T.parameters, 1)
-            if replace(sourcetext(node), r"\s" => "") == replace(sprint(show, T.parameters[1]), r"\s" => "")
-                return false, pre, pre2, post
+        # Try stripping Core.Const and Type{T} wrappers to check if we need to avoid `String::Type{String}`
+        # or `String::Core.Const(String)` annotations
+        S = nothing
+        if isa(T, Core.Const)
+            val = T.val
+            if isa(val, DataType)
+                S = val
             end
+        elseif isa(T, DataType) && T <: Type && isassigned(T.parameters, 1)
+            S = T.parameters[1]
+        end
+        if S !== nothing && is_type_transparent(node, S)
+            return false, pre, pre2, post
         end
         if kind(node) ∈ KSet":: where" || is_infix_op_call(node) || (is_prec_assignment(node) && kind(node) != K"=")
             pre, post = "(", ")"
@@ -124,6 +144,9 @@ function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Boo
     inlay_hints = get(io, :inlay_hints, nothing)
 
     print(io, post)
+    if isa(T, Core.Const) && isa(T.val, Type)
+        T = Type{T.val}
+    end
     T_str = string(T)
     if iswarn && is_type_unstable(T)
         color = is_small_union_or_tunion(T) ? :yellow : :red

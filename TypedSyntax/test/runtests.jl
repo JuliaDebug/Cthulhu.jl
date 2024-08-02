@@ -571,7 +571,7 @@ include("test_module.jl")
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test   occursin("s::$Int = 0::$Int", str)
+    @test   occursin("s::$Int = 0::$Int", str) || occursin("s::Core.Const(0) = 0::Core.Const(0)", str)
     @test !occursin("(s::$Int = 0::$Int)", str)
     @test occursin("(s::Float64 += x::Float64)::Float64", str) || occursin("(s::Union{Float64, Int64} += x::Float64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
@@ -619,6 +619,11 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test !occursin("::Type{Dict{String, Any}}", str)
+    tsn = TypedSyntaxNode(TSN.obfuscated, (Float64,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test occursin("::Core.Const(sin)", str) || occursin("::typeof(sin)", str)
 
     # issue #413
     @test TypedSyntax.is_small_union_or_tunion(Union{})
