@@ -2,6 +2,7 @@ using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @
 using TypedSyntax: TypedSyntax, TypedSyntaxNode
 using Dates, InteractiveUtils, Test
 
+has_name_typ(node, name::Symbol, @nospecialize(Ts::Tuple)) = kind(node) == K"Identifier" && node.val === name && node.typ in Ts
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && node.typ === T
 has_name_notyp(node, name::Symbol) = has_name_typ(node, name, nothing)
 
@@ -351,7 +352,7 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test child(sig, 1, 2).typ === Vector{Int16}
     @test body.typ === Core.Const(Int16(0))
-    @test has_name_typ(child(body, 2), :T, Core.Const(Int16))
+    @test has_name_typ(child(body, 2), :T, (Core.Const(Int16), Type{Int16}))
     # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
     m = @which TSN.vaparam(rand(3,3), ("hello", false))
     mi = first(specializations(m))
@@ -474,7 +475,7 @@ include("test_module.jl")
     @test errnode.typ === nothing && errf.typ === Core.Const(Base.throw_boundserror)
     retnode = child(body, 2)
     @test kind(retnode) == K"return"
-    @test retnode.typ === Core.Const(nothing)
+    @test retnode.typ === Core.Const(nothing) || retnode.typ === nothing  # julia 1.10 doesn't assign a type to the Core.ReturnNode
 
     # Globals & scoped assignment
     tsn = TypedSyntaxNode(TSN.setglobal, (Char,))
