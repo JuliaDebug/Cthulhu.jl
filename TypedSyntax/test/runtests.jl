@@ -249,12 +249,7 @@ include("test_module.jl")
     sig, body = children(tsn)
     node = child(body, 2)
     src = tsn.typedsource
-    if isa(src.code[1], GlobalRef)   # FIXME: not sure what this is really testing
-        @test kind(node) == K"dotcall" && node.typ === Vector{String}
-    else
-        # We aren't quite handling this properly yet
-        @test_broken kind(node) == K"dotcall" && node.typ === Vector{String}
-    end
+    @test kind(node) == K"dotcall" && node.typ === Vector{String}
     tsn = TypedSyntaxNode(TSN.bcast415, (TSN.B415, Float64))
     sig, body = children(tsn)
     @test child(body, 1).typ === Float64

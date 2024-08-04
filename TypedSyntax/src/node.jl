@@ -745,7 +745,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                         if isexpr(nextstmt, :call)
                             f = nextstmt.args[1]
                             if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
-                                empty!(mapped)
+                                # empty!(mapped)
                                 break
                             elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] === SSAValue(i)
                                 push!(mappings[inext], node)
