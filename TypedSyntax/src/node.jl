@@ -290,16 +290,7 @@ function gettyp(node2ssa, node, src)
         isa(arg, SSAValue) && return ssavaluetypes[arg.id]
         is_slot(arg) && return (src.slottypes::Vector{Any})[arg.id]
     end
-    # isa(stmt, GlobalRef) && return getglobal(stmt.mod, stmt.name)
-    v = ssavaluetypes[i]
-    # p = node.parent
-    # if isa(p, MaybeTypedSyntaxNode) && kind(p) == K"call"
-    #     # for `f(x)`, we want to return just `f` rather than `typeof(f)`
-    #     if node == p.children[1] && isa(v, Core.Const)
-    #         return v.val
-    #     end
-    # end
-    return v
+    return ssavaluetypes[i]
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ, tsd.runtime)
