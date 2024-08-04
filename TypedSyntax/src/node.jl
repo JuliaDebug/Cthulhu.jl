@@ -911,6 +911,9 @@ function skipped_parent(node::SyntaxNode)
     pnode === nothing && return node
     ppnode = pnode.parent
     if ppnode !== nothing && kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+        if kind(node) == K"Identifier" && kind(pnode) == K"quote" && kind(ppnode) == K"." && sourcetext(node) == "materialize"
+            return ppnode.parent
+        end
         return ppnode
     end
     return pnode
