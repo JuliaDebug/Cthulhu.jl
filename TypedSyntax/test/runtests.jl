@@ -711,8 +711,8 @@ using TypedSyntax: InlayHint, Diagnostic, InlayHintKinds
     "("
     "::$Int"
     ")::Bool"
-    "::$Int"
-    "::Float64"
+    "::Core.Const(-1)"
+    "::Core.Const(1.0)"
     ")::Union{Float64, $Int}"]
     @test length(io[:diagnostics]) == 2
 end
