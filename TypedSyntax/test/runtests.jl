@@ -569,7 +569,7 @@ include("test_module.jl")
     end
     @test   occursin("s::$Int = 0::$Int", str) || occursin("s::Core.Const(0) = 0::Core.Const(0)", str)
     @test !occursin("(s::$Int = 0::$Int)", str)
-    @test occursin("(s::Float64 += x::Float64)::Float64", str) || occursin("(s::Union{Float64, Int64} += x::Float64)::Float64", str)
+    @test occursin("(s::Float64 += x::Float64)::Float64", str) || occursin("(s::Union{Float64, $Int} += x::Float64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     str = sprint(tsn; context=:color=>true) do io, obj
         printstyled(io, obj; iswarn=true, hide_type_stable=false)
