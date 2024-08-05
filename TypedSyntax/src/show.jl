@@ -95,7 +95,8 @@ function is_show_annotation(@nospecialize(T); type_annotations::Bool, hide_type_
 end
 
 # Is the type equivalent to the source-text?
-is_type_transparent(node, @nospecialize(T)) = replace(sourcetext(node), r"\s" => "") == replace(sprint(show, T), r"\s" => "")
+# We use `endswith` to handle module qualification
+is_type_transparent(node, @nospecialize(T)) = endswith(replace(sprint(show, T), r"\s" => ""), replace(sourcetext(node), r"\s" => ""))
 
 function is_callfunc(node::TypedSyntaxNode, @nospecialize(T))
     pnode = node.parent

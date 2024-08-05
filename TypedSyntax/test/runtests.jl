@@ -620,6 +620,11 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test occursin("::Core.Const(sin)", str) || occursin("::typeof(sin)", str)
+    tsn = TypedSyntaxNode(TSN.calls_helper, (Float32,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test !occursin("Core.Const", str)
 
     # issue #413
     @test TypedSyntax.is_small_union_or_tunion(Union{})

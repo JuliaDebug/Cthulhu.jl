@@ -247,4 +247,11 @@ function obfuscated(x)
     return f(x)
 end
 
+module Internal
+export helper
+helper(x) = x+1
+end
+using .Internal
+calls_helper(x) = helper(x)
+
 end
