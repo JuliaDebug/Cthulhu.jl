@@ -2,7 +2,7 @@ module Cthulhu
 
 Base.Experimental.@compiler_options compile=min optimize=1
 
-using CodeTracking: definition, whereis
+using CodeTracking: CodeTracking, definition, whereis, maybe_fix_path
 using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
@@ -832,6 +832,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                 miparent = instance(node.parent.data.nd)
                 ulocs = find_caller_of(interp, miparent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
+                    ulocs = [(k[1], maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     explain_inlining = length(ulocs) > 1 ? "(including inlined callers represented by indentation) " : ""
                     push!(strlocs, "Browse typed code")
@@ -846,8 +847,8 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                         end
                         choice2 = TerminalMenus.request(term, promptstr, linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
-                            loc = ulocs[choice2]
-                            edit(String(loc[1][2]), first(loc[2]))
+                            loc, lines = ulocs[choice2]
+                            edit(loc[2], first(lines))
                         elseif choice2 == length(strlocs)
                             browsecodetyped = true
                             break
