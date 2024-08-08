@@ -87,6 +87,7 @@ end
 function is_show_annotation(@nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
     type_annotations || return false
     if isa(T, Core.Const)
+        isa(T.val, Module) && return false
         T = Core.Typeof(T.val)
     end
     isa(T, Type) || return false
@@ -98,9 +99,14 @@ end
 # We use `endswith` to handle module qualification
 is_type_transparent(node, @nospecialize(T)) = endswith(replace(sprint(show, T), r"\s" => ""), replace(sourcetext(node), r"\s" => ""))
 
-function is_callfunc(node::TypedSyntaxNode, @nospecialize(T))
+function is_callfunc(node::MaybeTypedSyntaxNode, @nospecialize(T))
+    thisnode = node
     pnode = node.parent
-    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(node)) || node === pnode.children[1])
+    while pnode !== nothing && kind(pnode) ∈ KSet"quote ." && pnode.parent !== nothing
+        thisnode = pnode
+        pnode = pnode.parent
+    end
+    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(thisnode)) || thisnode === pnode.children[1])
         if isa(T, Core.Const)
             T = T.val
         end

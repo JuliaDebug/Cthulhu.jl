@@ -625,6 +625,16 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test !occursin("Core.Const", str)
+    tsn = TypedSyntaxNode(TSN.calls_helper1, (Float32,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test !occursin("Core.Const", str)
+    tsn = TypedSyntaxNode(TSN.calls_helper2, (Float32,))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test !occursin("Core.Const", str)
 
     # issue #413
     @test TypedSyntax.is_small_union_or_tunion(Union{})

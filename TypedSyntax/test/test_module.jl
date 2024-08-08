@@ -250,8 +250,13 @@ end
 module Internal
 export helper
 helper(x) = x+1
+module MoreInternal
+helper2(x) = x+2
+end
 end
 using .Internal
 calls_helper(x) = helper(x)
+calls_helper1(x) = Internal.helper(x)
+calls_helper2(x) = Internal.MoreInternal.helper2(x)
 
 end
