@@ -635,6 +635,12 @@ include("test_module.jl")
         printstyled(io, obj; hide_type_stable=false)
     end
     @test !occursin("Core.Const", str)
+    tsn = TypedSyntaxNode(TSN.allbutfirst, (Vector{Bool},))
+    str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
+    @test occursin("2:end", str)
+
 
     # issue #413
     @test TypedSyntax.is_small_union_or_tunion(Union{})

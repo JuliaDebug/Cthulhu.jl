@@ -259,4 +259,6 @@ calls_helper(x) = helper(x)
 calls_helper1(x) = Internal.helper(x)
 calls_helper2(x) = Internal.MoreInternal.helper2(x)
 
+allbutfirst(list) = list[2:end]
+
 end

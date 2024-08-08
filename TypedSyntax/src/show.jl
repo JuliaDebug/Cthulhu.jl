@@ -111,6 +111,7 @@ function is_callfunc(node::MaybeTypedSyntaxNode, @nospecialize(T))
             T = T.val
         end
         if isa(T, Type) || isa(T, Function)
+            T === Colon() && sourcetext(node) == ":" && return true
             return is_type_transparent(node, T)
         end
     end
