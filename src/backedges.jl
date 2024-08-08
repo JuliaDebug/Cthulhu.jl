@@ -88,7 +88,59 @@ function buildframes(st::Vector{StackTraces.StackFrame})
     return ipframes
 end
 
-# Extension API
+## Extension API
+
+# With hindsight, this API was poorly designed and would be worth fixing in the next breaking release.
+# See issue #582
+
+"""
+    edges = backedges(obj)
+
+Return an iterable of children (callers) of `obj`. An `edge` should support [`Cthulhu.method`](@ref)
+and [`Cthulhu.specTypes`](@ref), as well as [`Cthulhu.nextnode`](@ref) to get the next node object.
+
+Part of the `ascend` API.
+"""
+function backedges end
+
+"""
+    inst = instance(obj)
+
+Return the current node data corresponding to `obj`. `inst` should support [`Cthulhu.method`](@ref)
+and [`Cthulhu.specTypes`](@ref).
+
+Part of the `ascend` API.
+"""
+function instance end
+
+"""
+    m = method(edge)
+
+Return the method corresponding to `edge`.
+
+Part of the `ascend` API.
+"""
+function method end
+
+"""
+    sig = specTypes(edge)
+
+Return the signature of `edge`.
+
+Part of the `ascend` API.
+"""
+function specTypes end
+
+"""
+    childobj = nextnode(obj, edge)
+
+Return the next node object from `obj` indicated by `edge`.
+
+Part of the `ascend` API.
+"""
+function nextnode end
+
+
 backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _emptybackedges
 method(mi::MethodInstance) = mi.def
 specTypes(mi::MethodInstance) = mi.specTypes
@@ -102,9 +154,9 @@ backedges(sframes::Vector{StackTraces.StackFrame}) = (ret = sframes[2:end]; isem
 instance(ipframes::Vector{IPFrames}) = isempty(ipframes) ? CC.Timings.ROOTmi : instance(ipframes[1].sfs)
 backedges(ipframes::Vector{IPFrames}) = (ret = ipframes[2:end]; isempty(ret) ? () : (ret,))
 
-function callstring(io::IO, obj)
-    name = isa(method(obj), Method) ? method(obj).name : :toplevel
-    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), name, specTypes(obj))
+function callstring(io::IO, edge)
+    name = isa(method(edge), Method) ? method(edge).name : :toplevel
+    show_tuple_as_call(nonconcrete_red, IOContext(io, :color=>true), name, specTypes(edge))
     return String(take!(io))
 end
 function callstring(io::IO, sfs::Vector{StackTraces.StackFrame})
@@ -125,12 +177,14 @@ end
 
 function treelist(mi)
     io = IOBuffer()
-    str = callstring(io, mi)
-    treelist!(Node(Data(str, instance(mi))), io, mi, "", Base.IdSet{typeof(instance(mi))}())
+    imi = instance(mi)
+    str = callstring(io, imi)
+    treelist!(Node(Data(str, imi)), io, mi, "", Base.IdSet{typeof(imi)}())
 end
 function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Base.IdSet)
-    mi ∈ visited && return parent
-    push!(visited, instance(mi))
+    imi = instance(mi)
+    imi ∈ visited && return parent
+    push!(visited, imi)
     indent *= " "
     for edge in backedges(mi)
         str = indent * callstring(io, edge)
