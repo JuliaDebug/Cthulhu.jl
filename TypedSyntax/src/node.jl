@@ -191,12 +191,12 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         kwdivider = 1
         if havekws && slotnames[1] !== Symbol("#self#")
             kwdivider = findfirst(1:length(slotnames)) do i
-                slotnames[i] == Symbol("") && unwrapinternal(slottypes[i]) <: Function  # this should be the parent function as an argument
+                slotnames[i] == Symbol("") && isa(unwrapinternal(slottypes[i]), Function)  # this should be the parent function as an argument
             end
             if kwdivider === nothing
                 kwdivider = 1
             end
-            if length(slottypes) >= 2 && slotnames[2] == Symbol("") && (nt = unwrapinternal(slottypes[2])) <: NamedTuple
+            if length(slottypes) >= 2 && slotnames[2] == Symbol("") && (nt = unwrapinternal(slottypes[2]); isa(nt, Type)) && nt <: NamedTuple
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
@@ -244,7 +244,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         if kind(arg) == K"::" && length(children(arg)) == 2
             arg = child(arg, 1)
         end
-        arg.typ = unwrapinternal(slottypes[idx])
+        arg.typ = slottypes[idx]
     end
 
     # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
@@ -276,7 +276,7 @@ function striparg(arg)
 end
 
 function unwrapinternal(@nospecialize(T))
-    isa(T, Core.Const) && return Core.Typeof(T.val)
+    isa(T, Core.Const) && return T.val
     isa(T, Core.PartialStruct) && return T.typ
     return T
 end
@@ -287,10 +287,10 @@ function gettyp(node2ssa, node, src)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     if isa(stmt, Core.ReturnNode)
         arg = stmt.val
-        isa(arg, SSAValue) && return unwrapinternal(ssavaluetypes[arg.id])
-        is_slot(arg) && return unwrapinternal((src.slottypes::Vector{Any})[arg.id])
+        isa(arg, SSAValue) && return ssavaluetypes[arg.id]
+        is_slot(arg) && return (src.slottypes::Vector{Any})[arg.id]
     end
-    return unwrapinternal(ssavaluetypes[i])
+    return ssavaluetypes[i]
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ, tsd.runtime)
@@ -608,7 +608,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     argmapping = typeof(rootnode)[]   # temporary storage
     for (i, mapped, stmt) in zip(eachindex(mappings), mappings, src.code)
         empty!(argmapping)
-        if is_slot(stmt) || isa(stmt, SSAValue)
+        if is_slot(stmt) || isa(stmt, SSAValue) || isa(stmt, GlobalRef)
             append_targets_for_arg!(mapped, i, stmt)
         elseif isa(stmt, Core.ReturnNode)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
@@ -626,16 +626,14 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = unwrapinternal(
-                                                (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::SlotType).id] :
+                        symtyps[only(mapped)] = (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::SlotType).id] :
                                                 isa(stmt, SSAValue) ? ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
-                        )
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        T = unwrapinternal(ssavaluetypes[i])
+                        T = ssavaluetypes[i]
                         symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
@@ -738,7 +736,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                         if isexpr(nextstmt, :call)
                             f = nextstmt.args[1]
                             if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
-                                empty!(mapped)
+                                # empty!(mapped)
                                 break
                             elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] === SSAValue(i)
                                 push!(mappings[inext], node)
@@ -793,14 +791,14 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
-                                        symtyps[t] = unwrapinternal(if j > 0
+                                        symtyps[t] = if j > 0
                                             ssavaluetypes[j]
                                         elseif have_slottypes
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
                                             slottypes[arg.id]
                                         else
                                             nothing
-                                        end)
+                                        end
                                         break
                                     end
                                 end
@@ -904,6 +902,9 @@ function skipped_parent(node::SyntaxNode)
     pnode === nothing && return node
     ppnode = pnode.parent
     if ppnode !== nothing && kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+        if kind(node) == K"Identifier" && kind(pnode) == K"quote" && kind(ppnode) == K"." && sourcetext(node) == "materialize"
+            return ppnode.parent
+        end
         return ppnode
     end
     return pnode
