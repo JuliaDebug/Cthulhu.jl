@@ -106,7 +106,7 @@ export ascend
     @descend_code_typed
 
 Evaluates the arguments to the function or macro call, determines their
-types, and calls `code_typed` on the resulting expression.
+types, and calls [`descend_code_typed`](@ref) on the resulting expression.
 """
 macro descend_code_typed(ex0...)
     InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
@@ -125,7 +125,7 @@ end
     @descend_code_warntype
 
 Evaluates the arguments to the function or macro call, determines their
-types, and calls `code_warntype` on the resulting expression.
+types, and calls [`descend_code_warntype`](@ref) on the resulting expression.
 """
 macro descend_code_warntype(ex0...)
     InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_warntype, ex0)
@@ -134,9 +134,12 @@ end
 """
     @descend
 
-Shortcut for [`@descend_code_typed`](@ref).
+Evaluates the arguments to the function or macro call, determines their
+types, and calls [`descend`](@ref) on the resulting expression.
 """
-const var"@descend" = var"@descend_code_typed"
+macro descend(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend, ex0)
+end
 
 """
     descend_code_typed(f, argtypes=Tuple{...}; kwargs...)
@@ -167,7 +170,7 @@ julia> descend_code_typed() do
 ```
 """
 descend_code_typed(@nospecialize(args...); kwargs...) =
-    _descend_with_error_handling(args...; iswarn=false, kwargs...)
+    _descend_with_error_handling(args...; annotate_source=false, iswarn=false, kwargs...)
 
 """
     descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
@@ -198,7 +201,7 @@ julia> descend_code_warntype() do
 ```
 """
 descend_code_warntype(@nospecialize(args...); kwargs...) =
-    _descend_with_error_handling(args...; iswarn=true, kwargs...)
+    _descend_with_error_handling(args...; annotate_source=false, iswarn=true, optimize=false, kwargs...)
 
 function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = default_tt(f)); kwargs...)
     ft = Core.Typeof(f)
@@ -234,14 +237,35 @@ end
 default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
 
 """
-    descend
+    descend(f, argtypes=Tuple{...}; kwargs...)
+    descend(tt::Type{<:Tuple}; kwargs...)
+    descend(Cthulhu.BOOKMARKS[i])
+    descend(mi::MethodInstance; kwargs...)
 
-Shortcut for [`descend_code_typed`](@ref).
+Given a function and a tuple-type, interactively explore the source code of functions
+annotated with inferred types by descending into `invoke` statements. Type enter to select an
+`invoke` to descend into, select `↩` to ascend, and press `q` or `control-c` to quit.
+
+# Usage:
+```julia
+julia> descend(sin, (Int,))
+[...]
+
+julia> descend(sin, Tuple{Int})
+[...]
+
+julia> descend(Tuple{typeof(sin), Int})
+[...]
+
+julia> descend() do
+           T = rand() > 0.5 ? Int64 : Float64
+           sin(rand(T)
+       end
+[...]
+```
 """
-const descend = descend_code_typed
-
-descend_code_typed(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
-    _descend_with_error_handling(interp, mi; iswarn=false, kwargs...)
+descend(@nospecialize(args...); kwargs...) =
+    _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
 @static if VERSION ≥ v"1.11.0-DEV.207"
     using .CC: cached_return_type
