@@ -519,6 +519,7 @@ maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{m
 maybe_callsite(info::RTCallInfo, mi::MethodInstance) = false
 
 function maybe_callsite(info::RTCallInfo, @nospecialize(tt::Type))
+    tt === Union{} && return false
     info.f === tt.parameters[1] && info.argtyps == tt.parameters[2:end]
 end
 function maybe_callsite(info::MICallInfo, @nospecialize(tt::Type))
