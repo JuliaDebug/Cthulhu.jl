@@ -880,6 +880,9 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                     end
                 end
             end
+            if !isa(mi, MethodInstance)
+                error("You can only descend into known calls. If you tried to descend into a runtime-dispatched signature, try its caller instead.")
+            end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
             interp′ = CthulhuInterpreter(interp)

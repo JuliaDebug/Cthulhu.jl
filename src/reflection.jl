@@ -299,7 +299,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance; allow_unspecialized::Bool=false)
+function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, caller::MethodInstance; allow_unspecialized::Bool=false)
     interp′ = CthulhuInterpreter(interp)
     do_typeinf!(interp′, caller)
     locs = Tuple{Core.LineInfoNode,Int}[]

@@ -147,6 +147,8 @@ specTypes(mi::MethodInstance) = mi.specTypes
 instance(mi::MethodInstance) = mi
 nextnode(mi, edge) = edge
 
+instance(@nospecialize(tt::Type)) = tt
+
 instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? CC.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 backedges(sframes::Vector{StackTraces.StackFrame}) = (ret = sframes[2:end]; isempty(ret) ? () : (ret,))
@@ -188,7 +190,7 @@ function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Ba
     indent *= " "
     for edge in backedges(mi)
         str = indent * callstring(io, edge)
-        child = Node(Data(str, instance(edge)), parent)
+        child = Node(typeof(parent.data)(str, instance(edge)), parent)
         treelist!(child, io, nextnode(mi, edge), indent, visited)
     end
     return parent

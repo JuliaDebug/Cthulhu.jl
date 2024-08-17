@@ -506,6 +506,7 @@ end
 
 # maybe_callsite for higher-level inputs
 maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
+maybe_callsite(cs::Callsite, @nospecialize(tt::Type)) = maybe_callsite(cs.info, tt)
 maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
 # Special CallInfo cases:
 function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
@@ -516,5 +517,20 @@ function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
 end
 maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
 maybe_callsite(info::RTCallInfo, mi::MethodInstance) = false
+
+function maybe_callsite(info::RTCallInfo, @nospecialize(tt::Type))
+    isa(tt, Union) && return maybe_callsite(info, tt.a) || maybe_callsite(info, tt.b)
+    isa(tt, DataType) || return false
+    typeof(info.f) === tt.parameters[1] || return false
+    for (a, b) in zip(info.argtyps, tt.parameters[2:end])
+        a === b || return false
+    end
+    return true
+end
+function maybe_callsite(info::MICallInfo, @nospecialize(tt::Type))
+    return tt <: info.mi.specTypes
+end
+
+maybe_callsite(info::CallInfo, @nospecialize(tt::Type)) = false
 
 unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg
