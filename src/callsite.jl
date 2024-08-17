@@ -519,11 +519,16 @@ maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{m
 maybe_callsite(info::RTCallInfo, mi::MethodInstance) = false
 
 function maybe_callsite(info::RTCallInfo, @nospecialize(tt::Type))
-    tt === Union{} && return false
-    info.f === tt.parameters[1] && info.argtyps == tt.parameters[2:end]
+    isa(tt, Union) && return maybe_callsite(info, tt.a) || maybe_callsite(info, tt.b)
+    isa(tt, DataType) || return false
+    typeof(info.f) === tt.parameters[1] || return false
+    for (a, b) in zip(info.argtyps, tt.parameters[2:end])
+        a === b || return false
+    end
+    return true
 end
 function maybe_callsite(info::MICallInfo, @nospecialize(tt::Type))
-    info.mi.specTypes <: tt
+    return tt <: info.mi.specTypes
 end
 
 maybe_callsite(info::CallInfo, @nospecialize(tt::Type)) = false
