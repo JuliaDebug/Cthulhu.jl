@@ -357,7 +357,12 @@ function code_typed1_by_method_instance(mi::MethodInstance;
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection should not be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
-    code, rt = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    @static if VERSION < v"1.12.0-DEV.669"
+        code, rt = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    else
+        code = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+        rt = code.rettype
+    end
     code isa CodeInfo || error("no code is available for ", mi)
     debuginfo === :none && Base.remove_linenums!(code)
     return Pair{CodeInfo,Any}(code, rt)
