@@ -800,7 +800,12 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             view_cmd = CODEVIEWS[toggle]
             world = get_inference_world(interp)
             println(iostream)
-            view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
+            @static if VERSION < v"1.12.0-DEV.669"
+                view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
+            else
+                src = Core.Compiler.typeinf_code(interp, mi, true)
+                view_cmd(iostream, mi, src, optimize, debuginfo, world, CONFIG)
+            end
             display_CI = false
         else
             local i = findfirst(ct->ct.toggle === toggle, custom_toggles)
