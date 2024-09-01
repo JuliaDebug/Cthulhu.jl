@@ -828,10 +828,14 @@ end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
+    @static if isdefined(CC, :engine_reserve)
+        ci = CC.engine_reserve(interp, mi)
+        result.ci = ci
+    end
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
     # and show it in the UI in some way?
-    frame = InferenceState(result, #=cache=#:global, interp)::InferenceState
+    frame = InferenceState(result, #=cache_mode=#:global, interp)::InferenceState
     CC.typeinf(interp, frame)
     return nothing
 end
