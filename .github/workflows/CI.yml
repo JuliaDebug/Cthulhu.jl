@@ -14,15 +14,19 @@ jobs:
       matrix:
         version:
           - '1'
-          - '1.9.0'
+          - '1.10.0'
+          - '1.11-nightly'
           - 'nightly'
-          - '1.8.5'
         os:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
         arch:
           - x64
+          - x86
+        exclude:
+          - os: macOS-latest
+            arch: x86
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
@@ -39,17 +43,14 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - name: dev TypedSyntax
-        shell: julia --color=yes --project=. {0}    # this is necessary for the next command to work on Windows
+      - name: dev TypedSyntax # dev TypedSyntax (a subdir package) since the latest version may not be registered yet
+        shell: julia --color=yes --project=. {0} # this is necessary for the next command to work on Windows
         run: 'using Pkg; Pkg.develop(path=joinpath(pwd(), "TypedSyntax"))'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
           check_bounds: 'auto'
           coverage: 'false'
-      - name: TypedSyntax     # run the tests of TypedSyntax (a subdir package)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: julia --project=TypedSyntax -e 'using Pkg; Pkg.test(coverage=true)'
       # - name: Coverage off  # `empty_func` test doesn't work as intended with `coverage=true`
       #   if: ${{ matrix.os == 'ubuntu-latest' }}
       #   run: julia --project -e 'using Pkg; Pkg.test("Cthulhu"; coverage=false)'

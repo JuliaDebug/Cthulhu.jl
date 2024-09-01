@@ -26,7 +26,7 @@ const goodmis = Core.MethodInstance[]
                 continue
             end
             try
-                tsn, _ = TypedSyntax.tsn_and_mappings(m, src, rt, ret...; warn=false)
+                tsn, _ = TypedSyntax.tsn_and_mappings(mi, src, rt, ret...; warn=false)
                 @test isa(tsn, TypedSyntaxNode)
                 push!(goodmis, mi)
             catch

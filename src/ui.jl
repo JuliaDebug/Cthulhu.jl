@@ -13,7 +13,7 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     custom_toggles::Vector{CustomToggle}
 end
 
-function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, iswarn::Bool)
+function show_as_line(callsite::Callsite, with_effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     sprint() do io
         show(IOContext(io,
@@ -21,15 +21,17 @@ function show_as_line(callsite::Callsite, with_effects::Bool, optimize::Bool, is
             :displaysize  => reduced_displaysize,
             :optimize     => optimize,
             :iswarn       => iswarn,
-            :color        => iswarn | with_effects,
-            :with_effects => with_effects),
+            :color        => iswarn | with_effects | exception_type,
+            :with_effects => with_effects,
+            :exception_type => exception_type),
             callsite)
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
+function CthulhuMenu(callsites, with_effects::Bool, exception_type::Bool,
+                     optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
                      custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
-    options = build_options(callsites, with_effects, optimize, iswarn, hide_type_stable)
+    options = build_options(callsites, with_effects, exception_type, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -47,15 +49,15 @@ function CthulhuMenu(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool
     return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
 end
 
-build_options(callsites::Vector{Callsite}, with_effects::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
-    vcat(map(callsite->show_as_line(callsite, with_effects, optimize, iswarn), callsites), ["↩"])
-function build_options(callsites, with_effects::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
+build_options(callsites::Vector{Callsite}, with_effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
+    vcat(map(callsite->show_as_line(callsite, with_effects, exception_type, optimize, iswarn), callsites), ["↩"])
+function build_options(callsites, with_effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
     reduced_displaysize::Int = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
     nd::Int = -1
 
     shown_callsites = map(callsites) do node
         if isa(node, Callsite)
-            show_as_line(node, with_effects, optimize, iswarn)
+            show_as_line(node, with_effects, exception_type, optimize, iswarn)
         else
             if nd == -1
                 nd = TypedSyntax.ndigits_linenumbers(node)
@@ -92,8 +94,10 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, highlight,
-    custom_toggles::Vector{CustomToggle})
+function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable,
+               debuginfo, remarks, with_effects, exception_type, inline_cost,
+               type_annotations, highlight, inlay_types_vscode, diagnostics_vscode,
+               jump_always, custom_toggles::Vector{CustomToggle})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
@@ -106,7 +110,16 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
-        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native")
+        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native, [",
+        colorize(jump_always, 'j'), "]ump to source always"),
+    if TypedSyntax.inlay_hints_available_vscode()
+        print(ioctx, ", [",
+        colorize(inlay_types_vscode, 'v'), "]scode: inlay types")
+    end
+    if TypedSyntax.diagnostics_available_vscode()
+        print(ioctx, ", [",
+        colorize(diagnostics_vscode, 'V'), "]scode: diagnostics")
+    end
     if !annotate_source
         print(ioctx, ", [",
             colorize(optimize, 'o'), "]ptimize, [",
@@ -114,7 +127,8 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
                 printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
             end, "]ebuginfo, [",
             colorize(remarks, 'r'), "]emarks, [",
-            colorize(with_effects, 'e'), "]ffects, [",
+            colorize(with_effects, 'e'), "]ffects, ",
+            "e[", colorize(exception_type, 'x'), "]ception types, [",
             colorize(inline_cost, 'i'), "]nlining costs")
     end
     for i = 1:length(custom_toggles)
@@ -148,6 +162,7 @@ const TOGGLES = Dict(
     UInt32('d') => :debuginfo,
     UInt32('r') => :remarks,
     UInt32('e') => :with_effects,
+    UInt32('x') => :exception_type,
     UInt32('i') => :inline_cost,
     UInt32('t') => :type_annotations,
     UInt32('s') => :highlighter,
@@ -160,6 +175,9 @@ const TOGGLES = Dict(
     UInt32('b') => :bookmark,
     UInt32('R') => :revise,
     UInt32('E') => :edit,
+    UInt32('v') => :inlay_types_vscode,
+    UInt32('V') => :diagnostics_vscode,
+    UInt32('j') => :jump_always
 )
 
 function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)

@@ -1,4 +1,3 @@
-
 mutable struct TypedSyntaxData <: AbstractSyntaxData
     source::SourceFile
     typedsource::CodeInfo
@@ -13,29 +12,37 @@ TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd
 const TypedSyntaxNode = JuliaSyntax.TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 
+@static if VERSION ≥ v"1.11.0-DEV.337"
+    const SlotType = Core.SlotNumber
+else
+    const SlotType = Union{Core.SlotNumber, Core.Compiler.TypedSlot}
+end
+
 struct NoDefaultValue end
 const no_default_value = NoDefaultValue()
 
 # These are TypedSyntaxNode constructor helpers
 # Call these directly if you want both the TypedSyntaxNode and the `mappings` list,
 # where `mappings[i]` corresponds to the list of nodes matching `(src::CodeInfo).code[i]`.
-function tsn_and_mappings(@nospecialize(f), @nospecialize(t); kwargs...)
-    m = which(f, t)
-    src, rt = getsrc(f, t)
-    tsn_and_mappings(m, src, rt; kwargs...)
+function tsn_and_mappings(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...)
+    inferred_result = get_inferred_result(f, tt)
+    return tsn_and_mappings(inferred_result.mi, inferred_result.src, inferred_result.rt; kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
     def = definition(String, m)
     if isnothing(def)
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing
     end
-    return tsn_and_mappings(m, src, rt, def...; warn, strip_macros, kwargs...)
+    return tsn_and_mappings(mi, src, rt, def...; warn, strip_macros, kwargs...)
 end
 
-function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
-    rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=string(m.file), first_line=lineno, kwargs...)
+function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt), sourcetext::AbstractString, lineno::Integer; warn::Bool=true, strip_macros::Bool=false, kwargs...)
+    m = mi.def::Method
+    filename = isnothing(functionloc(m)[1]) ? string(m.file) : functionloc(m)[1]
+    rootnode = JuliaSyntax.parsestmt(SyntaxNode, sourcetext; filename=filename, first_line=lineno, kwargs...)
     if strip_macros
         rootnode = get_function_def(rootnode)
         if !is_function_def(rootnode)
@@ -44,28 +51,33 @@ function tsn_and_mappings(m::Method, src::CodeInfo, @nospecialize(rt), sourcetex
         end
     end
     Δline = lineno - m.line   # offset from original line number (Revise)
-    mappings, symtyps = map_ssas_to_source(src, rootnode, Δline)
+    mappings, symtyps = map_ssas_to_source(src, mi, rootnode, Δline)
     node = TypedSyntaxNode(rootnode, src, mappings, symtyps)
     node.typ = rt
     return node, mappings
 end
 
-TypedSyntaxNode(@nospecialize(f), @nospecialize(t); kwargs...) = tsn_and_mappings(f, t; kwargs...)[1]
+TypedSyntaxNode(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = tsn_and_mappings(f, tt; kwargs...)[1]
 
 function TypedSyntaxNode(mi::MethodInstance; kwargs...)
-    m = mi.def::Method
-    src, rt = getsrc(mi)
-    tsn_and_mappings(m, src, rt; kwargs...)[1]
+    src, rt = code_typed1_tsn(mi)
+    tsn_and_mappings(mi, src, rt; kwargs...)[1]
 end
 
-TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, Δline::Integer=0) =
-    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, rootnode, Δline)...)
+function TypedSyntaxNode(rootnode::SyntaxNode, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...)
+    inferred_result = get_inferred_result(f, tt)
+    TypedSyntaxNode(rootnode, inferred_result.src, inferred_result.mi; kwargs...)
+end
+
+TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mi::MethodInstance, Δline::Integer=0) =
+    TypedSyntaxNode(rootnode, src, map_ssas_to_source(src, mi, rootnode, Δline)...)
 
 function TypedSyntaxNode(rootnode::SyntaxNode, src::CodeInfo, mappings, symtyps)
     # There may be ambiguous assignments back to the source; preserve just the unambiguous ones
     node2ssa = IdDict{SyntaxNode,Int}(only(list) => i for (i, list) in pairs(mappings) if length(list) == 1)
     # Copy `rootnode`, adding type annotations
-    trootnode = TypedSyntaxNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, gettyp(node2ssa, rootnode, src)))
+    typ = gettyp(node2ssa, rootnode, src)
+    trootnode = TypedSyntaxNode(nothing, nothing, TypedSyntaxData(rootnode.data::SyntaxData, src, typ))
     addchildren!(trootnode, rootnode, src, node2ssa, symtyps, mappings)
     # Add argtyps to signature
     fnode = get_function_def(trootnode)
@@ -179,12 +191,12 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         kwdivider = 1
         if havekws && slotnames[1] !== Symbol("#self#")
             kwdivider = findfirst(1:length(slotnames)) do i
-                slotnames[i] == Symbol("") && unwrapinternal(slottypes[i]) <: Function  # this should be the parent function as an argument
+                slotnames[i] == Symbol("") && isa(unwrapinternal(slottypes[i]), Function)  # this should be the parent function as an argument
             end
             if kwdivider === nothing
                 kwdivider = 1
             end
-            if length(slottypes) >= 2 && slotnames[2] == Symbol("") && (nt = unwrapinternal(slottypes[2])) <: NamedTuple
+            if length(slottypes) >= 2 && slotnames[2] == Symbol("") && (nt = unwrapinternal(slottypes[2]); isa(nt, Type)) && nt <: NamedTuple
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
@@ -232,7 +244,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         if kind(arg) == K"::" && length(children(arg)) == 2
             arg = child(arg, 1)
         end
-        arg.typ = unwrapinternal(slottypes[idx])
+        arg.typ = slottypes[idx]
     end
 
     # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
@@ -264,7 +276,7 @@ function striparg(arg)
 end
 
 function unwrapinternal(@nospecialize(T))
-    isa(T, Core.Const) && return Core.Typeof(T.val)
+    isa(T, Core.Const) && return T.val
     isa(T, Core.PartialStruct) && return T.typ
     return T
 end
@@ -275,10 +287,10 @@ function gettyp(node2ssa, node, src)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     if isa(stmt, Core.ReturnNode)
         arg = stmt.val
-        isa(arg, SSAValue) && return unwrapinternal(ssavaluetypes[arg.id])
-        is_slot(arg) && return unwrapinternal((src.slottypes::Vector{Any})[arg.id])
+        isa(arg, SSAValue) && return ssavaluetypes[arg.id]
+        is_slot(arg) && return (src.slottypes::Vector{Any})[arg.id]
     end
-    return unwrapinternal(ssavaluetypes[i])
+    return ssavaluetypes[i]
 end
 
 Base.copy(tsd::TypedSyntaxData) = TypedSyntaxData(tsd.source, tsd.typedsource, tsd.raw, tsd.position, tsd.val, tsd.typ, tsd.runtime)
@@ -298,17 +310,57 @@ function sparam_name(mi::MethodInstance, i::Int)
     return sig.var.name
 end
 
-function getsrc(@nospecialize(f), @nospecialize(t))
-    srcrts = code_typed(f, t; debuginfo=:source, optimize=false)
-    return only(srcrts)
+@static if isdefined(Base, :method_instances)
+using Base: method_instances
+else
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
+    tt = Base.signature_type(f, t)
+    results = Core.MethodInstance[]
+    # this make a better error message than the typeassert that follows
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    for match in Base._methods_by_ftype(tt, -1, world)::Vector
+        instance = Core.Compiler.specialize_method(match)
+        push!(results, instance)
+    end
+    return results
+end
 end
 
-function getsrc(mi::MethodInstance)
-    cis = Base.code_typed_by_type(mi.specTypes; debuginfo=:source, optimize=false)
-    isempty(cis) && error("no applicable type-inferred code found for ", mi)
-    length(cis) == 1 || error("got $(length(cis)) possible type-inferred results for ", mi,
-                              ", you may need a more specialized signature")
-    return cis[1]::Pair{CodeInfo}
+struct InferredResult
+    mi::MethodInstance
+    src::CodeInfo
+    rt
+    InferredResult(mi::MethodInstance, src::CodeInfo, @nospecialize(rt)) = new(mi, src, rt)
+end
+function get_inferred_result(@nospecialize(f), @nospecialize(tt=Base.default_tt(f)),
+                             world::UInt=Base.get_world_counter())
+    mis = method_instances(f, tt, world)
+    if isempty(mis)
+        sig = sprint(Base.show_tuple_as_call, Symbol(""), Base.signature_type(f, tt))
+        error("no applicable type-inferred code found for ", sig)
+    elseif length(mis) ≠ 1
+        sig = sprint(Base.show_tuple_as_call, Symbol(""), Base.signature_type(f, tt))
+        error("got $(length(mis)) possible type-inferred results for ", sig,
+              ", you may need a more specialized signature")
+    end
+    mi = only(mis)
+    return InferredResult(mi, code_typed1_tsn(mi)...)
+end
+
+code_typed1_tsn(mi::MethodInstance) = code_typed1_by_method_instance(mi; optimize=false, debuginfo=:source)
+
+function code_typed1_by_method_instance(mi::MethodInstance;
+                                        optimize::Bool=true,
+                                        debuginfo::Symbol=:default,
+                                        world::UInt=Base.get_world_counter(),
+                                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
+        error("code reflection should not be used from generated functions")
+    debuginfo = Base.IRShow.debuginfo(debuginfo)
+    code, rt = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    code isa CodeInfo || error("no code is available for ", mi)
+    debuginfo === :none && Base.remove_linenums!(code)
+    return Pair{CodeInfo,Any}(code, rt)
 end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
@@ -388,11 +440,80 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
     return symlocs
 end
 
+## utility function to extract the line number at a particular program counter (ignoring inlining).
+## return <= 0 if there is no line number change caused by this statement
+@static if VERSION ≥ v"1.12.0-DEV.173"
+function getline(lt::Core.DebugInfo, i::Int)
+    while true
+        codeloc = Base.IRShow.getdebugidx(lt, i)
+        line::Int = codeloc[1]
+        line < 0 && return 0 # broken or disabled debug info?
+        line == 0 && return 0 # no line number update (though maybe inlining changed)
+        ltnext = lt.linetable
+        if ltnext === nothing
+            return line
+        end
+        i = line
+        lt = ltnext
+    end
+end
+function getnextline(lt::Core.DebugInfo, i::Int, Δline)
+    while true
+        codeloc = Base.IRShow.getdebugidx(lt, i)
+        line::Int = codeloc[1]
+        line < 0 && return typemax(Int) # broken or disabled debug info?
+        if line == 0
+            i += 1
+            continue
+        end
+        ltnext = lt.linetable
+        if ltnext === nothing
+            break
+        end
+        i = line
+        lt = ltnext
+    end
+    # now that we have line i and a list of all lines with code on them lt
+    # find the next largest line number in this list greater than i, or return typemax(Int)
+    j = i+1
+    currline = Base.IRShow.getdebugidx(lt, i)[1]
+    while j ≤ typemax(Int)
+        codeloc = Base.IRShow.getdebugidx(lt, j)
+        line::Int = codeloc[1]
+        line < 0 && break
+        if line == 0 || currline == line
+            j += 1
+        else
+            return line + Δline
+        end
+    end
+    return typemax(Int)
+end
+
+else # VERSION < v"1.12.0-DEV.173"
+function getline(lt, j)
+    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
+    linfo.inlined_at == 0 && return linfo.line
+    @assert linfo.method === Symbol("macro expansion")
+    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
+    return linfo.line
+end
+function getnextline(lt, j, Δline)
+    j == 0 && return typemax(Int)
+    j += 1
+    while j <= length(lt)
+        linfo = lt[j]::Core.LineInfoNode
+        linfo.inlined_at == 0 && return linfo.line + Δline
+        j += 1
+    end
+    return typemax(Int)
+end
+end # @static if
+
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
-function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
-    mi = src.parent::MethodInstance
+function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Int)
     slottypes = src.slottypes::Union{Nothing, Vector{Any}}
     have_slottypes = slottypes !== nothing
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
@@ -421,8 +542,13 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
-        j = src.codelocs[i]
-        lt = src.linetable::Vector{Any}
+        @static if VERSION ≥ v"1.12.0-DEV.173"
+            j = i
+            lt = src.debuginfo
+        else
+            j = src.codelocs[i]
+            lt = src.linetable::Vector
+        end
         start = getline(lt, j) + Δline
         stop = getnextline(lt, j, Δline) - 1
         linerange = start : stop
@@ -442,7 +568,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     function get_targets(@nospecialize(arg))
         return if is_slot(arg)
             # If `arg` is a variable, e.g., the `x` in `f(x)`
-            name = src.slotnames[(arg::Union{SlotNumber,TypedSlot}).id]
+            name = src.slotnames[(arg::SlotType).id]
             is_gensym(name) ? nothing : get(symlocs, symloc_key(name), nothing)
             # get(symlocs, src.slotnames[arg.id], nothing)  # find all places this variable is used
         elseif isa(arg, GlobalRef)
@@ -482,12 +608,15 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     argmapping = typeof(rootnode)[]   # temporary storage
     for (i, mapped, stmt) in zip(eachindex(mappings), mappings, src.code)
         empty!(argmapping)
-        if is_slot(stmt) || isa(stmt, SSAValue)
+        if is_slot(stmt) || isa(stmt, SSAValue) || isa(stmt, GlobalRef)
             append_targets_for_arg!(mapped, i, stmt)
         elseif isa(stmt, Core.ReturnNode)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
-            if stmt.head == :(=) && is_slot(stmt.args[1])
+            targets = get_targets(stmt)
+            if targets !== nothing
+                append_targets_for_line!(mapped, i, targets)
+            elseif stmt.head == :(=) && is_slot(stmt.args[1])
                 # We defer setting up `symtyps` for the LHS because processing the RHS first might eliminate ambiguities
                 # # Update `symtyps` for this assignment
                 lhs = stmt.args[1]
@@ -497,16 +626,14 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                     append_targets_for_arg!(mapped, i, stmt)
                     filter_assignment_targets!(mapped, true)   # match the RHS of assignments
                     if length(mapped) == 1
-                        symtyps[only(mapped)] = unwrapinternal(
-                                                (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::Union{SlotNumber,TypedSlot}).id] :
+                        symtyps[only(mapped)] = (is_slot(stmt) & have_slottypes) ? slottypes[(stmt::SlotType).id] :
                                                 isa(stmt, SSAValue) ? ssavaluetypes[stmt.id] : #=literal=#typeof(stmt)
-                        )
                     end
                     # Now try to assign types to the LHS of the assignment
                     append_targets_for_arg!(argmapping, i, lhs)
                     filter_assignment_targets!(argmapping, false)  # match the LHS of assignments
                     if length(argmapping) == 1
-                        T = unwrapinternal(ssavaluetypes[i])
+                        T = ssavaluetypes[i]
                         symtyps[only(argmapping)] = T
                     end
                     empty!(argmapping)
@@ -609,7 +736,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         if isexpr(nextstmt, :call)
                             f = nextstmt.args[1]
                             if isa(f, GlobalRef) && f.mod == Base && f.name == :broadcasted
-                                empty!(mapped)
+                                # empty!(mapped)
                                 break
                             elseif isa(f, GlobalRef) && f.mod == Base && f.name == :materialize && nextstmt.args[2] === SSAValue(i)
                                 push!(mappings[inext], node)
@@ -625,7 +752,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                 # `node` or, for the LHS of a `slot = callexpr` statement, one that shares a parent with `node`.
                 if stmt.head == :(=) && is_slot(stmt.args[1])
                     # Tag the LHS of this expression
-                    arg = stmt.args[1]::Union{SlotNumber, TypedSlot}
+                    arg = stmt.args[1]::SlotType
                     sym = src.slotnames[arg.id]
                     if !is_gensym(sym)
                         lhsnode = node
@@ -656,7 +783,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                         end
                         for (arg, j) in argjs
                             if is_slot(arg)
-                                arg = arg::Union{SlotNumber, TypedSlot}
+                                arg = arg::SlotType
                                 sym = src.slotnames[arg.id]
                                 itr = get(symlocs, symloc_key(sym), nothing)
                                 itr === nothing && continue
@@ -664,14 +791,14 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
                                         is_prec_assignment(node) && t == child(node, 1) && continue
-                                        symtyps[t] = unwrapinternal(if j > 0
+                                        symtyps[t] = if j > 0
                                             ssavaluetypes[j]
                                         elseif have_slottypes
                                             # We failed to find it as an SSAValue, it must have type assigned at function entry
                                             slottypes[arg.id]
                                         else
                                             nothing
-                                        end)
+                                        end
                                         break
                                     end
                                 end
@@ -730,7 +857,7 @@ function map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Int)
     end
     return mappings, symtyps
 end
-map_ssas_to_source(src::CodeInfo, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, rootnode, Int(Δline))
+map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxNode, Δline::Integer) = map_ssas_to_source(src, mi, rootnode, Int(Δline))
 
 function follow_back(src, arg)
     # Follow SSAValue backward to see if it maps back to a slot
@@ -758,7 +885,7 @@ function is_indexed_iterate(arg)
     return arg.name == :indexed_iterate
 end
 
-is_slot(@nospecialize(arg)) = isa(arg, SlotNumber) || isa(arg, TypedSlot)
+is_slot(@nospecialize(arg)) = isa(arg, SlotType)
 
 is_src_literal(x) = isa(x, Integer) || isa(x, AbstractFloat) || isa(x, String) || isa(x, Char) || isa(x, Symbol)
 
@@ -775,6 +902,9 @@ function skipped_parent(node::SyntaxNode)
     pnode === nothing && return node
     ppnode = pnode.parent
     if ppnode !== nothing && kind(pnode) ∈ KSet"... quote"   # might need to add more things here
+        if kind(node) == K"Identifier" && kind(pnode) == K"quote" && kind(ppnode) == K"." && sourcetext(node) == "materialize"
+            return ppnode.parent
+        end
         return ppnode
     end
     return pnode
@@ -801,25 +931,6 @@ function symloc_key(sym::Symbol)
     ssym = string(sym)
     endswith(ssym, "...") && return Symbol(ssym[1:end-3])
     return sym
-end
-
-function getline(lt, j)
-    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
-    linfo.inlined_at == 0 && return linfo.line
-    @assert linfo.method === Symbol("macro expansion")
-    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
-    return linfo.line
-end
-
-function getnextline(lt, j, Δline)
-    j == 0 && return typemax(Int)
-    j += 1
-    while j <= length(lt)
-        linfo = lt[j]::Core.LineInfoNode
-        linfo.inlined_at == 0 && return linfo.line + Δline
-        j += 1
-    end
-    return typemax(Int)
 end
 
 function find_identifier_or_tuplechild(node::AbstractSyntaxNode, sym)

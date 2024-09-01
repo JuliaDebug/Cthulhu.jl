@@ -274,8 +274,6 @@ Enter `@descend bar(x, y, z)` you can see that, for `foo(4)`, the types within `
 
 ## Viewing the internal representation of Julia code
 
-Anyone using Cthulhu to investigate the behavior of Julia's compiler will
-prefer to examine the
 While Cthulhu tries to place type-annotations on the source code, this obscures
 detail and can occassionally go awry (see details [here](TypedSyntax/README.md)).
 For anyone who needs more direct insight, it can be better to look directly at Julia's

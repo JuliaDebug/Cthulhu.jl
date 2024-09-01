@@ -44,7 +44,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
         sig, body = children(rootnode)
         type_annotate, pre, pre2, post = type_annotation_mode(sig, rt; type_annotations, hide_type_stable)
         position = show_src_expr(io, sig, position, pre, pre2; type_annotations, iswarn, hide_type_stable, nd)
-        type_annotate && show_annotation(io, rt, post; iswarn)
+        type_annotate && show_annotation(io, rt, post, rootnode.source, position; iswarn)
         rootnode = body
     end
     position = show_src_expr(io, rootnode, position, "", ""; type_annotations, iswarn, hide_type_stable, nd)
@@ -55,6 +55,14 @@ Base.printstyled(rootnode::MaybeTypedSyntaxNode; kwargs...) = printstyled(stdout
 
 ndigits_linenumbers(node::AbstractSyntaxNode, idxend = last_byte(node)) = ndigits(node.source.first_line + nlines(node.source, idxend) - 1)
 
+function _print(io::IO, x, node, position)
+    print(io, x)
+
+    if !isempty(x)
+        add_hint!(get(io, :inlay_hints, nothing), x, node, position+1)
+    end
+end
+
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
@@ -64,33 +72,72 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
             position = catchup(io, first(children(node)), position, nd)
         end
     end
-    print(io, pre)
+    _print(io, pre, node.source, position)
     for (i, child) in enumerate(children(node))
-        i == 2 && print(io, pre2)
+        i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
         position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
-        ctype_annotate && show_annotation(io, cT, cpost; iswarn)
+        ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
     end
-    return catchup(io, node, position, nd, _lastidx+1)
+    return Int(catchup(io, node, position, nd, _lastidx+1))
 end
 
 # should we print a type-annotation?
 function is_show_annotation(@nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
     type_annotations || return false
     if isa(T, Core.Const)
-        T = typeof(T.val)
+        isa(T.val, Module) && return false
+        T = Core.Typeof(T.val)
     end
     isa(T, Type) || return false
     hide_type_stable || return true
     return isa(T, Type) && is_type_unstable(T)
 end
 
+# Is the type equivalent to the source-text?
+# We use `endswith` to handle module qualification
+is_type_transparent(node, @nospecialize(T)) = endswith(replace(sprint(show, T), r"\s" => ""), replace(sourcetext(node), r"\s" => ""))
+
+function is_callfunc(node::MaybeTypedSyntaxNode, @nospecialize(T))
+    thisnode = node
+    pnode = node.parent
+    while pnode !== nothing && kind(pnode) ∈ KSet"quote ." && pnode.parent !== nothing
+        thisnode = pnode
+        pnode = pnode.parent
+    end
+    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(thisnode)) || thisnode === pnode.children[1])
+        if isa(T, Core.Const)
+            T = T.val
+        end
+        if isa(T, Type) || isa(T, Function)
+            T === Colon() && sourcetext(node) == ":" && return true
+            return is_type_transparent(node, T)
+        end
+    end
+    return false
+end
+
 function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hide_type_stable::Bool)
     kind(node) == K"return" && return false, "", "", ""
+    is_callfunc(node, T) && return false, "", "", ""
     type_annotate = is_show_annotation(T; type_annotations, hide_type_stable)
     pre = pre2 = post = ""
     if type_annotate
+        # Try stripping Core.Const and Type{T} wrappers to check if we need to avoid `String::Type{String}`
+        # or `String::Core.Const(String)` annotations
+        S = nothing
+        if isa(T, Core.Const)
+            val = T.val
+            if isa(val, DataType)
+                S = val
+            end
+        elseif isa(T, DataType) && T <: Type && isassigned(T.parameters, 1)
+            S = T.parameters[1]
+        end
+        if S !== nothing && is_type_transparent(node, S)
+            return false, pre, pre2, post
+        end
         if kind(node) ∈ KSet":: where" || is_infix_op_call(node) || (is_prec_assignment(node) && kind(node) != K"=")
             pre, post = "(", ")"
         elseif is_prefix_op_call(node) # insert parens after prefix op and before type-annotating
@@ -100,19 +147,28 @@ function type_annotation_mode(node, @nospecialize(T); type_annotations::Bool, hi
     return type_annotate, pre, pre2, post
 end
 
-function show_annotation(io, @nospecialize(T), post=""; iswarn::Bool)
+function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Bool)
+    diagnostics = get(io, :diagnostics, nothing)
+    inlay_hints = get(io, :inlay_hints, nothing)
+
     print(io, post)
-    if iswarn
-        color = !is_type_unstable(T) ? :cyan :
-                 is_small_union_or_tunion(T) ? :yellow : :red
-        printstyled(io, "::", T; color)
+    if isa(T, Core.Const) && isa(T.val, Type)
+        T = Type{T.val}
+    end
+    T_str = string(T)
+    if iswarn && is_type_unstable(T)
+        color = is_small_union_or_tunion(T) ? :yellow : :red
+        printstyled(io, "::", T_str; color)
+        add_diagnostic!(diagnostics, node, position+1, is_small_union_or_tunion(T) ? DiagnosticKinds.Information : DiagnosticKinds.Warning)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position+1; kind=InlayHintKinds.Nothing)
     else
-        printstyled(io, "::", T; color=:cyan)
+        printstyled(io, "::", T_str; color=:cyan)
+        add_hint!(inlay_hints, string(post, "::", T_str), node, position+1; kind=InlayHintKinds.Type)
     end
 end
 
 print_linenumber(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int) =
-    print_linenumber(io, source_line(node.source, position), nd)
+    print_linenumber(io, source_line(node.source, position+1), nd)
 print_linenumber(io::IO, ln::Int, nd::Int) = printstyled(io, lpad(ln, nd), " "; color=:light_black)
 
 # Do any "overdue" printing, generating a line number if needed. Mostly, this catches whitespace.

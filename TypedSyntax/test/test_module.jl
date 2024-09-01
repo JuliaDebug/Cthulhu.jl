@@ -50,10 +50,10 @@ zerowhere(::AbstractArray{T}) where T<:Real = zero(T)
 vaparam(a::AbstractArray{T,N}, I::NTuple{N,Any}) where {T,N} = N
 @inline function myplustv(x::T, y::Integer) where {T<:AbstractChar}  # vendored copy of +(::T, ::Integer) where T<:AbstractChar
     if x isa Char
-        u = Int32((bitcast(UInt32, x) >> 24) % Int8)
+        u = Int32((Base.bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
             z = u + y
-            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
+            return 0 <= z < 0x80 ? Base.bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
         end
     end
     return T(Int32(x) + Int32(y))
@@ -222,5 +222,43 @@ const T426 = Dict{Type{<:Dates.Period}, Bool}(
 
 # Issue #458
 f458() = return
+
+function fVSCode(x)
+    z = x + 1
+    y = 2 * z
+    return y + (x > 0 ? -1 : 1.0)
+end
+
+# Issue #482 & #465
+MyDict{T} = Dict{T,Any}
+f482a(x) = MyDict{String}(x)
+f482b(x) = Dict{String,Any}(x)
+
+# Issue 487
+f487(x) = 1
+
+function f493()
+    T = rand() > 0.5 ? Int64 : Float64
+    sum(rand(T, 100))
+end
+
+function obfuscated(x)
+    f = sin
+    return f(x)
+end
+
+module Internal
+export helper
+helper(x) = x+1
+module MoreInternal
+helper2(x) = x+2
+end
+end
+using .Internal
+calls_helper(x) = helper(x)
+calls_helper1(x) = Internal.helper(x)
+calls_helper2(x) = Internal.MoreInternal.helper2(x)
+
+allbutfirst(list) = list[2:end]
 
 end

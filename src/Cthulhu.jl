@@ -2,7 +2,7 @@ module Cthulhu
 
 Base.Experimental.@compiler_options compile=min optimize=1
 
-using CodeTracking: definition, whereis
+using CodeTracking: CodeTracking, definition, whereis, maybe_fix_path
 using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
@@ -20,6 +20,13 @@ const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
 
+@static if VERSION ≥ v"1.11.0-DEV.1498"
+    import .CC: get_inference_world
+    using Base: get_world_counter
+else
+    import .CC: get_world_counter, get_world_counter as get_inference_world
+end
+
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
@@ -33,9 +40,13 @@ Base.@kwdef mutable struct CthulhuConfig
     hide_type_stable::Bool = false
     remarks::Bool = false
     with_effects::Bool = false
+    exception_type::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
     annotate_source::Bool = true   # overrides optimize, although the current setting is preserved
+    inlay_types_vscode::Bool = true
+    diagnostics_vscode::Bool = true
+    jump_always::Bool = false
 end
 
 """
@@ -60,9 +71,13 @@ end
 - `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
 - `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
 - `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
+- `exception_type::Bool` `Intial state of "exception type" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
 - `annotate_source::Bool` Initial state of "Source". Defaults to `true`.
+- `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
+- `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
+- `jump_always::Bool` Initial state of "jump to source always" toggle. Defaults to `false`.
 """
 const CONFIG = CthulhuConfig()
 
@@ -91,7 +106,17 @@ export ascend
     @descend_code_typed
 
 Evaluates the arguments to the function or macro call, determines their
-types, and calls `code_typed` on the resulting expression.
+types, and calls [`descend_code_typed`](@ref) on the resulting expression.
+See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+# Examples
+```julia
+julia> @descend_code_typed sin(1)
+[...]
+
+julia> @descend_code_typed optimize=false sin(1)
+[...]
+```
 """
 macro descend_code_typed(ex0...)
     InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_typed, ex0)
@@ -110,7 +135,23 @@ end
     @descend_code_warntype
 
 Evaluates the arguments to the function or macro call, determines their
-types, and calls `code_warntype` on the resulting expression.
+types, and calls [`descend_code_warntype`](@ref) on the resulting expression.
+See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+# Examples
+```julia
+julia> function foo()
+           T = rand() > 0.5 ? Int64 : Float64
+           sin(rand(T))
+       end
+foo (generic function with 1 method)
+
+julia> @descend_code_warntype foo()
+[...]
+
+julia> @descend_code_warntype hide_type_stable=true foo()
+[...]
+```
 """
 macro descend_code_warntype(ex0...)
     InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend_code_warntype, ex0)
@@ -119,9 +160,22 @@ end
 """
     @descend
 
-Shortcut for [`@descend_code_typed`](@ref).
+Evaluates the arguments to the function or macro call, determines their
+types, and calls [`descend`](@ref) on the resulting expression.
+See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+# Examples
+```julia
+julia> @descend sin(1)
+[...]
+
+julia> @descend iswarn=false foo()
+[...]
+```
 """
-const var"@descend" = var"@descend_code_typed"
+macro descend(ex0...)
+    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :descend, ex0)
+end
 
 """
     descend_code_typed(f, argtypes=Tuple{...}; kwargs...)
@@ -132,6 +186,7 @@ const var"@descend" = var"@descend_code_typed"
 Given a function and a tuple-type, interactively explore the output of
 `code_typed` by descending into `invoke` statements. Type enter to select an
 `invoke` to descend into, select `↩`  to ascend, and press `q` or `control-c` to quit.
+See [`Cthulhu.CONFIG`](@ref) for `kwargs` and their defaults.
 
 # Usage:
 ```julia
@@ -146,13 +201,13 @@ julia> descend_code_typed(Tuple{typeof(sin), Int})
 
 julia> descend_code_typed() do
            T = rand() > 0.5 ? Int64 : Float64
-           sin(rand(T)
+           sin(rand(T))
        end
 [...]
 ```
 """
 descend_code_typed(@nospecialize(args...); kwargs...) =
-    _descend_with_error_handling(args...; iswarn=false, kwargs...)
+    _descend_with_error_handling(args...; annotate_source=false, iswarn=false, kwargs...)
 
 """
     descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
@@ -163,6 +218,7 @@ descend_code_typed(@nospecialize(args...); kwargs...) =
 Given a function and a tuple-type, interactively explore the output of
 `code_warntype` by descending into `invoke` statements. Type enter to select an
 `invoke` to descend into, select `↩` to ascend, and press `q` or `control-c` to quit.
+See [`Cthulhu.CONFIG`](@ref) for `kwargs` and their defaults.
 
 # Usage:
 ```julia
@@ -177,13 +233,13 @@ julia> descend_code_warntype(Tuple{typeof(sin), Int})
 
 julia> descend_code_warntype() do
            T = rand() > 0.5 ? Int64 : Float64
-           sin(rand(T)
+           sin(rand(T))
        end
 [...]
 ```
 """
 descend_code_warntype(@nospecialize(args...); kwargs...) =
-    _descend_with_error_handling(args...; iswarn=true, kwargs...)
+    _descend_with_error_handling(args...; annotate_source=false, iswarn=true, optimize=false, kwargs...)
 
 function _descend_with_error_handling(@nospecialize(f), @nospecialize(argtypes = default_tt(f)); kwargs...)
     ft = Core.Typeof(f)
@@ -206,6 +262,7 @@ function __descend_with_error_handling(args...; terminal=default_terminal(), kwa
     try
         _descend(terminal, args...; kwargs...)
     catch x
+        TypedSyntax.clear_all_vscode()
         if x isa InterruptException
             return nothing
         else
@@ -218,46 +275,71 @@ end
 default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
 
 """
-    descend
+    descend(f, argtypes=Tuple{...}; kwargs...)
+    descend(tt::Type{<:Tuple}; kwargs...)
+    descend(Cthulhu.BOOKMARKS[i])
+    descend(mi::MethodInstance; kwargs...)
 
-Shortcut for [`descend_code_typed`](@ref).
+Given a function and a tuple-type, interactively explore the source code of functions
+annotated with inferred types by descending into `invoke` statements. Type enter to select an
+`invoke` to descend into, select `↩` to ascend, and press `q` or `control-c` to quit.
+See [`Cthulhu.CONFIG`](@ref) for `kwargs` and their defaults.
+
+# Usage:
+```julia
+julia> descend(sin, (Int,))
+[...]
+
+julia> descend(sin, Tuple{Int})
+[...]
+
+julia> descend(Tuple{typeof(sin), Int})
+[...]
+
+julia> descend() do
+           T = rand() > 0.5 ? Int64 : Float64
+           sin(rand(T))
+       end
+[...]
+```
 """
-const descend = descend_code_typed
+descend(@nospecialize(args...); kwargs...) =
+    _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-descend_code_typed(interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
-    _descend_with_error_handling(interp, mi; iswarn=false, kwargs...)
-
-function codeinst_rt(code::CodeInstance)
+@static if VERSION ≥ v"1.11.0-DEV.207"
+    using .CC: cached_return_type
+else
+function cached_return_type(code::CodeInstance)
     rettype = code.rettype
-    if isdefined(code, :rettype_const)
-        rettype_const = code.rettype_const
-        if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-            return Core.PartialStruct(rettype, rettype_const)
-        elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
-            return rettype_const
-        elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
-            return rettype_const
-        else
-            return Const(rettype_const)
-        end
+    isdefined(code, :rettype_const) || return rettype
+    rettype_const = code.rettype_const
+    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+        return Core.PartialStruct(rettype, rettype_const)
+    elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
+        return rettype_const
     else
-        return rettype
+        return Const(rettype_const)
+    end
+end
+end
+
+function cached_exception_type(code::CodeInstance)
+    @static if VERSION ≥ v"1.11.0-DEV.945"
+        return code.exctype
+    else
+        return nothing
     end
 end
 
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
 get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
 get_effects(src::InferredSource) = src.effects
-get_effects(unopt::Dict{Union{MethodInstance, InferenceResult}, InferredSource}, mi::MethodInstance) =
-    haskey(unopt, mi) ? get_effects(unopt[mi]) : Effects()
 get_effects(result::InferenceResult) = result.ipo_effects
-@static if VERSION ≥ v"1.9-"
-    get_effects(result::CC.ConstPropResult) = get_effects(result.result)
-    get_effects(result::CC.ConcreteResult) = result.effects
-    get_effects(result::CC.SemiConcreteResult) = result.effects
-else
-    get_effects(result::CC.ConstResult) = result.effects
-end
+get_effects(result::CC.ConstPropResult) = get_effects(result.result)
+get_effects(result::CC.ConcreteResult) = result.effects
+get_effects(result::CC.SemiConcreteResult) = result.effects
 
 # `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
 @constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
@@ -270,7 +352,8 @@ end
 
 function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_no_src::Bool=false)
     codeinst = interp.opt[mi]
-    rt = codeinst_rt(codeinst)
+    rt = cached_return_type(codeinst)
+    exct = cached_exception_type(codeinst)
     opt = codeinst.inferred
     if opt !== nothing
         opt = opt::OptimizedSource
@@ -292,19 +375,19 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
         error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
     end
     effects = get_effects(codeinst)
-    return (; src, rt, infos, slottypes, effects, codeinf)
+    return (; src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
     codeinf = src = copy(interp.unopt[mi].src)
-    rt = interp.unopt[mi].rt
+    (; rt, exct) = interp.unopt[mi]
     infos = interp.unopt[mi].stmt_info
     effects = get_effects(interp.unopt[mi])
     slottypes = src.slottypes
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, infos, slottypes, effects, codeinf)
+    return (; src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_constproped(interp::CthulhuInterpreter, override::InferenceResult, optimize::Bool)
@@ -322,11 +405,12 @@ function lookup_constproped_optimized(interp::CthulhuInterpreter, override::Infe
         # e.g. when we switch from constant-prop' unoptimized source
         src = CC.copy(opt.ir)
         rt = override.result
+        exct = @static hasfield(InferenceResult, :exc_result) ? override.exc_result : nothing
         infos = src.stmts.info
         slottypes = src.argtypes
         codeinf = opt.src
         effects = opt.effects
-        return (; src, rt, infos, slottypes, effects, codeinf)
+        return (; src, rt, exct, infos, slottypes, effects, codeinf)
     else
         # the source might be unavailable at this point,
         # when a result is fully constant-folded etc.
@@ -340,24 +424,25 @@ function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::In
         unopt = interp.unopt[override.linfo]
     end
     codeinf = src = copy(unopt.src)
-    rt = unopt.rt
+    (; rt, exct) = unopt
     infos = unopt.stmt_info
     effects = get_effects(unopt)
     slottypes = src.slottypes
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, infos, slottypes, effects, codeinf)
+    return (; src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_semiconcrete(interp::CthulhuInterpreter, override::SemiConcreteCallInfo, optimize::Bool)
     src = CC.copy(override.ir)
     rt = get_rt(override)
+    exct = Any # TODO
     infos = src.stmts.info
     slottypes = src.argtypes
     effects = get_effects(override)
     (; codeinf) = lookup(interp, get_mi(override), optimize)
-    return (; src, rt, infos, slottypes, effects, codeinf)
+    return (; src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function get_override(@nospecialize(info))
@@ -374,17 +459,21 @@ end
 ##
 function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::AbstractCursor;
     override::Union{Nothing,InferenceResult,SemiConcreteCallInfo} = nothing,
-    debuginfo::Union{Symbol,DebugInfo}       = CONFIG.debuginfo,                     # default is compact debuginfo
-    optimize::Bool                           = CONFIG.optimize,                      # default is true
-    interruptexc::Bool                       = CONFIG.interruptexc,
-    iswarn::Bool                             = CONFIG.iswarn,                        # default is false
-    hide_type_stable::Union{Nothing,Bool}    = CONFIG.hide_type_stable,
-    verbose::Union{Nothing,Bool}             = nothing,
-    remarks::Bool                            = CONFIG.remarks&!CONFIG.optimize,      # default is false
-    with_effects::Bool                       = CONFIG.with_effects,                  # default is false
-    inline_cost::Bool                        = CONFIG.inline_cost&CONFIG.optimize,   # default is false
-    type_annotations::Bool                   = CONFIG.type_annotations,              # default is true
-    annotate_source::Bool                    = CONFIG.annotate_source,               # default is true
+    debuginfo::Union{Symbol,DebugInfo}    = CONFIG.debuginfo,                     # default is compact debuginfo
+    optimize::Bool                        = CONFIG.optimize,                      # default is true
+    interruptexc::Bool                    = CONFIG.interruptexc,
+    iswarn::Bool                          = CONFIG.iswarn,                        # default is false
+    hide_type_stable::Union{Nothing,Bool} = CONFIG.hide_type_stable,
+    verbose::Union{Nothing,Bool}          = nothing,
+    remarks::Bool                         = CONFIG.remarks&!CONFIG.optimize,      # default is false
+    with_effects::Bool                    = CONFIG.with_effects,                  # default is false
+    exception_type::Bool                  = CONFIG.exception_type,                # default is false
+    inline_cost::Bool                     = CONFIG.inline_cost&CONFIG.optimize,   # default is false
+    type_annotations::Bool                = CONFIG.type_annotations,              # default is true
+    annotate_source::Bool                 = CONFIG.annotate_source,               # default is true
+    inlay_types_vscode::Bool              = CONFIG.inlay_types_vscode,            # default is true
+    diagnostics_vscode::Bool              = CONFIG.diagnostics_vscode,            # default is true
+    jump_always::Bool                     = CONFIG.jump_always,                   # default is false
     )
 
     if isnothing(hide_type_stable)
@@ -406,7 +495,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         do_typeinf!(new_interp, new_mi)
         _descend(term, new_interp, new_mi;
                  debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
-                 with_effects, inline_cost, type_annotations, annotate_source)
+                 with_effects, exception_type,
+                 inline_cost, type_annotations, annotate_source,
+                 inlay_types_vscode, diagnostics_vscode)
     end
     custom_toggles = Cthulhu.custom_toggles(interp)
     if !(custom_toggles isa Vector{CustomToggle})
@@ -417,9 +508,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     end
     while true
         if isa(override, InferenceResult)
-            (; src, rt, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize & !annotate_source)
+            (; src, rt, exct, infos, slottypes, codeinf, effects) = lookup_constproped(interp, curs, override, optimize & !annotate_source)
         elseif isa(override, SemiConcreteCallInfo)
-                (; src, rt, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize & !annotate_source)
+                (; src, rt, exct, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize & !annotate_source)
         else
             if optimize && !annotate_source
                 codeinst = get_optimized_codeinst(interp, curs)
@@ -429,7 +520,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         # but make something up that looks plausible.
                         callsites = Callsite[]
                         if display_CI
-                            callsite = Callsite(-1, MICallInfo(codeinst.def, codeinst.rettype, get_effects(codeinst)), :invoke)
+                            exct = @static VERSION ≥ v"1.11.0-DEV.945" ? codeinst.exct : nothing
+                            callsite = Callsite(-1, MICallInfo(codeinst.def, codeinst.rettype, get_effects(codeinst), exct), :invoke)
                             println(iostream)
                             println(iostream, "│ ─ $callsite")
                             println(iostream, "│  return ", Const(codeinst.rettype_const))
@@ -446,7 +538,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     end
                 end
             end
-            (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize & !annotate_source)
+            (; src, rt, exct, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize & !annotate_source)
         end
         mi = get_mi(curs)
         src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
@@ -455,11 +547,28 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         else
             @assert length(src.code) == length(infos)
         end
-        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source)
+        infkey = override isa InferenceResult ? override : mi
+        @static if VERSION ≥ v"1.11.0-DEV.1127"
+        pc2excts = exception_type ? get_excts(interp, infkey) : nothing
+        else
+        if exception_type
+            @warn "Statement-wise and call-wise exception type information is available only on v\"1.11.0-DEV.1127\" and later"
+        end
+        pc2excts = nothing
+        end
+        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source, pc2excts)
+
+        if jump_always
+            if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
+                Main.VSCodeServer.openfile(whereis(mi.def::Method)...; preserve_focus=true)
+            else
+                edit(whereis(mi.def::Method)...)
+            end
+        end
 
         if display_CI
-            pc2remarks = remarks ? get_remarks(interp, override !== nothing ? override : mi) : nothing
-            pc2effects = with_effects ? get_effects(interp, override !== nothing ? override : mi) : nothing
+            pc2remarks = remarks ? get_remarks(interp, infkey) : nothing
+            pc2effects = with_effects ? get_effects(interp, infkey) : nothing
             printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
             if debuginfo == DInfo.compact
                 str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
@@ -469,13 +578,14 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :color => true,
                         :displaysize => displaysize(iostream), # displaysize doesn't propagate otherwise
                         :SOURCE_SLOTNAMES => codeinf === nothing ? false : Base.sourceinfo_slotnames(codeinf),
-                        :with_effects => with_effects)
+                        :with_effects => with_effects,
+                        :exception_type => exception_type)
                     stringify(ioctx) do lambda_io
-                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, effects, mi;
-                                      iswarn, hide_type_stable,
-                                      pc2remarks, pc2effects,
-                                      inline_cost, type_annotations, annotate_source,
-                                      interp)
+                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, exct, effects, mi;
+                                      iswarn, optimize, hide_type_stable,
+                                      pc2remarks, pc2effects, pc2excts,
+                                      inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
+                                      jump_always, interp)
                     end
                 end
                 # eliminate trailing indentation (see first item in bullet list in PR #189)
@@ -487,12 +597,13 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             else
                 lambda_io = IOContext(iostream,
                     :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
-                    :with_effects => with_effects)
-                cthulhu_typed(lambda_io, debuginfo, src, rt, effects, mi;
-                              iswarn, hide_type_stable,
-                              pc2remarks, pc2effects,
-                              inline_cost, type_annotations, annotate_source,
-                              interp)
+                    :with_effects => with_effects,
+                    :exception_type => exception_type)
+                cthulhu_typed(lambda_io, debuginfo, src, rt, exct, effects, mi;
+                              iswarn, optimize, hide_type_stable,
+                              pc2remarks, pc2effects, pc2excts,
+                              inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
+                              jump_always, interp)
             end
             view_cmd = cthulhu_typed
         else
@@ -502,8 +613,14 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label show_menu
 
         shown_callsites = annotate_source ? sourcenodes : callsites
-        menu = CthulhuMenu(shown_callsites, with_effects, optimize & !annotate_source, iswarn&get(iostream, :color, false)::Bool, hide_type_stable, custom_toggles; menu_options...)
-        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable, debuginfo, remarks, with_effects, inline_cost, type_annotations, CONFIG.enable_highlighter, custom_toggles)
+        menu = CthulhuMenu(shown_callsites, with_effects, exception_type,
+                           optimize & !annotate_source,
+                           iswarn&get(iostream, :color, false)::Bool,
+                           hide_type_stable, custom_toggles; menu_options...)
+        usg = usage(view_cmd, annotate_source, optimize, iswarn, hide_type_stable,
+                    debuginfo, remarks, with_effects, exception_type, inline_cost,
+                    type_annotations, CONFIG.enable_highlighter, inlay_types_vscode,
+                    diagnostics_vscode, jump_always, custom_toggles)
         cid = request(term, usg, menu)
         toggle = menu.toggle
 
@@ -547,7 +664,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         end
                     end
                 end
-                menu = CthulhuMenu(show_sub_callsites, with_effects, optimize & !annotate_source, false, false, custom_toggles; sub_menu=true, menu_options...)
+                menu = CthulhuMenu(show_sub_callsites, with_effects, exception_type,
+                                   optimize & !annotate_source, false, false, custom_toggles;
+                                   sub_menu=true, menu_options...)
                 cid = request(term, "", menu)
                 if cid == length(sub_callsites) + 1
                     continue
@@ -592,14 +711,25 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                      override = get_override(info), debuginfo,
                      optimize, interruptexc,
                      iswarn, hide_type_stable,
-                     remarks, with_effects, inline_cost, type_annotations, annotate_source)
+                     remarks, with_effects, exception_type, inline_cost,
+                     type_annotations, annotate_source,
+                     inlay_types_vscode, diagnostics_vscode,
+                     jump_always)
 
         elseif toggle === :warn
             iswarn ⊻= true
         elseif toggle === :with_effects
             with_effects ⊻= true
+        elseif toggle === :exception_type
+            exception_type ⊻= true
         elseif toggle === :hide_type_stable
             hide_type_stable ⊻= true
+        elseif toggle === :inlay_types_vscode
+            inlay_types_vscode ⊻= true
+            TypedSyntax.clear_inlay_hints_vscode()
+        elseif toggle === :diagnostics_vscode
+            diagnostics_vscode ⊻= true
+            TypedSyntax.clear_diagnostics_vscode()
         elseif toggle === :optimize
             optimize ⊻= true
             if !is_cached(get_mi(curs))
@@ -656,6 +786,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         elseif toggle === :edit
             edit(whereis(mi.def::Method)...)
             display_CI = false
+        elseif toggle === :jump_always
+            jump_always ⊻= true
         elseif toggle === :typed
             view_cmd = cthulhu_typed
             annotate_source = false
@@ -666,8 +798,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             display_CI = true
         elseif toggle === :ast || toggle === :llvm || toggle === :native
             view_cmd = CODEVIEWS[toggle]
+            world = get_inference_world(interp)
             println(iostream)
-            view_cmd(iostream, mi, optimize, debuginfo, interp, CONFIG)
+            view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
             display_CI = false
         else
             local i = findfirst(ct->ct.toggle === toggle, custom_toggles)
@@ -689,6 +822,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
         println(iostream)
     end
+
+    TypedSyntax.clear_all_vscode()
 end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
@@ -701,15 +836,10 @@ function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     return nothing
 end
 
-function get_specialization(@nospecialize(TT))
-    match = Base._which(TT)
-    mi = specialize_method(match)
-    return mi
-end
+get_specialization(@nospecialize tt::Type{<:Tuple}) = specialize_method(Base._which(tt))
 
-function get_specialization(@nospecialize(F), @nospecialize(TT))
-    return get_specialization(Base.signature_type(F, TT))
-end
+get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
+    get_specialization(Base.signature_type(f, tt))
 
 function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
     interp′ = CthulhuInterpreter(interp)
@@ -765,6 +895,7 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                 miparent = instance(node.parent.data.nd)
                 ulocs = find_caller_of(interp, miparent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
+                    ulocs = [(k[1], maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     explain_inlining = length(ulocs) > 1 ? "(including inlined callers represented by indentation) " : ""
                     push!(strlocs, "Browse typed code")
@@ -779,14 +910,17 @@ function ascend(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwarg
                         end
                         choice2 = TerminalMenus.request(term, promptstr, linemenu; cursor=choice2)
                         if 0 < choice2 < length(strlocs)
-                            loc = ulocs[choice2]
-                            edit(String(loc[1][2]), first(loc[2]))
+                            loc, lines = ulocs[choice2]
+                            edit(loc[2], first(lines))
                         elseif choice2 == length(strlocs)
                             browsecodetyped = true
                             break
                         end
                     end
                 end
+            end
+            if !isa(mi, MethodInstance)
+                error("You can only descend into known calls. If you tried to descend into a runtime-dispatched signature, try its caller instead.")
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
@@ -809,13 +943,17 @@ ascend
 
 using PrecompileTools
 @setup_workload begin
-    input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
-    term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
-    write(input.in, 'q')
-    @compile_workload begin
-        descend(gcd, (Int, Int); terminal=term)
-        # declare we are done with streams
-        close(input.in)
+    try
+        input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
+        term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
+        write(input.in, 'q')
+        @compile_workload begin
+            descend(gcd, (Int, Int); terminal=term)
+            # declare we are done with streams
+            close(input.in)
+        end
+    catch err
+        @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
 end
 

@@ -1,12 +1,18 @@
 using Test, Cthulhu, InteractiveUtils
+if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
+    using ..VSCodeServer
+end
 
-function cthulhu_info(@nospecialize(f), @nospecialize(TT=()); optimize=true)
-    (interp, mi) = Cthulhu.mkinterp(Core.Compiler.NativeInterpreter(), f, TT)
-    (; src, rt, infos, slottypes, effects) = Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
+function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
+                      optimize=true, interp=Core.Compiler.NativeInterpreter())
+    (interp, mi) = Cthulhu.mkinterp(f, tt; interp)
+    (; src, rt, exct, infos, slottypes, effects) =
+        Cthulhu.lookup(interp, mi, optimize; allow_no_src=true)
     if src !== nothing
-        src = Cthulhu.preprocess_ci!(src, mi, optimize, Cthulhu.CthulhuConfig(dead_code_elimination=true))
+        config = Cthulhu.CthulhuConfig(; dead_code_elimination=true)
+        src = Cthulhu.preprocess_ci!(src, mi, optimize, config)
     end
-    (; interp, src, infos, mi, rt, slottypes, effects)
+    return (; interp, src, infos, mi, rt, exct, slottypes, effects)
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
@@ -19,10 +25,4 @@ end
 
 macro find_callsites_by_ftt(ex0...)
     return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :find_callsites_by_ftt, ex0)
-end
-
-@static if isdefined(Core.Compiler, :is_foldable_nothrow)
-    using Core.Compiler: is_foldable_nothrow
-else
-    const is_foldable_nothrow = Core.Compiler.is_total
 end

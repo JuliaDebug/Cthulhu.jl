@@ -20,10 +20,19 @@ end
 
 function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
                         stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
-                        slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false)
+                        slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false,
+                        pc2excts::Union{Nothing,PC2Excts}=nothing)
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
-    stmts = isa(CI, IRCode) ? CI.stmts.inst : CI.code
+    if isa(CI, IRCode)
+        @static if VERSION < v"1.11.0-DEV.258"
+            stmts = CI.stmts.inst
+        else
+            stmts = CI.stmts.stmt
+        end
+    else
+        stmts = CI.code
+    end
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
@@ -45,7 +54,8 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                                       t = argextype(arg, CI, sptypes, slottypes)
                                       return ignorelimited(t)
                                   end, args)
-                callinfos = process_info(interp, info, argtypes, rt, optimize)
+                exct = isnothing(pc2excts) ? nothing : get(pc2excts, id, nothing)
+                callinfos = process_info(interp, info, argtypes, rt, optimize, exct)
                 isempty(callinfos) && continue
                 callsite = let
                     if length(callinfos) == 1
@@ -77,7 +87,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                         func = args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_world_counter(interp))), head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_inference_world(interp))), head)
                     end
                 end
             end
@@ -89,7 +99,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                 mi = get_mi(info)
                 meth = mi.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_world_counter(interp))
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_inference_world(interp))
                 end
             end
 
@@ -108,68 +118,70 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
 end
 
 function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),
-    argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result), optimize::Bool)
+    argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result), optimize::Bool,
+    @nospecialize(exct))
     is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
 
     if isnothing(result)
         return thisinfo
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConcreteResult)
+    elseif (@static VERSION ≥ v"1.11.0-DEV.851" && true) && result isa CC.VolatileInferenceResult
+        # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
+        #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
+        return thisinfo
+    elseif isa(result, CC.ConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
+        mici = MICallInfo(linfo, rt, effects, exct)
         return ConcreteCallInfo(mici, argtypes)
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.ConstPropResult)
+    elseif isa(result, CC.ConstPropResult)
         result = result.result
         linfo = result.linfo
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
+        mici = MICallInfo(linfo, rt, effects, exct)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(result, CC.SemiConcreteResult)
+    elseif isa(result, CC.SemiConcreteResult)
         linfo = result.mi
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
+        mici = MICallInfo(linfo, rt, effects, exct)
         return SemiConcreteCallInfo(mici, result.ir)
-    elseif (@static !(VERSION ≥ v"1.9-") && true) && isa(result, CC.ConstResult)
-        linfo = result.mi
-        effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
-        return ConcreteCallInfo(mici, argtypes)
     else
         @assert isa(result, CC.InferenceResult)
         linfo = result.linfo
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects)
+        mici = MICallInfo(linfo, rt, effects, exct)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
     end
 end
 
-function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInfo), argtypes::ArgTypes, @nospecialize(rt), optimize::Bool)
+function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInfo),
+                      argtypes::ArgTypes, @nospecialize(rt), optimize::Bool,
+                      @nospecialize(exct))
     is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
-    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize)
+    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize, exct)
 
     if isa(info, MethodResultPure)
         if isa(info.info, CC.ReturnTypeCallInfo)
             # xref: https://github.com/JuliaLang/julia/pull/45299#discussion_r871939049
             info = info.info # cascade to the special handling below
         else
-            return Any[PureCallInfo(argtypes, rt)]
+            return CallInfo[PureCallInfo(argtypes, rt)]
         end
     end
     if isa(info, MethodMatchInfo)
         if info.results === missing
-            return []
+            return CallInfo[]
         end
         matches = info.results.matches
-        return mapany(matches) do match::Core.MethodMatch
+        return CallInfo[let
             mi = specialize_method(match)
             effects = get_effects(interp, mi, optimize)
-            mici = MICallInfo(mi, rt, effects)
-            return is_cached(mi) ? mici : UncachedCallInfo(mici)
-        end
+            mici = MICallInfo(mi, rt, effects, exct)
+            is_cached(mi) ? mici : UncachedCallInfo(mici)
+        end for match::Core.MethodMatch in matches]
     elseif isa(info, UnionSplitInfo)
-        return mapreduce(process_recursive, vcat, info.matches; init=[])::Vector{Any}
+        return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
-        return mapreduce(process_recursive, vcat, info.infos; init=[])::Vector{Any}
+        return mapreduce(process_recursive, vcat, info.infos; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, ApplyCallInfo)
         # XXX: This could probably use its own info. For now,
         # we ignore any implicit iterate calls.
@@ -177,32 +189,32 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
     elseif isa(info, ConstCallInfo)
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
-        return mapany(enumerate(info.results)) do (i, result)
-            process_const_info(interp, infos[i], argtypes, rt, result, optimize)
-        end
+        return CallInfo[let
+            process_const_info(interp, infos[i], argtypes, rt, result, optimize, exct)
+        end for (i, result) in enumerate(info.results)]
     elseif isa(info, CC.InvokeCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
         info = InvokeCallInfo(innerinfo)
-        return Any[info]
+        return CallInfo[info]
     elseif isa(info, CC.OpaqueClosureCallInfo)
         mi = specialize_method(info.match; preexisting=true)
         effects = get_effects(interp, mi, false)
         thisinfo = MICallInfo(mi, rt, effects)
-        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize)
+        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
         info = OCCallInfo(innerinfo)
-        return Any[info]
+        return CallInfo[info]
     elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
-        return []
-    elseif (@static VERSION ≥ v"1.9-" && true) && isa(info, CC.FinalizerInfo)
+        return CallInfo[]
+    elseif isa(info, CC.FinalizerInfo)
         # TODO: Add ability to descend into finalizers at creation site
-        return []
+        return CallInfo[]
     elseif isa(info, CC.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]
-        callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize)
+        callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize, exct)
         if length(callinfos) == 1
             vmi = only(callinfos)
         else
@@ -211,13 +223,13 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             sig = Tuple{widenconst(newargtypes[1]), argt.parameters...}
             vmi = FailedCallInfo(sig, Union{})
         end
-        return Any[ReturnTypeCallInfo(vmi)]
+        return CallInfo[ReturnTypeCallInfo(vmi)]
     elseif info == NoCallInfo()
         f = unwrapconst(argtypes[1])
-        isa(f, Core.Builtin) && return []
-        return [RTCallInfo(f, argtypes[2:end], rt)]
+        isa(f, Core.Builtin) && return CallInfo[]
+        return CallInfo[RTCallInfo(f, argtypes[2:end], rt, exct)]
     elseif info === false
-        return []
+        return CallInfo[]
     else
         @eval Main begin
             interp = $interp
@@ -249,11 +261,7 @@ function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::Cthu
         argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
-        @static if VERSION ≥ v"1.10.0-DEV.870"
-            ci = CC.replace_code_newstyle!(ci, ir)
-        else
-            ci = CC.replace_code_newstyle!(ci, ir, length(argtypes)-1)
-        end
+        ci = CC.replace_code_newstyle!(ci, ir)
     end
     return ci
 end
@@ -291,7 +299,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
     return MultiCallInfo(sig, rt, callinfos)
 end
 
-function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, caller::MethodInstance; allow_unspecialized::Bool=false)
+function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, caller::MethodInstance; allow_unspecialized::Bool=false)
     interp′ = CthulhuInterpreter(interp)
     do_typeinf!(interp′, caller)
     locs = Tuple{Core.LineInfoNode,Int}[]
@@ -301,7 +309,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
         callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)
-        foreach(cs -> add_sourceline!(locs, src, cs.id), callsites)
+        foreach(cs -> add_sourceline!(locs, src, cs.id, caller), callsites)
     end
     # Consolidate by method, but preserve the order
     prlookup = Dict{Tuple{Symbol,Symbol},Int}()
@@ -327,29 +335,35 @@ function find_caller_of(interp::AbstractInterpreter, callee::MethodInstance, cal
     return ulocs
 end
 
-function add_sourceline!(locs, CI, stmtidx::Int)
-    if isa(CI, IRCode)
-        stack = Base.IRShow.compute_loc_stack(CI.linetable, CI.stmts.line[stmtidx])
+function add_sourceline!(locs::Vector{Tuple{Core.LineInfoNode,Int}}, src::Union{CodeInfo,IRCode}, stmtidx::Int, caller::MethodInstance)
+    @static if VERSION ≥ v"1.12.0-DEV.173"
+    stack = Base.IRShow.buildLineInfoNode(src.debuginfo, caller, stmtidx)
+    for (i, di) in enumerate(stack)
+        loc = Core.LineInfoNode(Main, di.method, di.file, di.line, zero(Int32))
+        push!(locs, (loc, i-1))
+    end
+    else # VERSION < v"1.12.0-DEV.173"
+    if isa(src, IRCode)
+        stack = Base.IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
         for (i, idx) in enumerate(stack)
-            line = CI.linetable[idx]
+            line = src.linetable[idx]
             line.line == 0 && continue
-            push!(locs, (CI.linetable[idx], i-1))
+            push!(locs, (src.linetable[idx], i-1))
         end
     else
-        push!(locs, (CI.linetable[CI.codelocs[stmtidx]], 0))
+        push!(locs, (src.linetable[src.codelocs[stmtidx]], 0))
     end
+    end # @static if
     return locs
 end
 
 function get_typed_sourcetext(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true)
-    meth = mi.def::Method
-    tsn, mappings = TypedSyntax.tsn_and_mappings(meth, src, rt; warn, strip_macros=true)
-    return truncate_if_defaultargs!(tsn, mappings, meth)
-    return tsn, mappings
+    tsn, mappings = TypedSyntax.tsn_and_mappings(mi, src, rt; warn, strip_macros=true)
+    return truncate_if_defaultargs!(tsn, mappings, mi.def::Method)
 end
 
 function get_typed_sourcetext(mi::MethodInstance, ::IRCode, @nospecialize(rt); kwargs...)
-    src, rt = TypedSyntax.getsrc(mi)
+    src, rt = TypedSyntax.code_typed1_tsn(mi)
     return get_typed_sourcetext(mi, src, rt; kwargs...)
 end
 
@@ -373,11 +387,7 @@ function truncate_if_defaultargs!(tsn, mappings, meth)
     return tsn, mappings
 end
 
-if isdefined(Core, :kwcall)
-    is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
-else
-    is_kw_dispatch(meth::Method) = endswith(string(meth.name), "##kw") || !isempty(Base.kwarg_decl(meth))
-end
+is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
 
 function tag_runtime(node::TypedSyntaxNode, info)
     node.runtime = isa(info, RTCallInfo)

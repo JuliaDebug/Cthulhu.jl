@@ -7,17 +7,19 @@ struct MICallInfo <: CallInfo
     mi::MethodInstance
     rt
     effects::Effects
-    function MICallInfo(mi::MethodInstance, @nospecialize(rt), effects)
+    exct
+    function MICallInfo(mi::MethodInstance, @nospecialize(rt), effects, @nospecialize(exct=nothing))
         if isa(rt, LimitedAccuracy)
-            return LimitedCallInfo(new(mi, ignorelimited(rt), effects))
+            return LimitedCallInfo(new(mi, ignorelimited(rt), effects, exct))
         else
-            return new(mi, rt, effects)
+            return new(mi, rt, effects, exct)
         end
     end
 end
 get_mi(ci::MICallInfo) = ci.mi
-get_rt(ci::CallInfo) = ci.rt
+get_rt(ci::MICallInfo) = ci.rt
 get_effects(ci::MICallInfo) = ci.effects
+get_exct(ci::MICallInfo) = ci.exct
 
 abstract type WrappedCallInfo <: CallInfo end
 
@@ -27,6 +29,7 @@ ignorewrappers(ci::WrappedCallInfo) = ignorewrappers(get_wrapped(ci))
 get_mi(ci::WrappedCallInfo) = get_mi(ignorewrappers(ci))
 get_rt(ci::WrappedCallInfo) = get_rt(ignorewrappers(ci))
 get_effects(ci::WrappedCallInfo) = get_effects(ignorewrappers(ci))
+get_exct(ci::WrappedCallInfo) = get_exct(ignorewrappers(ci))
 
 # only appears when inspecting pre-optimization states
 struct LimitedCallInfo <: WrappedCallInfo
@@ -38,9 +41,12 @@ struct RTCallInfo <: CallInfo
     f
     argtyps
     rt
+    exct
 end
+get_rt(ci::RTCallInfo) = ci.rt
 get_mi(ci::RTCallInfo) = nothing
 get_effects(ci::RTCallInfo) = Effects()
+get_exct(ci::RTCallInfo) = ci.exct
 
 # uncached callsite, we can't recurse into this call
 struct UncachedCallInfo <: WrappedCallInfo
@@ -56,6 +62,7 @@ end
 get_mi(::PureCallInfo) = nothing
 get_rt(pci::PureCallInfo) = pci.rt
 get_effects(::PureCallInfo) = EFFECTS_TOTAL
+get_exct(::PureCallInfo) = Union{}
 
 # Failed
 struct FailedCallInfo <: CallInfo
@@ -64,7 +71,8 @@ struct FailedCallInfo <: CallInfo
 end
 get_mi(ci::FailedCallInfo) = fail(ci)
 get_rt(ci::FailedCallInfo) = fail(ci)
-get_effects(ci::FailedCallInfo) = Effects()
+get_effects(ci::FailedCallInfo) = fail(ci)
+get_exct(ci::FailedCallInfo) = fail(ci)
 function fail(ci::FailedCallInfo)
     @warn "MethodInstance extraction failed." ci.sig ci.rt
     return nothing
@@ -77,7 +85,8 @@ struct GeneratedCallInfo <: CallInfo
 end
 get_mi(genci::GeneratedCallInfo) = fail(genci)
 get_rt(genci::GeneratedCallInfo) = fail(genci)
-get_effects(genci::GeneratedCallInfo) = Effects()
+get_effects(genci::GeneratedCallInfo) = fail(genci)
+get_exct(genci::GeneratedCallInfo) = fail(genci)
 function fail(genci::GeneratedCallInfo)
     @warn "Can't extract MethodInstance from call to generated functions." genci.sig genci.rt
     return nothing
@@ -86,13 +95,16 @@ end
 struct MultiCallInfo <: CallInfo
     sig
     rt
+    exct
     callinfos::Vector{CallInfo}
+    MultiCallInfo(@nospecialize(sig), @nospecialize(rt), callinfos::Vector{CallInfo},
+                  @nospecialize(exct=nothing)) =
+        new(sig, rt, exct, callinfos)
 end
-# actual code-error
 get_mi(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
-get_effects(mci::MultiCallInfo) = @static VERSION ≥ v"1.9-" ?
-    mapreduce(get_effects, CC.merge_effects, mci.callinfos) :
-    mapreduce(get_effects, CC.tristate_merge, mci.callinfos)
+get_rt(ci::MultiCallInfo) = ci.rt
+get_effects(mci::MultiCallInfo) = mapreduce(get_effects, CC.merge_effects, mci.callinfos)
+get_exct(ci::MultiCallInfo) = ci.exct
 
 struct TaskCallInfo <: CallInfo
     ci::CallInfo
@@ -100,6 +112,7 @@ end
 get_mi(tci::TaskCallInfo) = get_mi(tci.ci)
 get_rt(tci::TaskCallInfo) = get_rt(tci.ci)
 get_effects(tci::TaskCallInfo) = get_effects(tci.ci)
+get_exct(tci::TaskCallInfo) = get_exct(tci.ci)
 
 struct InvokeCallInfo <: CallInfo
     ci::CallInfo
@@ -108,6 +121,7 @@ end
 get_mi(ici::InvokeCallInfo) = get_mi(ici.ci)
 get_rt(ici::InvokeCallInfo) = get_rt(ici.ci)
 get_effects(ici::InvokeCallInfo) = get_effects(ici.ci)
+get_exct(ici::InvokeCallInfo) = get_exct(ici.ci)
 
 # OpaqueClosure CallInfo
 struct OCCallInfo <: CallInfo
@@ -117,6 +131,7 @@ end
 get_mi(occi::OCCallInfo) = get_mi(occi.ci)
 get_rt(occi::OCCallInfo) = get_rt(occi.ci)
 get_effects(occi::OCCallInfo) = get_effects(occi.ci)
+get_exct(occi::OCCallInfo) = get_exct(occi.ci)
 
 # Special handling for ReturnTypeCall
 struct ReturnTypeCallInfo <: CallInfo
@@ -125,6 +140,7 @@ end
 get_mi((; vmi)::ReturnTypeCallInfo) = isa(vmi, FailedCallInfo) ? nothing : get_mi(vmi)
 get_rt((; vmi)::ReturnTypeCallInfo) = Type{isa(vmi, FailedCallInfo) ? Union{} : widenconst(get_rt(vmi))}
 get_effects(::ReturnTypeCallInfo) = EFFECTS_TOTAL
+get_exct(::ReturnTypeCallInfo) = Union{} # FIXME
 
 struct ConstPropCallInfo <: CallInfo
     mi::CallInfo
@@ -133,6 +149,7 @@ end
 get_mi(cpci::ConstPropCallInfo) = cpci.result.linfo
 get_rt(cpci::ConstPropCallInfo) = get_rt(cpci.mi)
 get_effects(cpci::ConstPropCallInfo) = get_effects(cpci.result)
+get_exct(cpci::ConstPropCallInfo) = get_exct(cpci.mi)
 
 struct ConcreteCallInfo <: CallInfo
     mi::CallInfo
@@ -141,6 +158,7 @@ end
 get_mi(ceci::ConcreteCallInfo) = get_mi(ceci.mi)
 get_rt(ceci::ConcreteCallInfo) = get_rt(ceci.mi)
 get_effects(ceci::ConcreteCallInfo) = get_effects(ceci.mi)
+get_exct(cici::ConcreteCallInfo) = get_exct(ceci.mi)
 
 struct SemiConcreteCallInfo <: CallInfo
     mi::CallInfo
@@ -149,6 +167,7 @@ end
 get_mi(scci::SemiConcreteCallInfo) = get_mi(scci.mi)
 get_rt(scci::SemiConcreteCallInfo) = get_rt(scci.mi)
 get_effects(scci::SemiConcreteCallInfo) = get_effects(scci.mi)
+get_exct(scci::SemiConcreteCallInfo) = get_exct(scci.mi)
 
 # CUDA callsite
 struct CuCallInfo <: CallInfo
@@ -189,22 +208,22 @@ function headstring(@nospecialize(T))
     end
 end
 
-function __show_limited(limiter, name, tt, @nospecialize(rt), effects)
+function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecialize(exct=nothing))
     vastring(@nospecialize(T)) = (isvarargtype(T) ? headstring(T)*"..." : string(T)::String)
 
     # If effects are explicitly turned on, make sure to print them, even
     # if there otherwise isn't space for them, since the effects are the
     # most important piece of information if turned on.
     with_effects = get(limiter, :with_effects, false)::Bool
+    exception_type = get(limiter, :exception_type, false)::Bool && exct !== nothing
 
-    if with_effects
-        limiter.width += textwidth(repr(effects)) + 1
-    end
-
+    with_effects && (limiter.width += textwidth(repr(effects)) + 1)
+    exception_type && (limiter.width += textwidth(string(exct)) + 1)
     if !has_space(limiter, name)
         print(limiter, '…')
         @goto print_effects
     end
+
     print(limiter, string(name))
     pstrings = String[vastring(T) for T in tt]
     headstrings = String[
@@ -236,13 +255,26 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects)
         print(limiter, "::…")
     end
 
-@label print_effects
+    @label print_effects
     if with_effects
         # Print effects unlimited
         print(limiter.io, " ", effects)
     end
+    if exception_type
+        print(limiter.io, ' ', ExctWrapper(exct))
+    end
 
     return nothing
+end
+
+struct ExctWrapper
+    exct
+    ExctWrapper(@nospecialize exct) = new(exct)
+end
+
+function Base.show(io::IO, (;exct)::ExctWrapper)
+    color = exct === Union{} ? :green : :yellow
+    printstyled(io, "(↑::", exct, ")"; color)
 end
 
 function show_callinfo(limiter, mici::MICallInfo)
@@ -254,7 +286,8 @@ function show_callinfo(limiter, mici::MICallInfo)
         name = mi.def.name
     end
     rt = get_rt(mici)
-    __show_limited(limiter, name, tt, rt, get_effects(mici))
+    exct = get_exct(mici)
+    __show_limited(limiter, name, tt, rt, get_effects(mici), exct)
 end
 
 function show_callinfo(limiter, ci::Union{MultiCallInfo, FailedCallInfo, GeneratedCallInfo})
@@ -380,8 +413,7 @@ function print_callsite_info(limiter::IO, info::OCCallInfo)
     show_callinfo(limiter, info.ci)
 end
 
-const is_expected_union = @static VERSION ≥ v"1.9-" ?
-    InteractiveUtils.is_expected_union : Base.is_expected_union
+const is_expected_union = InteractiveUtils.is_expected_union
 
 function Base.show(io::IO, c::Callsite)
     limit = get(io, :limit, false)::Bool
@@ -474,6 +506,7 @@ end
 
 # maybe_callsite for higher-level inputs
 maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
+maybe_callsite(cs::Callsite, @nospecialize(tt::Type)) = maybe_callsite(cs.info, tt)
 maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
 # Special CallInfo cases:
 function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
@@ -484,5 +517,20 @@ function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
 end
 maybe_callsite(info::PureCallInfo, mi::MethodInstance) = mi.specTypes <: Tuple{mapany(Core.Typeof ∘ unwrapconst, info.argtypes)...}
 maybe_callsite(info::RTCallInfo, mi::MethodInstance) = false
+
+function maybe_callsite(info::RTCallInfo, @nospecialize(tt::Type))
+    isa(tt, Union) && return maybe_callsite(info, tt.a) || maybe_callsite(info, tt.b)
+    isa(tt, DataType) || return false
+    typeof(info.f) === tt.parameters[1] || return false
+    for (a, b) in zip(info.argtyps, tt.parameters[2:end])
+        a === b || return false
+    end
+    return true
+end
+function maybe_callsite(info::MICallInfo, @nospecialize(tt::Type))
+    return tt <: info.mi.specTypes
+end
+
+maybe_callsite(info::CallInfo, @nospecialize(tt::Type)) = false
 
 unwrapconst(@nospecialize(arg)) = arg isa Core.Const ? arg.val : arg

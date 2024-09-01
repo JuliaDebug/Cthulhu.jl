@@ -13,11 +13,15 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6'    # test LTS versions that are not supported by Cthulhu
+          - '1'
+          - '1.10.0'
+          - '1.11-nightly'
+          - 'nightly'
         os:
           - ubuntu-latest
         arch:
           - x64
+          - x86
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
