@@ -216,11 +216,7 @@ uncached_call3(a) = uncached_call1(Type{a})
     @test isa(ci, Cthulhu.UncachedCallInfo)
     effects = Cthulhu.get_effects(ci)
     @test !Core.Compiler.is_consistent(effects)
-    @static if VERSION ≥ v"1.11.0-DEV.392"
-        @test !Core.Compiler.is_effect_free(effects)
-    else
-        @test Core.Compiler.is_effect_free(effects)
-    end
+    @test Core.Compiler.is_effect_free(effects)
     @test !Core.Compiler.is_nothrow(effects)
     @test !Core.Compiler.is_terminates(effects)
     @test Cthulhu.is_callsite(ci, ci.wrapped.mi)

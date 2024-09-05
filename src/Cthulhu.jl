@@ -800,7 +800,12 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             view_cmd = CODEVIEWS[toggle]
             world = get_inference_world(interp)
             println(iostream)
-            view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
+            @static if VERSION < v"1.12.0-DEV.669"
+                view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
+            else
+                src = Core.Compiler.typeinf_code(interp, mi, true)
+                view_cmd(iostream, mi, src, optimize, debuginfo, world, CONFIG)
+            end
             display_CI = false
         else
             local i = findfirst(ct->ct.toggle === toggle, custom_toggles)
@@ -828,10 +833,14 @@ end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
+    @static if isdefined(CC, :engine_reserve)
+        ci = CC.engine_reserve(interp, mi)
+        result.ci = ci
+    end
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
     # and show it in the UI in some way?
-    frame = InferenceState(result, #=cache=#:global, interp)::InferenceState
+    frame = InferenceState(result, #=cache_mode=#:global, interp)::InferenceState
     CC.typeinf(interp, frame)
     return nothing
 end
