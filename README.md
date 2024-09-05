@@ -1,4 +1,4 @@
-# Cthulhu.jl <a href="https://github.com/JuliaDebug/Cthulhu.jl/actions?query=workflow%3A%22CI%22+branch%3Amaster"><img src="https://github.com/JuliaDebug/Cthulhu.jl/workflows/CI/badge.svg"></a> <a href="https://codecov.io/gh/JuliaDebug/Cthulhu.jl"><img src="https://codecov.io/github/JuliaDebug/Cthulhu.jl/coverage.svg"></a>
+# Cthulhu.jl [![CI](https://github.com/JuliaDebug/Cthulhu.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/JuliaDebug/Cthulhu.jl/actions/workflows/CI.yml)
 
 *The slow descent into madness*
 
