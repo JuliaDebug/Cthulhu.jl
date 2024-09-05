@@ -19,7 +19,7 @@ jobs:
           - {user: timholy, repo: SnoopCompile.jl}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
@@ -29,7 +29,7 @@ jobs:
         run: 'using Pkg; Pkg.develop(path=joinpath(pwd(), "TypedSyntax"))'
       - uses: julia-actions/julia-buildpkg@latest
       - name: Clone Downstream
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: ${{ matrix.package.user }}/${{ matrix.package.repo }}
           path: downstream
