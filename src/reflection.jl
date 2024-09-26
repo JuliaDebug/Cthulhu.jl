@@ -179,6 +179,11 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             is_cached(mi) ? mici : UncachedCallInfo(mici)
         end for match::Core.MethodMatch in matches]
     elseif isa(info, UnionSplitInfo)
+        @static if hasfield(UnionSplitInfo, :split)
+            return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
+        else
+            return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
+        end
         return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
         return mapreduce(process_recursive, vcat, info.infos; init=CallInfo[])::Vector{CallInfo}
