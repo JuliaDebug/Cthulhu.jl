@@ -687,6 +687,12 @@ include("test_module.jl")
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
+
+    # issue 597
+    tsn = TypedSyntaxNode(TSN.f597, (Int,))
+    @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
+        printstyled(io, obj; hide_type_stable=false)
+    end
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
