@@ -184,7 +184,6 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         else
             return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
         end
-        return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
         return mapreduce(process_recursive, vcat, info.infos; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, ApplyCallInfo)
