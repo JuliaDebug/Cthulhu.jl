@@ -1016,4 +1016,12 @@ let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
     @test length(inferred.ir.cfg.blocks) == 1
 end
 
+f515() = cglobal((:foo, bar))
+@testset "issue #515" begin
+    let (; interp, src, infos, mi, slottypes) = cthulhu_info(f515)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes)
+        @test isempty(callsites)
+    end
+end
+
 end # module test_Cthulhu
