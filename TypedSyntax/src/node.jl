@@ -142,6 +142,9 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         if kind(arg) == K"curly"
             arg = first(children(arg))
         end
+        if kind(arg) == K"var"
+            arg = child(arg, 1)
+        end
         kind(arg) == K"tuple" && return nothing, defaultval     # FIXME? see extrema2 test
         @assert kind(arg) == K"Identifier" || is_operator(arg)
         return arg, defaultval

@@ -247,6 +247,8 @@ function obfuscated(x)
     return f(x)
 end
 
+f597(var"#"::Int) = 1
+
 module Internal
 export helper
 helper(x) = x+1
