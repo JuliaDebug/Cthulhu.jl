@@ -249,6 +249,9 @@ end
 
 f597(var"#"::Int) = 1
 
+struct A504{T, N} end
+(A504{T, N} where T)(x::AbstractArray{S, N}) where {S, N} = x
+
 module Internal
 export helper
 helper(x) = x+1
