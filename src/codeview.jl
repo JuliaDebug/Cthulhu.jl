@@ -153,7 +153,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
     rettype = ignorelimited(rt)
-    lambda_io = IOContext(io, :limit=>true)
+    maxtypedepth = CONFIG.type_depth_limit
+    lambda_io = IOContext(io, :limit=>true, :maxtypedepth => maxtypedepth)
 
     if annotate_source && isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, rt)
@@ -178,7 +179,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             vscode_io = IOContext(
                 jump_always && inlay_types_vscode ? devnull : lambda_io,
                 :inlay_hints => inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing ,
-                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
+                :diagnostics => diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing,
+                :maxtypedepth => maxtypedepth
             )
 
             if istruncated
@@ -189,7 +191,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
-                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
+                vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics], maxtypedepth=CONFIG.type_depth_limit)
                 callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
                 visited_mis = Set{MethodInstance}((mi,))
                 add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
@@ -221,6 +223,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             show_variables(io, src, slotnames)
         end
     end
+    maxtypedepth = CONFIG.type_depth_limit
 
     # preprinter configuration
     preprinter = if src isa IRCode && inline_cost
@@ -250,7 +253,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
                   idx == -1 ? lpad(total_cost, nd+1) :
                   " "^(nd+1)
             str = sprint(; context=:color=>true) do @nospecialize io
-                printstyled(io, str; color=:green)
+                printstyled(io, str; color=:green, maxtypedepth)
             end
             if debuginfo === :source
                 str *= " "
@@ -298,7 +301,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         function (io::IO; idx::Int, @nospecialize(kws...))
             _postprinter(io; idx, kws...)
             for i = searchsorted(pc2remarks, idx=>"", by=((idx,msg),)->idx)
-                printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
+                printstyled(io, ' ', pc2remarks[i].second; color=:light_black, maxtypedepth)
             end
         end
     else
@@ -336,8 +339,9 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     # We empty the body when filling kwargs
     istruncated = isempty(children(body))
     idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
+    maxtypedepth = CONFIG.type_depth_limit
     if !istruncated # If method only fills in default arguments
-        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+        printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend, maxtypedepth)
     end
 end
 

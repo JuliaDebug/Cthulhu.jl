@@ -1,5 +1,8 @@
 using Test, PerformanceTestTools
 
+using Cthulhu
+Cthulhu.CONFIG.type_depth_limit = nothing # disable type-depth limit printing in tests
+
 @testset "runtests.jl" begin
     @testset "test_Cthulhu.jl" begin
         include("test_Cthulhu.jl")
