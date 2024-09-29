@@ -172,8 +172,8 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         # Try to find an identifier for this arg
         arg, defaultval = argidentifier(arg)
         if arg !== nothing
-            name = arg.val::Symbol
-            idx = findfirst(==(name), slotnames)
+            name = arg.val
+            idx = name === nothing ? nothing : findfirst(==(name::Symbol), slotnames)
             if idx === nothing && isempty(slotarg) && slotnames[1] == Symbol("#self#")
                 # The first argument is the function name itself, and matches `#self#`
                 idx = 1
