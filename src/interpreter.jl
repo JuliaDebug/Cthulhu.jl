@@ -58,10 +58,12 @@ end
 #=CC.=#get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = CC.get_inference_cache(interp.native)
 
-CC.may_optimize(interp::CthulhuInterpreter) = true
-CC.may_compress(interp::CthulhuInterpreter) = false
-CC.may_discard_trees(interp::CthulhuInterpreter) = false
-CC.verbose_stmt_info(interp::CthulhuInterpreter) = true
+CC.may_optimize(::CthulhuInterpreter) = true
+CC.may_compress(::CthulhuInterpreter) = false
+CC.may_discard_trees(::CthulhuInterpreter) = false
+@static if isdefined(CC, :verbose_stmt_info)
+CC.verbose_stmt_info(::CthulhuInterpreter) = true
+end
 
 CC.method_table(interp::CthulhuInterpreter) = CC.method_table(interp.native)
 
@@ -226,13 +228,17 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     inferred = inferred::OptimizedSource
     ir = CC.copy(inferred.ir)
     src = inferred.src
-    method_info = CC.MethodInfo(src)
+    @static if isdefined(CC, :SpecInfo)
+        spec_info = CC.SpecInfo(src)
+    else
+        spec_info = CC.MethodInfo(src)
+    end
     if isdefined(Base, :__has_internal_change) && Base.__has_internal_change(v"1.12-alpha", :codeinfonargs)
         argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     elseif VERSION >= v"1.12.0-DEV.341"
         argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, mi)
     end
-    return CC.IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
+    return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
 end
 
