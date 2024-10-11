@@ -30,7 +30,7 @@ end
             Base.CodegenParams())
         highlight(io, dump, "llvm", config)
     end
-    
+
     function cthulhu_native(io::IO, mi, ::Bool, debuginfo, world::UInt,
                             config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
         if dump_module
@@ -59,7 +59,7 @@ else
             Base.CodegenParams())
         highlight(io, dump, "llvm", config)
     end
-    
+
     function cthulhu_native(io::IO, mi, src::CodeInfo, ::Bool, debuginfo, world::UInt,
                             config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
         if dump_module
@@ -223,7 +223,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     end
 
     # preprinter configuration
-    preprinter = if src isa IRCode && inline_cost
+    preprinter = if inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         if isa(src, IRCode)
             @static if VERSION < v"1.11.0-DEV.258"
@@ -310,7 +310,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
 
     irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
 
-    if iswarn
+    if !inline_cost && iswarn
         print(lambda_io, "Body")
         InteractiveUtils.warntype_type_printer(lambda_io; type=rettype, used=true)
         if get(lambda_io, :with_effects, false)::Bool
@@ -518,7 +518,7 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         dump_module,
         raw,
     )
-    
+
     InteractiveUtils.code_native(
         io::IO,
         b::Bookmark;
@@ -560,7 +560,7 @@ else
             raw,
         )
     end
-    
+
     function InteractiveUtils.code_native(
         io::IO,
         b::Bookmark;
