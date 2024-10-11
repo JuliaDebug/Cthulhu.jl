@@ -50,10 +50,16 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
                 if !optimize
                     args = (ignorelhs(stmt)::Expr).args
                 end
-                argtypes = mapany(function (@nospecialize(arg),)
-                                      t = argextype(arg, CI, sptypes, slottypes)
-                                      return ignorelimited(t)
-                                  end, args)
+                argtypes = Vector{Any}(undef, length(args))
+                ft = ignorelimited(argextype(args[1], CI, sptypes, slottypes))
+                f = CC.singleton_type(ft)
+                f === Core.Intrinsics.llvmcall && continue
+                f === Core.Intrinsics.cglobal && continue
+                argtypes[1] = ft
+                for i = 2:length(args)
+                    t = argextype(args[i], CI, sptypes, slottypes)
+                    argtypes[i] = ignorelimited(t)
+                end
                 exct = isnothing(pc2excts) ? nothing : get(pc2excts, id, nothing)
                 callinfos = process_info(interp, info, argtypes, rt, optimize, exct)
                 isempty(callinfos) && continue
