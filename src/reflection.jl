@@ -135,7 +135,11 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
         return thisinfo
     elseif isa(result, CC.ConcreteResult)
-        linfo = result.mi
+        @static if VERSION ≥ v"1.12.0-DEV.1531"
+            linfo = result.edge.def
+        else
+            linfo = result.mi
+        end
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects, exct)
         return ConcreteCallInfo(mici, argtypes)
@@ -146,7 +150,11 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         mici = MICallInfo(linfo, rt, effects, exct)
         return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
     elseif isa(result, CC.SemiConcreteResult)
-        linfo = result.mi
+        @static if VERSION ≥ v"1.12.0-DEV.1531"
+            linfo = result.edge.def
+        else
+            linfo = result.mi
+        end
         effects = get_effects(result)
         mici = MICallInfo(linfo, rt, effects, exct)
         return SemiConcreteCallInfo(mici, result.ir)
