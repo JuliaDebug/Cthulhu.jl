@@ -12,9 +12,21 @@ using TypedSyntax
 using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
-const CC = Core.Compiler
-using .CC: Effects, EFFECTS_TOTAL, LimitedAccuracy,
-    compileable_specialization, ignorelimited, specialize_method
+@static if VERSION ≥ v"1.12.0-DEV.1581"
+    using Compiler: Compiler as CC
+    using Compiler.IRShow: IRShow
+else
+    const CC = Core.Compiler
+    const IRShow = Base.IRShow
+end
+using Core.IR
+using .CC: AbstractInterpreter, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
+    EFFECTS_TOTAL, Effects, IncrementalCompact, InferenceParams, InferenceResult,
+    InferenceState, IRCode, LimitedAccuracy, MethodMatchInfo, MethodResultPure,
+    NativeInterpreter, NoCallInfo, OptimizationParams, OptimizationState,
+    UnionSplitApplyCallInfo, UnionSplitInfo, WorldRange, WorldView,
+    argextype, argtypes_to_type, compileable_specialization, ignorelimited, singleton_type,
+    specialize_method, sptypes_from_meth_instance, widenconst
 using Base: @constprop, default_tt, isvarargtype, unwrapva, unwrap_unionall, rewrap_unionall
 const mapany = Base.mapany
 
@@ -803,7 +815,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             @static if VERSION < v"1.12.0-DEV.669"
                 view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
             else
-                src = Core.Compiler.typeinf_code(interp, mi, true)
+                src = CC.typeinf_code(interp, mi, true)
                 view_cmd(iostream, mi, src, optimize, debuginfo, world, CONFIG)
             end
             display_CI = false

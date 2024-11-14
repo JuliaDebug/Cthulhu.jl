@@ -1,9 +1,14 @@
 module test_Cthulhu
 
 using Test, Cthulhu, StaticArrays, Random
+const CC = Cthulhu.CC
 
 include("setup.jl")
 include("irutils.jl")
+
+# NOTE: From Julia version `v"1.12.0-DEV.1581"` onwards, Cthulhu uses the Compiler.jl stdlib.
+# Therefore, for queries on its data structures, use the utilities from `Compiler === Cthulhu.CC`
+# instead of those from `Base.Compiler === Core.Compiler`.
 
 @testset "ambiguity check" begin
     @test isempty(detect_ambiguities(Cthulhu))
@@ -147,7 +152,7 @@ let callsites = find_callsites_by_ftt(foo_callsite_assign, Tuple{}; optimize=fal
 end
 
 @eval function call_rt()
-    S = $(Core.Compiler.return_type)(+, Tuple{Int, Int})
+    S = $(CC.return_type)(+, Tuple{Int, Int})
 end
 let callsites = find_callsites_by_ftt(call_rt, Tuple{}; optimize=false)
     @test length(callsites) == 1
@@ -198,7 +203,7 @@ let callsites = find_callsites_by_ftt(f_matches, Tuple{Any, Any}; optimize=false
     @test length(callsites) == 1
     callinfo = callsites[1].info
     @test callinfo isa Cthulhu.MultiCallInfo
-    @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+    @test Cthulhu.get_effects(callinfo) |> CC.is_foldable
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
     @test occursin(r"→ g_matches\(::Any, ?::Any\)::Union{Float64, ?Int\d+}", String(take!(io)))
@@ -215,10 +220,10 @@ uncached_call3(a) = uncached_call1(Type{a})
     ci = first(callsites).info
     @test isa(ci, Cthulhu.UncachedCallInfo)
     effects = Cthulhu.get_effects(ci)
-    @test !Core.Compiler.is_consistent(effects)
-    @test Core.Compiler.is_effect_free(effects)
-    @test !Core.Compiler.is_nothrow(effects)
-    @test !Core.Compiler.is_terminates(effects)
+    @test !CC.is_consistent(effects)
+    @test CC.is_effect_free(effects)
+    @test !CC.is_nothrow(effects)
+    @test !CC.is_terminates(effects)
     @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
     io = IOBuffer()
     show(io, first(callsites))
@@ -307,7 +312,7 @@ end
         callinfo = only(callsites).info
         @test isa(callinfo, Cthulhu.ConcreteCallInfo)
         @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
-        @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_foldable
+        @test Cthulhu.get_effects(callinfo) |> CC.is_foldable
         io = IOBuffer()
         print(io, only(callsites))
         @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
@@ -337,7 +342,7 @@ end
         callinfo = only(callsites).info
         @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
         @test Cthulhu.get_rt(callinfo) == Core.Const(semi_concrete_eval(42, 0))
-        # @test Cthulhu.get_effects(callinfo) |> Core.Compiler.is_semiconcrete_eligible
+        # @test Cthulhu.get_effects(callinfo) |> CC.is_semiconcrete_eligible
         io = IOBuffer()
         print(io, only(callsites))
         @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
@@ -369,8 +374,8 @@ struct SingletonPureCallable{N} end
     @test occursin("SingletonPureCallable{1}()(::Float64)::Float64", s)
 
 
-    @test Cthulhu.get_effects(c1) |> Core.Compiler.is_foldable_nothrow
-    @test Cthulhu.get_effects(c2) |> Core.Compiler.is_foldable_nothrow
+    @test Cthulhu.get_effects(c1) |> CC.is_foldable_nothrow
+    @test Cthulhu.get_effects(c2) |> CC.is_foldable_nothrow
 end
 
 @testset "ReturnTypeCallInfo" begin
@@ -402,8 +407,8 @@ end
     print(io, callsites[2])
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
-    @test Cthulhu.get_effects(callinfo1) |> Core.Compiler.is_foldable_nothrow
-    @test Cthulhu.get_effects(callinfo2) |> Core.Compiler.is_foldable_nothrow
+    @test Cthulhu.get_effects(callinfo1) |> CC.is_foldable_nothrow
+    @test Cthulhu.get_effects(callinfo2) |> CC.is_foldable_nothrow
 end
 
 @testset "OCCallInfo" begin
@@ -414,7 +419,7 @@ end
         @test length(callsites) == 1
         callinfo = only(callsites).info
         @test callinfo isa Cthulhu.OCCallInfo
-        @test Cthulhu.get_effects(callinfo) |> !Core.Compiler.is_foldable_nothrow
+        @test Cthulhu.get_effects(callinfo) |> !CC.is_foldable_nothrow
         # TODO not sure what these effects are (and neither is Base.infer_effects yet)
         @test callinfo.ci.rt === Base.return_types((Int,Int)) do a, b
             sin(a) + cos(b)
@@ -442,7 +447,7 @@ end
 
         buf = IOBuffer()
         Cthulhu.show_callinfo(buf, callinfo.ci)
-        s = "opaque closure(::$(Core.Compiler.Const(42)))::$(Core.Compiler.Const(sin(42)))"
+        s = "opaque closure(::$(Const(42)))::$(Const(sin(42)))"
         @test String(take!(buf)) == s
         print(buf, only(callsites))
         @test occursin("< opaque closure call > $s", String(take!(buf)))
@@ -472,8 +477,8 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
-        rt = Core.Compiler.Const(:Integer)
+        @test Cthulhu.get_effects(info) |> CC.is_foldable_nothrow
+        rt = CC.Const(:Integer)
         @test info.ci.rt === rt
         buf = IOBuffer()
         show(buf, callsite)
@@ -485,8 +490,8 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
-        @test info.ci.rt === Core.Compiler.Const(:Int)
+        @test Cthulhu.get_effects(info) |> CC.is_foldable_nothrow
+        @test info.ci.rt === CC.Const(:Int)
     end
 
     # const prop' / semi-concrete callsite
@@ -496,14 +501,14 @@ invoke_constcall(a::Number, c::Bool) = c ? Number : :number
         callsite = only(callsites)
         info = callsite.info
         @test isa(info, Cthulhu.InvokeCallInfo)
-        @test Cthulhu.get_effects(info) |> Core.Compiler.is_foldable_nothrow
+        @test Cthulhu.get_effects(info) |> CC.is_foldable_nothrow
         inner = info.ci
-        rt = Core.Compiler.Const(Any)
+        rt = Const(Any)
         @test Cthulhu.get_rt(info) === rt
         buf = IOBuffer()
         show(buf, callsite)
         @test isa(inner, Cthulhu.SemiConcreteCallInfo)
-        @test occursin("= invoke < invoke_constcall(::Any,::$(Core.Compiler.Const(true)))::$rt", String(take!(buf)))
+        @test occursin("= invoke < invoke_constcall(::Any,::$(Const(true)))::$rt", String(take!(buf)))
     end
 end
 
@@ -665,18 +670,18 @@ end
         f1() = x
         function f2()
             y = x
-            return sum(y)
+            return @noinline sum(y)
         end
     end
     function doprint(f)
-        (; src, mi, rt, exct, effects) = cthulhu_info(f)
+        (; src, mi, rt, exct, effects) = cthulhu_info(f; optimize=false)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; iswarn=false)
         return String(take!(io))
     end
     @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
     str = doprint(getfield(m, :f2))
-    @test occursin("x::Core.Const([1, 2, 3", str)
+    @test occursin("y::Core.Const([1, 2, 3", str)
     @test !occursin("500,", str)
 end
 
@@ -748,7 +753,7 @@ end
 #     tree = Cthulhu.treelist(similar(fst5(1.0), 0))
 #     @test isempty(tree.data.callstr)
 #     @test isempty(Cthulhu.callstring(io, similar(stacktrace(fst5(1.0)), 0)))
-#     @test Cthulhu.instance(similar(stacktrace(fst5(1.0)), 0)) === Core.Compiler.Timings.ROOTmi
+#     @test Cthulhu.instance(similar(stacktrace(fst5(1.0)), 0)) === CC.Timings.ROOTmi
 # end
 
 @testset "ascend" begin
@@ -767,9 +772,9 @@ end
     micaller = Cthulhu.get_specialization(caller, Tuple{Int})
     micallee_Int = Cthulhu.get_specialization(callee, Tuple{Int})
     micallee_Float64 = Cthulhu.get_specialization(callee, Tuple{Float64})
-    info, lines = only(Cthulhu.find_caller_of(Core.Compiler.NativeInterpreter(), micallee_Int, micaller))
+    info, lines = only(Cthulhu.find_caller_of(CC.NativeInterpreter(), micallee_Int, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line1, line3]
-    info, lines = only(Cthulhu.find_caller_of(Core.Compiler.NativeInterpreter(), micallee_Float64, micaller))
+    info, lines = only(Cthulhu.find_caller_of(CC.NativeInterpreter(), micallee_Float64, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
 
     M = Module()
@@ -800,7 +805,7 @@ end
     _, line1, line2 = outercaller(7)
     micaller = Cthulhu.get_specialization(outercaller, Tuple{Int})
     micallee = Cthulhu.get_specialization(nicallee, Tuple{Int})
-    callerinfo = Cthulhu.find_caller_of(Core.Compiler.NativeInterpreter(), micallee, micaller)
+    callerinfo = Cthulhu.find_caller_of(CC.NativeInterpreter(), micallee, micaller)
     @test length(callerinfo) == 2
     info, lines = callerinfo[1]
     @test info == (:outercaller, Symbol(@__FILE__), 0)
@@ -889,13 +894,13 @@ end
 
     @testset "code_typed(bookmark)" begin
         ci, rt = code_typed(b)
-        @test ci isa Core.Compiler.CodeInfo
+        @test ci isa CodeInfo
         @test rt isa Type
     end
 
     @testset "code_typed(bookmark; optimize = false)" begin
         ci, rt = code_typed(b; optimize = false)
-        @test ci isa Core.Compiler.CodeInfo
+        @test ci isa CodeInfo
         @test rt isa Type
     end
 
@@ -986,7 +991,7 @@ end
     # Get IR for a function, wrap it in a minimal methodinstance
     (ir, rt) = only(Base.code_ircode(sqrt, (Float64,)))
     mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
-    mi.specTypes = Tuple{map(Core.Compiler.widenconst, ir.argtypes)...}
+    mi.specTypes = Tuple{map(CC.widenconst, ir.argtypes)...}
     # Just state that the definition of this MI is the module it was defined in
     mi.def = @__MODULE__
 
@@ -997,7 +1002,7 @@ end
     @test isempty(root.children)
 
     # Create an MICallInfo for this `mi`, ensure it works with `show_callinfo()`
-    callinfo = Cthulhu.MICallInfo(mi, rt, Core.Compiler.Effects())
+    callinfo = Cthulhu.MICallInfo(mi, rt, CC.Effects())
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
 

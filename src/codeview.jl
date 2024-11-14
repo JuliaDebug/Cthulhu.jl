@@ -100,17 +100,15 @@ function cthulhu_ast(io::IO, mi, ::Bool, debuginfo, ::UInt, config::CthulhuConfi
     end
 end
 
-using Base.IRShow: IRShow, _stmt, _type, should_print_ssa_type, IRShowConfig, show_ir
-
 const __debuginfo = merge(IRShow.__debuginfo, Dict(
-    :compact => src -> src isa CodeInfo ? __debuginfo[:source](src)
-                                        : IRShow.inline_linfo_printer(src)
-))
+    :compact => function (src)
+        src isa CodeInfo ? IRShow.__debuginfo[:source](src) : IRShow.inline_linfo_printer(src)
+    end))
 
 function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
-    stmt = _stmt(code, idx)
-    type = _type(code, idx)
-    should_print_ssa_type(stmt) || return false
+    stmt = IRShow._stmt(code, idx)
+    type = IRShow._type(code, idx)
+    IRShow.should_print_ssa_type(stmt) || return false
     # `used` only contains used SSA values and ignores slots
     in_use = in(idx, used) || Meta.isexpr(stmt, :(=))
     return in_use && is_type_unstable(type)
@@ -308,7 +306,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     should_print_stmt = hide_type_stable ? is_type_unstable : Returns(true)
     bb_color = (src isa IRCode && debuginfo === :compact) ? :normal : :light_black
 
-    irshow_config = IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
+    irshow_config = IRShow.IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
 
     if !inline_cost && iswarn
         print(lambda_io, "Body")
@@ -319,14 +317,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         println(lambda_io)
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        cfg = src isa IRCode ? src.cfg : Core.Compiler.compute_basic_blocks(src.code)
+        cfg = src isa IRCode ? src.cfg : CC.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
         callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
         println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
     end
 
-    show_ir(lambda_io, src, irshow_config)
+    IRShow.show_ir(lambda_io, src, irshow_config)
     return nothing
 end
 
@@ -547,7 +545,7 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = Core.Compiler.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.mi, true)
         return cthulhu_llvm(
             io,
             b.mi,
@@ -570,7 +568,7 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = Core.Compiler.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.mi, true)
         return cthulhu_native(
             io,
             b.mi,

@@ -1,7 +1,3 @@
-using .CC: AbstractInterpreter, CallInfo as CCCallInfo, CodeInfo, CodeInstance,
-    InferenceParams, InferenceResult, InferenceState, IRCode, NativeInterpreter,
-    NoCallInfo, OptimizationParams, OptimizationState, SSAValue, WorldRange, WorldView
-
 struct InferredSource
     src::CodeInfo
     stmt_info::Vector{CCCallInfo}
