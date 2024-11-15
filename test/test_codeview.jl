@@ -25,7 +25,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
                 @static if VERSION < v"1.12.0-DEV.669"
                     codeview(io, mi, optimize, debuginfo, Cthulhu.get_inference_world(interp), config)
                 else
-                    src = Core.Compiler.typeinf_code(interp, mi, true)
+                    src = Cthulhu.CC.typeinf_code(interp, mi, true)
                     codeview(io, mi, src, optimize, debuginfo, Cthulhu.get_inference_world(interp), config)
                 end
                 @test !isempty(String(take!(io))) # just check it works

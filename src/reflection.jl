@@ -3,11 +3,7 @@
 ##
 
 using Base.Meta
-import .CC: widenconst, argextype, Const, MethodMatchInfo,
-    UnionSplitApplyCallInfo, UnionSplitInfo, ConstCallInfo,
-    MethodResultPure, ApplyCallInfo,
-    sptypes_from_meth_instance, argtypes_to_type
-import Base: may_invoke_generator
+using Base: may_invoke_generator
 
 transform(::Val, callsite) = callsite
 function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; world=get_world_counter())
@@ -269,8 +265,8 @@ function is_call_expr(x::Expr, optimize::Bool)
 end
 
 function dce!(ir::IRCode)
-    ir = Core.Compiler.compact!(ir, #=allow_cfg_transform=#true)
-    ir = Core.Compiler.compact!(ir, #=allow_cfg_transform=#true)
+    ir = CC.compact!(ir, #=allow_cfg_transform=#true)
+    ir = CC.compact!(ir, #=allow_cfg_transform=#true)
     return ir
 end
 
@@ -355,14 +351,14 @@ end
 
 function add_sourceline!(locs::Vector{Tuple{Core.LineInfoNode,Int}}, src::Union{CodeInfo,IRCode}, stmtidx::Int, caller::MethodInstance)
     @static if VERSION ≥ v"1.12.0-DEV.173"
-    stack = Base.IRShow.buildLineInfoNode(src.debuginfo, caller, stmtidx)
+    stack = IRShow.buildLineInfoNode(src.debuginfo, caller, stmtidx)
     for (i, di) in enumerate(stack)
         loc = Core.LineInfoNode(Main, di.method, di.file, di.line, zero(Int32))
         push!(locs, (loc, i-1))
     end
     else # VERSION < v"1.12.0-DEV.173"
     if isa(src, IRCode)
-        stack = Base.IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
+        stack = IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
         for (i, idx) in enumerate(stack)
             line = src.linetable[idx]
             line.line == 0 && continue

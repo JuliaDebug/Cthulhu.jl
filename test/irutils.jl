@@ -1,10 +1,10 @@
-using Core: CodeInfo, ReturnNode, MethodInstance
-using Core.Compiler: IRCode, IncrementalCompact, singleton_type
+using Core.IR
+using Cthulhu: Cthulhu
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
-argextype(@nospecialize args...) = Core.Compiler.argextype(args...)
-argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Core.Compiler.VarState[])
+argextype(@nospecialize args...) = Cthulhu.CC.argextype(args...)
+argextype(@nospecialize(x), src::CodeInfo) = argextype(x, src, Cthulhu.CC.VarState[])
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
 macro code_typed1(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :code_typed1, ex0)
@@ -20,9 +20,9 @@ isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{IR,Base.Callable}, @nospecialize(x)) where IR<:Union{CodeInfo,IRCode,IncrementalCompact}
+function iscall((src, f), @nospecialize(x))
     return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src)) === f
+        Cthulhu.CC.singleton_type(argextype(x, src)) === f
     end
 end
 function iscall(pred::Base.Callable, @nospecialize(x))
