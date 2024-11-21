@@ -76,7 +76,12 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             (; head, args) = stmt
             if head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
-                mi = args[1]::MethodInstance
+                arg1 = args[1]
+                if arg1 isa CodeInstance
+                    mi = arg1.def
+                else
+                    mi = arg1::MethodInstance
+                end
                 effects = get_effects(interp, mi, false)
                 callsite = Callsite(id, MICallInfo(mi, rt, effects), head)
             elseif head === :foreigncall
