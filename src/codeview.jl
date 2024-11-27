@@ -117,29 +117,21 @@ is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(t
 
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance}=nothing;
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, codeinst::Union{Nothing,CodeInstance}=nothing;
     hide_type_stable::Bool=false, inline_cost::Bool=false, optimize::Bool=false,
     interp::CthulhuInterpreter=CthulhuInterpreter())
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, nothing, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
+    cthulhu_typed(io, debuginfo, src, rt, nothing, effects, codeinst; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
     return nothing
 end
-
-# # for API consistency with the others
-# function cthulhu_typed(io::IO, mi::MethodInstance, optimize, debuginfo, params, config::CthulhuConfig)
-#     interp = mkinterp(mi)
-#     (; src, rt, infos, slottypes) = lookup(interp, mi, optimize)
-#     ci = Cthulhu.preprocess_ci!(src, mi, optimize, config)
-#     cthulhu_typed(io, debuginfo, src, rt, mi)
-# end
 
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), @nospecialize(exct),
-    effects::Effects, mi::Union{Nothing,MethodInstance};
+    effects::Effects, codeinst::Union{Nothing,CodeInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing,
     pc2effects::Union{Nothing,PC2Effects}=nothing,
@@ -147,6 +139,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, jump_always::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
+
+    mi = codeinst === nothing ? nothing : codeinst.def
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -316,11 +310,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
         println(lambda_io)
     else
-        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
+        isa(codeinst, CodeInstance) || throw("`codeinst::CodeInstance` is required")
         cfg = src isa IRCode ? src.cfg : CC.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
-        callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
+        callsite = Callsite(0, EdgeCallInfo(codeinst, rettype, effects, exct), :invoke)
         println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
     end
 
@@ -459,7 +453,7 @@ function Base.show(
     (; interp, mi) = b
     (; effects) = lookup(interp, mi, optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt, Effects()), :invoke))
+        print(io, Callsite(-1, EdgeCallInfo(b.mi, rt, Effects()), :invoke))
         print(io, " (world: ", world, ")")
         return
     end

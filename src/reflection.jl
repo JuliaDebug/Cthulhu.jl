@@ -14,8 +14,8 @@ function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; wo
     return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
 end
 
-function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IRCode},
-                        stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::Core.MethodInstance,
+function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
+                        stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::MethodInstance,
                         slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false,
                         pc2excts::Union{Nothing,PC2Excts}=nothing)
     sptypes = sptypes_from_meth_instance(mi)
@@ -76,14 +76,9 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
             (; head, args) = stmt
             if head === :invoke
                 rt = argextype(SSAValue(id), CI, sptypes, slottypes)
-                arg1 = args[1]
-                if arg1 isa CodeInstance
-                    mi = arg1.def
-                else
-                    mi = arg1::MethodInstance
-                end
-                effects = get_effects(interp, mi, false)
-                callsite = Callsite(id, MICallInfo(mi, rt, effects), head)
+                arg1 = args[1]::CodeInstance
+                effects = get_effects(arg1) # TODO
+                callsite = Callsite(id, EdgeCallInfo(arg1, rt, effects), head)
             elseif head === :foreigncall
                 # special handling of jl_new_task
                 length(args) > 0 || continue
@@ -102,11 +97,11 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{Core.CodeInfo, IR
 
         if callsite !== nothing
             info = callsite.info
-            if info isa MICallInfo
-                mi = get_mi(info)
-                meth = mi.def
+            if info isa EdgeCallInfo
+                ci = get_ci(info)
+                meth = ci.def.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, mi, slottypes; world=get_inference_world(interp))
+                    callsite = transform(Val(:CuFunction), callsite, c, CI, ci.def, slottypes; world=get_inference_world(interp))
                 end
             end
 
@@ -127,8 +122,6 @@ end
 function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo),
     argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result), optimize::Bool,
     @nospecialize(exct))
-    is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
-
     if isnothing(result)
         return thisinfo
     elseif (@static VERSION ≥ v"1.11.0-DEV.851" && true) && result isa CC.VolatileInferenceResult
@@ -136,42 +129,30 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
         #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
         return thisinfo
     elseif isa(result, CC.ConcreteResult)
-        @static if VERSION ≥ v"1.12.0-DEV.1531"
-            linfo = result.edge.def
-        else
-            linfo = result.mi
-        end
+        edge = result.edge
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects, exct)
+        mici = EdgeCallInfo(edge, rt, effects, exct)
         return ConcreteCallInfo(mici, argtypes)
     elseif isa(result, CC.ConstPropResult)
+        effects = get_effects(result)
         result = result.result
-        linfo = result.linfo
-        effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects, exct)
-        return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+        mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
+        return ConstPropCallInfo(mici, result)
     elseif isa(result, CC.SemiConcreteResult)
-        @static if VERSION ≥ v"1.12.0-DEV.1531"
-            linfo = result.edge.def
-        else
-            linfo = result.mi
-        end
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects, exct)
+        mici = EdgeCallInfo(result.edge, rt, effects, exct)
         return SemiConcreteCallInfo(mici, result.ir)
     else
         @assert isa(result, CC.InferenceResult)
-        linfo = result.linfo
         effects = get_effects(result)
-        mici = MICallInfo(linfo, rt, effects, exct)
-        return ConstPropCallInfo(is_cached(optimize ? linfo : result) ? mici : UncachedCallInfo(mici), result)
+        mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
+        return ConstPropCallInfo(mici, result)
     end
 end
 
 function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInfo),
                       argtypes::ArgTypes, @nospecialize(rt), optimize::Bool,
                       @nospecialize(exct))
-    is_cached(@nospecialize(key)) = can_descend(interp, key, optimize)
     process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize, exct)
 
     if isa(info, MethodResultPure)
@@ -183,16 +164,14 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         end
     end
     if isa(info, MethodMatchInfo)
-        if info.results === missing
-            return CallInfo[]
-        end
-        matches = info.results.matches
         return CallInfo[let
-            mi = specialize_method(match)
-            effects = get_effects(interp, mi, false)
-            mici = MICallInfo(mi, rt, effects, exct)
-            is_cached(mi) ? mici : UncachedCallInfo(mici)
-        end for match::Core.MethodMatch in matches]
+            if edge === nothing
+                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+            else
+                effects = get_effects(edge)
+                EdgeCallInfo(edge, rt, effects, exct)
+            end
+        end for edge in info.edges if edge !== nothing]
     elseif isa(info, UnionSplitInfo)
         @static if hasfield(UnionSplitInfo, :split)
             return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
@@ -212,17 +191,25 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             process_const_info(interp, infos[i], argtypes, rt, result, optimize, exct)
         end for (i, result) in enumerate(info.results)]
     elseif isa(info, CC.InvokeCallInfo)
-        mi = specialize_method(info.match; preexisting=true)
-        effects = get_effects(interp, mi, false)
-        thisinfo = MICallInfo(mi, rt, effects)
-        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
+        edge = info.edge
+        if edge !== nothing
+            effects = get_effects(edge)
+            thisinfo = EdgeCallInfo(edge, rt, effects)
+            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
+        else
+            innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+        end
         info = InvokeCallInfo(innerinfo)
         return CallInfo[info]
     elseif isa(info, CC.OpaqueClosureCallInfo)
-        mi = specialize_method(info.match; preexisting=true)
-        effects = get_effects(interp, mi, false)
-        thisinfo = MICallInfo(mi, rt, effects)
-        innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
+        edge = info.edge
+        if edge !== nothing
+            effects = get_effects(edge)
+            thisinfo = EdgeCallInfo(edge, rt, effects)
+            innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
+        else
+            innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+        end
         info = OCCallInfo(innerinfo)
         return CallInfo[info]
     elseif isa(info, CC.OpaqueClosureCreateInfo)
@@ -306,7 +293,7 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
         else
             mi = specialize_method(meth, atypes, sparams)
             if mi !== nothing
-                push!(callinfos, MICallInfo(mi, rt, Effects()))
+                push!(callinfos, EdgeCallInfo(mi, rt, Effects()))
             else
                 push!(callinfos, FailedCallInfo(sig, rt))
             end

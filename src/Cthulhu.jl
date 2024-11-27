@@ -347,26 +347,39 @@ end
 
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
 get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
-get_effects(src::InferredSource) = src.effects
 get_effects(result::InferenceResult) = result.ipo_effects
 get_effects(result::CC.ConstPropResult) = get_effects(result.result)
 get_effects(result::CC.ConcreteResult) = result.effects
 get_effects(result::CC.SemiConcreteResult) = result.effects
 
-# `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
-@constprop :aggressive function lookup(interp::CthulhuInterpreter, mi::MethodInstance, optimize::Bool; allow_no_src::Bool=false)
-    if optimize
-        return lookup_optimized(interp, mi, allow_no_src)
-    else
-        return lookup_unoptimized(interp, mi)
+struct LookupResult
+    src::Union{CodeInfo,IRCode}
+    rt
+    exct
+    infos::Vector{CCCallInfo}
+    slottypes::Vector{Any}
+    effects::Effects
+    codeinf::Union{Nothing,CodeInfo}
+    function LookupResult(src::Union{CodeInfo,IRCode}, @nospecialize(rt), @nospecialize(exct),
+                          infos::Vector{CCCallInfo}, slottypes::Vector{Any},
+                          effects::Effects, codeinf::Union{Nothing,CodeInfo})
+        return new(src, rt, exct, infos, slottypes, effects, codeinf)
     end
 end
 
-function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_no_src::Bool=false)
-    codeinst = interp.opt[mi]
-    rt = cached_return_type(codeinst)
-    exct = cached_exception_type(codeinst)
-    opt = codeinst.inferred
+# `@constprop :aggressive` here in order to make sure the constant propagation of `allow_no_src`
+@constprop :aggressive function lookup(interp::CthulhuInterpreter, ci::CodeInstance, optimize::Bool; allow_no_src::Bool=false)
+    if optimize
+        return lookup_optimized(interp, ci, allow_no_src)
+    else
+        return lookup_unoptimized(interp, ci)
+    end
+end
+
+function lookup_optimized(interp::CthulhuInterpreter, ci::CodeInstance, allow_no_src::Bool=false)
+    rt = cached_return_type(ci)
+    exct = cached_exception_type(ci)
+    opt = ci.inferred
     if opt !== nothing
         opt = opt::OptimizedSource
         src = CC.copy(opt.ir)
@@ -378,28 +391,29 @@ function lookup_optimized(interp::CthulhuInterpreter, mi::MethodInstance, allow_
         # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
         codeinf = src = nothing
         infos = []
-        slottypes = Any[Base.unwrap_unionall(mi.specTypes).parameters...]
+        slottypes = Any[Base.unwrap_unionall(ci.def.specTypes).parameters...]
     else
         Core.eval(Main, quote
             interp = $interp
-            mi = $mi
+            ci = $ci
         end)
         error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
     end
-    effects = get_effects(codeinst)
-    return (; src, rt, exct, infos, slottypes, effects, codeinf)
+    effects = get_effects(ci)
+    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
-function lookup_unoptimized(interp::CthulhuInterpreter, mi::MethodInstance)
-    codeinf = src = copy(interp.unopt[mi].src)
-    (; rt, exct) = interp.unopt[mi]
-    infos = interp.unopt[mi].stmt_info
-    effects = get_effects(interp.unopt[mi])
+function lookup_unoptimized(interp::CthulhuInterpreter, ci::CodeInstance)
+    unopt = interp.unopt[ci]
+    codeinf = src = copy(unopt.src)
+    (; rt, exct) = unopt
+    infos = unopt.stmt_info
+    effects = unopt.effects
     slottypes = src.slottypes
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, exct, infos, slottypes, effects, codeinf)
+    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_constproped(interp::CthulhuInterpreter, override::InferenceResult, optimize::Bool)
@@ -412,29 +426,21 @@ end
 
 function lookup_constproped_optimized(interp::CthulhuInterpreter, override::InferenceResult)
     opt = override.src
-    if isa(opt, OptimizedSource)
-        # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
-        # e.g. when we switch from constant-prop' unoptimized source
-        src = CC.copy(opt.ir)
-        rt = override.result
-        exct = @static hasfield(InferenceResult, :exc_result) ? override.exc_result : nothing
-        infos = src.stmts.info
-        slottypes = src.argtypes
-        codeinf = opt.src
-        effects = opt.effects
-        return (; src, rt, exct, infos, slottypes, effects, codeinf)
-    else
-        # the source might be unavailable at this point,
-        # when a result is fully constant-folded etc.
-        return lookup(interp, override.linfo, true)
-    end
+    isa(opt, OptimizedSource) || error("couldn't find the source")
+    # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+    # e.g. when we switch from constant-prop' unoptimized source
+    src = CC.copy(opt.ir)
+    rt = override.result
+    exct = @static hasfield(InferenceResult, :exc_result) ? override.exc_result : nothing
+    infos = src.stmts.info
+    slottypes = src.argtypes
+    codeinf = opt.src
+    effects = opt.effects
+    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::InferenceResult)
-    unopt = get(interp.unopt, override, nothing)
-    if unopt === nothing
-        unopt = interp.unopt[override.linfo]
-    end
+    unopt = interp.unopt[override]
     codeinf = src = copy(unopt.src)
     (; rt, exct) = unopt
     infos = unopt.stmt_info
@@ -443,7 +449,7 @@ function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::In
     if isnothing(slottypes)
         slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
-    return (; src, rt, exct, infos, slottypes, effects, codeinf)
+    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function lookup_semiconcrete(interp::CthulhuInterpreter, override::SemiConcreteCallInfo, optimize::Bool)
@@ -453,8 +459,8 @@ function lookup_semiconcrete(interp::CthulhuInterpreter, override::SemiConcreteC
     infos = src.stmts.info
     slottypes = src.argtypes
     effects = get_effects(override)
-    (; codeinf) = lookup(interp, get_mi(override), optimize)
-    return (; src, rt, exct, infos, slottypes, effects, codeinf)
+    codeinf = nothing # TODO try to find `CodeInfo` for the regular inference?
+    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
 function get_override(@nospecialize(info))
@@ -496,8 +502,6 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    is_cached(key::MethodInstance) = can_descend(interp, key, optimize & !annotate_source)
-
     menu_options = (; cursor = '•', scroll_wrap = true)
     display_CI = true
     view_cmd = cthulhu_typed
@@ -525,15 +529,16 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 (; src, rt, exct, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize & !annotate_source)
         else
             if optimize && !annotate_source
-                codeinst = get_optimized_codeinst(interp, curs)
+                codeinst = curs.ci
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
+                        # TODO use `codeinfo_for_const`
                         # This was inferred to a pure constant - we have no code to show,
                         # but make something up that looks plausible.
                         callsites = Callsite[]
                         if display_CI
                             exct = @static VERSION ≥ v"1.11.0-DEV.945" ? codeinst.exct : nothing
-                            callsite = Callsite(-1, MICallInfo(codeinst.def, codeinst.rettype, get_effects(codeinst), exct), :invoke)
+                            callsite = Callsite(-1, EdgeCallInfo(codeinst, codeinst.rettype, get_effects(codeinst), exct), :invoke)
                             println(iostream)
                             println(iostream, "│ ─ $callsite")
                             println(iostream, "│  return ", Const(codeinst.rettype_const))
@@ -552,16 +557,17 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             end
             (; src, rt, exct, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize & !annotate_source)
         end
-        mi = get_mi(curs)
+        ci = get_ci(curs)
+        mi = ci.def
         src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
         if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
             infos = src.stmts.info
         else
             @assert length(src.code) == length(infos)
         end
-        infkey = override isa InferenceResult ? override : mi
+        infkey = override isa InferenceResult ? override : ci
         @static if VERSION ≥ v"1.11.0-DEV.1127"
-        pc2excts = exception_type ? get_excts(interp, infkey) : nothing
+        pc2excts = exception_type ? get_pc_exct(interp, infkey) : nothing
         else
         if exception_type
             @warn "Statement-wise and call-wise exception type information is available only on v\"1.11.0-DEV.1127\" and later"
@@ -579,13 +585,14 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
 
         if display_CI
-            pc2remarks = remarks ? get_remarks(interp, infkey) : nothing
-            pc2effects = with_effects ? get_effects(interp, infkey) : nothing
+            pc2remarks = remarks ? get_pc_remarks(interp, infkey) : nothing
+            pc2effects = with_effects ? get_pc_effects(interp, infkey) : nothing
             printstyled(IOContext(iostream, :limit=>true), mi.def, '\n'; bold=true)
             if debuginfo == DInfo.compact
-                str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt, mi=mi,
+                str = let debuginfo=debuginfo, src=src, codeinf=codeinf, rt=rt,
                           iswarn=iswarn, hide_type_stable=hide_type_stable,
-                          pc2remarks=pc2remarks, pc2effects=pc2effects, inline_cost=inline_cost, type_annotations=type_annotations
+                          pc2remarks=pc2remarks, pc2effects=pc2effects, pc2excts=pc2excts,
+                          inline_cost=inline_cost, type_annotations=type_annotations
                     ioctx = IOContext(iostream,
                         :color => true,
                         :displaysize => displaysize(iostream), # displaysize doesn't propagate otherwise
@@ -593,7 +600,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         :with_effects => with_effects,
                         :exception_type => exception_type)
                     stringify(ioctx) do lambda_io
-                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, exct, effects, mi;
+                        cthulhu_typed(lambda_io, debuginfo, annotate_source ? codeinf : src, rt, exct, effects, ci;
                                       iswarn, optimize, hide_type_stable,
                                       pc2remarks, pc2effects, pc2excts,
                                       inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
@@ -608,10 +615,10 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 print(iostream, str)
             else
                 lambda_io = IOContext(iostream,
-                    :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(codeinf),
+                    :SOURCE_SLOTNAMES => codeinf === nothing ? false : Base.sourceinfo_slotnames(codeinf),
                     :with_effects => with_effects,
                     :exception_type => exception_type)
-                cthulhu_typed(lambda_io, debuginfo, src, rt, exct, effects, mi;
+                cthulhu_typed(lambda_io, debuginfo, src, rt, exct, effects, ci;
                               iswarn, optimize, hide_type_stable,
                               pc2remarks, pc2effects, pc2excts,
                               inline_cost, type_annotations, annotate_source, inlay_types_vscode, diagnostics_vscode,
@@ -692,14 +699,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             end
 
             # forcibly enter and inspect the frame, although the native interpreter gave up
-            if info isa UncachedCallInfo
-                @info """
-                Inference didn't cache this call information because of imprecise analysis due to recursion:
-                Cthulhu nevertheless is trying to descend into it for further inspection.
-                """
-                additional_descend(get_mi(info)::MethodInstance)
-                continue
-            elseif info isa TaskCallInfo
+            if info isa TaskCallInfo
                 @info """
                 Inference didn't analyze this call because it is a dynamic call:
                 Cthulhu nevertheless is trying to descend into it for further inspection.
@@ -744,10 +744,6 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             TypedSyntax.clear_diagnostics_vscode()
         elseif toggle === :optimize
             optimize ⊻= true
-            if !is_cached(get_mi(curs))
-                @warn "Can't switch to post-optimization state, since this inference frame isn't cached."
-                optimize ⊻= true
-            end
             if remarks && optimize
                 @warn "Disable optimization to see the inference remarks."
             end
@@ -790,8 +786,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 revise = getfield(mod, :revise)::Function
                 revise()
                 mi = get_specialization(mi.specTypes)::MethodInstance
-                do_typeinf!(interp, mi)
-                curs = update_cursor(curs, mi)
+                ci = do_typeinf!(interp, mi)
+                curs = update_cursor(curs, ci)
             else
                 @warn "Failed to load Revise."
             end
@@ -845,50 +841,48 @@ end
 
 function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     result = InferenceResult(mi)
-    @static if isdefined(CC, :engine_reserve)
-        ci = CC.engine_reserve(interp, mi)
-        result.ci = ci
-    end
+    ci = CC.engine_reserve(interp, mi)
+    result.ci = ci
     # we may want to handle the case when `InferenceState(...)` returns `nothing`,
     # which indicates code generation of a `@generated` has been failed,
     # and show it in the UI in some way?
     frame = InferenceState(result, #=cache_mode=#:global, interp)::InferenceState
     CC.typeinf(interp, frame)
-    return nothing
+    return ci
 end
-
-get_specialization(@nospecialize tt::Type{<:Tuple}) = specialize_method(Base._which(tt))
 
 get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
     get_specialization(Base.signature_type(f, tt))
+get_specialization(@nospecialize tt::Type{<:Tuple}) =
+    specialize_method(Base._which(tt))
 
 function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
     interp′ = CthulhuInterpreter(interp)
     mi = get_specialization(args...)
-    do_typeinf!(interp′, mi)
-    (interp′, mi)
+    ci = do_typeinf!(interp′, mi)
+    return interp′, ci
 end
 mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
 
-_descend(interp::AbstractInterpreter, mi::MethodInstance; terminal=default_terminal(), kwargs...) =
-    _descend(terminal, interp, mi; kwargs...)
-_descend(term::AbstractTerminal, interp::AbstractInterpreter, mi::MethodInstance; kwargs...) =
-    _descend(term, interp, AbstractCursor(interp, mi); kwargs...)
 function _descend(@nospecialize(args...);
     interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
-    (interp′, mi) = mkinterp(interp, args...)
-    _descend(interp′, mi; kwargs...)
+    (interp′, ci) = mkinterp(interp, args...)
+    _descend(interp′, ci; kwargs...)
 end
+_descend(interp::AbstractInterpreter, ci::CodeInstance; terminal=default_terminal(), kwargs...) =
+    _descend(terminal, interp, ci; kwargs...)
+_descend(term::AbstractTerminal, interp::AbstractInterpreter, ci::CodeInstance; kwargs...) =
+    _descend(term, interp, AbstractCursor(interp, ci); kwargs...)
 function _descend(term::AbstractTerminal, mi::MethodInstance;
     interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
     interp′ = Cthulhu.CthulhuInterpreter(interp)
-    Cthulhu.do_typeinf!(interp′, mi)
-    _descend(term, interp′, mi; kwargs...)
+    ci = Cthulhu.do_typeinf!(interp′, mi)
+    _descend(term, interp′, ci; kwargs...)
 end
 function _descend(term::AbstractTerminal, @nospecialize(args...);
     interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
-    (interp′, mi) = mkinterp(interp, args...)
-    _descend(term, interp′, mi; kwargs...)
+    (interp′, ci) = mkinterp(interp, args...)
+    _descend(term, interp′, ci; kwargs...)
 end
 
 descend_code_typed(b::Bookmark; kw...) =
