@@ -320,7 +320,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         cfg = src isa IRCode ? src.cfg : CC.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
-        callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
+        callsite = Callsite(0, EdgeCallInfo(mi, rettype, effects, exct), :invoke)
         println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
     end
 
@@ -459,7 +459,7 @@ function Base.show(
     (; interp, mi) = b
     (; effects) = lookup(interp, mi, optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt, Effects()), :invoke))
+        print(io, Callsite(-1, EdgeCallInfo(b.mi, rt, Effects()), :invoke))
         print(io, " (world: ", world, ")")
         return
     end
