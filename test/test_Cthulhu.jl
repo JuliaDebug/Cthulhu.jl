@@ -274,7 +274,7 @@ end
             @test isa(callinfo, Cthulhu.MultiCallInfo)
             callinfos = callinfo.callinfos
             @test length(callinfos) == 2
-            @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1 # getindex(::Vector{Any}, ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.EdgeCallInfo), callinfos) == 1 # getindex(::Vector{Any}, ::Const(1))
             @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo) || isa(ci, Cthulhu.SemiConcreteCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
         end
 
@@ -389,7 +389,7 @@ end
     @test length(callsites) == 2
     callinfo1 = callsites[1].info
     @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
-    @test callinfo1.vmi isa Cthulhu.MICallInfo
+    @test callinfo1.vmi isa Cthulhu.EdgeCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo1)
     @test String(take!(io)) == "only_ints(::$Int)::$Int"
@@ -526,7 +526,7 @@ let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.EdgeCallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 
@@ -548,7 +548,7 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.EdgeCallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 
@@ -1001,8 +1001,8 @@ end
     @test root.data.callstr == "sqrt(::Float64)"
     @test isempty(root.children)
 
-    # Create an MICallInfo for this `mi`, ensure it works with `show_callinfo()`
-    callinfo = Cthulhu.MICallInfo(mi, rt, CC.Effects())
+    # Create an EdgeCallInfo for this `mi`, ensure it works with `show_callinfo()`
+    callinfo = Cthulhu.EdgeCallInfo(mi, rt, CC.Effects())
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
 
