@@ -317,7 +317,6 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         println(lambda_io)
     else
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        cfg = src isa IRCode ? src.cfg : CC.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
         callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
