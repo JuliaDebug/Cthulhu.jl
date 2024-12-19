@@ -274,7 +274,7 @@ end
             @test isa(callinfo, Cthulhu.MultiCallInfo)
             callinfos = callinfo.callinfos
             @test length(callinfos) == 2
-            @test count(ci->isa(ci, Cthulhu.MICallInfo), callinfos) == 1 # getindex(::Vector{Any}, ::Const(1))
+            @test count(ci->isa(ci, Cthulhu.EdgeCallInfo), callinfos) == 1 # getindex(::Vector{Any}, ::Const(1))
             @test count(ci->isa(ci, Cthulhu.ConstPropCallInfo) || isa(ci, Cthulhu.SemiConcreteCallInfo), callinfos) == 1 # getindex(::Const(tuple(1,nothing)), ::Const(1))
         end
 
@@ -354,8 +354,8 @@ function bar346(x::ComplexF64)
     return sin(x.im)
 end
 @testset "issue #346" begin
-    let (; interp, src, infos, mi, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
-        callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes, false)
+    let (; interp, src, infos, codeinst, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst.def, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
         @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
@@ -389,7 +389,7 @@ end
     @test length(callsites) == 2
     callinfo1 = callsites[1].info
     @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
-    @test callinfo1.vmi isa Cthulhu.MICallInfo
+    @test callinfo1.vmi isa Cthulhu.EdgeCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo1)
     @test String(take!(io)) == "only_ints(::$Int)::$Int"
@@ -526,7 +526,7 @@ let callsites = find_callsites_by_ftt(callf, Tuple{Union{typeof(sin), typeof(cos
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.EdgeCallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 
@@ -548,7 +548,7 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         @test any(mi->mi.def.name === :cos, mis)
         @test any(mi->mi.def.name === :sin, mis)
     else
-        @test all(cs->cs.info isa Union{Cthulhu.MICallInfo,Cthulhu.MultiCallInfo}, callsites)
+        @test all(cs->cs.info isa Union{Cthulhu.EdgeCallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
 end
 
@@ -674,9 +674,9 @@ end
         end
     end
     function doprint(f)
-        (; src, mi, rt, exct, effects) = cthulhu_info(f; optimize=false)
+        (; src, codeinst, rt, exct, effects) = cthulhu_info(f; optimize=false)
         io = IOBuffer()
-        Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; iswarn=false)
+        Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, codeinst; iswarn=false)
         return String(take!(io))
     end
     @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
@@ -1001,8 +1001,8 @@ end
     @test root.data.callstr == "sqrt(::Float64)"
     @test isempty(root.children)
 
-    # Create an MICallInfo for this `mi`, ensure it works with `show_callinfo()`
-    callinfo = Cthulhu.MICallInfo(mi, rt, CC.Effects())
+    # Create an EdgeCallInfo for this `mi`, ensure it works with `show_callinfo()`
+    callinfo = Cthulhu.EdgeCallInfo(mi, rt, CC.Effects())
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo)
 
@@ -1023,8 +1023,8 @@ end
 
 f515() = cglobal((:foo, bar))
 @testset "issue #515" begin
-    let (; interp, src, infos, mi, slottypes) = cthulhu_info(f515)
-        callsites, _ = Cthulhu.find_callsites(interp, src, infos, mi, slottypes)
+    let (; interp, src, infos, codeinst, slottypes) = cthulhu_info(f515)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst.def, slottypes)
         @test isempty(callsites)
     end
 end
