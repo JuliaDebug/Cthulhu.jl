@@ -124,7 +124,15 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
-@static if VERSION ≥ v"1.12.0-DEV.734"
+@static if VERSION ≥ v"1.12.0-DEV.1823"
+CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
+    result = caller.result
+    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState)
+end
+
+elseif VERSION ≥ v"1.12.0-DEV.734"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState;
                     can_discard_trees::Bool=false)
