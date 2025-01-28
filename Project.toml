@@ -1,6 +1,6 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-version = "2.16.1"
+version = "2.16.2"
 authors = ["Valentin Churavy <v.churavy@gmail.com> and contributors"]
 
 [deps]
