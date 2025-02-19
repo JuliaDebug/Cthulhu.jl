@@ -124,20 +124,29 @@ function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
+function set_cthulhu_source!(result::InferenceResult)
+    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+end
+
 @static if VERSION ≥ v"1.12.0-DEV.1823"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
+@static if VERSION ≥ v"1.12.0-DEV.1988"
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt)
+    set_cthulhu_source!(caller.result)
+    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
+end
+else
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
-    result = caller.result
-    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState)
+end
 end
 
 elseif VERSION ≥ v"1.12.0-DEV.734"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState;
                     can_discard_trees::Bool=false)
-    result = caller.result
-    result.src = create_cthulhu_source(result.src, result.ipo_effects)
+    set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState;
                               can_discard_trees)
 end
@@ -147,7 +156,7 @@ CC.finish(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
     result = caller.result
     opt = result.src
-    result.src = create_cthulhu_source(opt, result.ipo_effects)
+    set_cthulhu_source!(result)
     if opt isa CC.OptimizationState
         CC.ir_to_codeinf!(opt)
     end
