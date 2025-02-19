@@ -6,6 +6,7 @@ module CthulhuCompilerExt
     using Cthulhu: Cthulhu
 
     function __init__()
+        CC.activate!(; reflection=true)
         Cthulhu.CTHULHU_MODULE[] = @__MODULE__
     end
 

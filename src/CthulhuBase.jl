@@ -345,7 +345,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                  inline_cost, type_annotations, annotate_source,
                  inlay_types_vscode, diagnostics_vscode)
     end
-    custom_toggles = Cthulhu.custom_toggles(interp)
+    custom_toggles = (@__MODULE__).custom_toggles(interp)
     if !(custom_toggles isa Vector{CustomToggle})
         error(lazy"""
         invalid `$AbstractInterpreter` API:
