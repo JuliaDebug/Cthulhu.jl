@@ -65,7 +65,8 @@ function build_options(callsites, with_effects::Bool, exception_type::Bool, opti
             end
             str = string(chomp(
                 sprint(node; context=:color=>true) do io, node
-                    limiter = TextWidthLimiter(io, reduced_displaysize)
+                    ioc = IOContext(io, :maxtypedepth=>CONFIG.type_depth_limit)
+                    limiter = TextWidthLimiter(ioc, reduced_displaysize)
                     if TypedSyntax.is_runtime(node)
                         if iswarn
                             printstyled(limiter, "runtime "; color=:red)
