@@ -5,6 +5,7 @@ authors = ["Valentin Churavy <v.churavy@gmail.com> and contributors"]
 
 [deps]
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 FoldingTrees = "1eca21be-9b9b-4ed8-839a-6d8ae26b1781"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
@@ -18,6 +19,7 @@ WidthLimitedIO = "b8c1c048-cf81-46c6-9da0-18c1d99e41f2"
 
 [compat]
 CodeTracking = "0.5, 1"
+Compiler = "0.0.3"
 FoldingTrees = "1"
 InteractiveUtils = "1.9"
 JuliaSyntax = "0.4"
