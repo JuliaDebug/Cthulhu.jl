@@ -105,7 +105,7 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-@static if VERSION ≥ v"1.13.0-DEV.126" || v"1.12.0-alpha1" ≤ VERSION < v"1.13"
+@static if VERSION ≥ v"1.12.0-alpha1"
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
     key = CC.is_constproped(state) ? state.result : state.linfo
@@ -139,7 +139,7 @@ function set_cthulhu_source!(result::InferenceResult)
 end
 
 @static if VERSION ≥ v"1.12.0-DEV.1823"
-@static if VERSION ≥ v"1.13.0-DEV.126" || v"1.12.0-alpha1" ≤ VERSION < v"1.13"
+@static if VERSION ≥ v"1.12.0-alpha1"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
 else
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
