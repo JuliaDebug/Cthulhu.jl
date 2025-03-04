@@ -212,6 +212,8 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         end
         info = OCCallInfo(innerinfo)
         return CallInfo[info]
+    elseif (@static VERSION ≥ v"1.12.0-DEV.1870" && true) && isa(info, CC.GlobalAccessInfo)
+        return CallInfo[] # TODO return something informative here?
     elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return CallInfo[]
