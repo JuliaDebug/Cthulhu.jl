@@ -14,7 +14,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
     tf = (true, false)
     mi = codeinst.def
     @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
-        if !@isdefined(Revise)
+        if !isdefined(@__MODULE__(), :Revise)
             codeview == Cthulhu.cthulhu_ast && continue
         end
         @testset "optimize: $optimize" for optimize in tf

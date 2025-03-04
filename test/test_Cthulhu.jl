@@ -2,6 +2,7 @@ module test_Cthulhu
 
 using Test, Cthulhu, StaticArrays, Random
 const CC = Cthulhu.CC
+using Core: Const
 
 include("setup.jl")
 include("irutils.jl")
@@ -47,7 +48,7 @@ end
 
     # handle pure
     callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
-    @test occursin("::Core.Const((1, 1))", string(callsites[1]))
+    @test occursin("::Const((1, 1))", string(callsites[1]))
     @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
     callsites = @eval find_callsites_by_ftt(; optimize=false) do
         length($(QuoteNode(Core.svec(0,1,2))))
@@ -311,11 +312,11 @@ end
         end
         callinfo = only(callsites).info
         @test isa(callinfo, Cthulhu.ConcreteCallInfo)
-        @test Cthulhu.get_rt(callinfo) == Core.Const(factorial(12))
+        @test Cthulhu.get_rt(callinfo) == Const(factorial(12))
         @test Cthulhu.get_effects(callinfo) |> CC.is_foldable
         io = IOBuffer()
         print(io, only(callsites))
-        @test occursin("= < concrete eval > issue41694(::Core.Const(12))", String(take!(io)))
+        @test occursin("= < concrete eval > issue41694(::Const(12))", String(take!(io)))
     end
 end
 
@@ -341,11 +342,11 @@ end
         end
         callinfo = only(callsites).info
         @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
-        @test Cthulhu.get_rt(callinfo) == Core.Const(semi_concrete_eval(42, 0))
+        @test Cthulhu.get_rt(callinfo) == Const(semi_concrete_eval(42, 0))
         # @test Cthulhu.get_effects(callinfo) |> CC.is_semiconcrete_eligible
         io = IOBuffer()
         print(io, only(callsites))
-        @test occursin("= < semi-concrete eval > semi_concrete_eval(::Core.Const(42),::$Int)", String(take!(io)))
+        @test occursin("= < semi-concrete eval > semi_concrete_eval(::Const(42),::$Int)", String(take!(io)))
     end
 end
 
@@ -357,8 +358,8 @@ end
     let (; interp, src, infos, codeinst, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
         callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst.def, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
-        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Core.Const(:re))::Float64", string(callsites[1]))
-        @test Cthulhu.get_rt(callsites[end].info) == Core.Const(sin(1.0))
+        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Const(:re))::Float64", string(callsites[1]))
+        @test Cthulhu.get_rt(callsites[end].info) == Const(sin(1.0))
     end
 end
 
@@ -382,29 +383,36 @@ end
     only_ints(::Integer) = 1
 
     callsites = find_callsites_by_ftt(; optimize=false) do
-            t1 = Base._return_type(only_ints, Tuple{Int})     # successful `return_type`
-            t2 = Base._return_type(only_ints, Tuple{Float64}) # failed `return_type`
+            t1 = CC.return_type(only_ints, Tuple{Int})     # successful `return_type`
+            t2 = CC.return_type(only_ints, Tuple{Float64}) # failed `return_type`
             t1, t2
         end
-    @test length(callsites) == 2
-    callinfo1 = callsites[1].info
+    @static if VERSION ≥ v"1.12.0-alpha1"
+        # We have the function resolved as `getproperty(Compiler, :return_type)` first.
+        @test length(callsites) == 4
+        extract_callsite(i) = callsites[2i]
+    else
+        @test length(callsites) == 2
+        extract_callsite(i) = callsites[i]
+    end
+    callinfo1 = extract_callsite(1).info
     @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
     @test callinfo1.vmi isa Cthulhu.EdgeCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo1)
     @test String(take!(io)) == "only_ints(::$Int)::$Int"
     io = IOBuffer()
-    print(io, callsites[1])
+    print(io, extract_callsite(1))
     @test occursin("return_type < only_ints(::$Int)::$Int >", String(take!(io)))
 
-    callinfo2 = callsites[2].info
+    callinfo2 = extract_callsite(2).info
     @test callinfo2 isa Cthulhu.ReturnTypeCallInfo
     @test callinfo2.vmi isa Cthulhu.FailedCallInfo
     io = IOBuffer()
     Cthulhu.show_callinfo(io, callinfo2)
     @test String(take!(io)) == "only_ints(::Float64)::Union{}"
     io = IOBuffer()
-    print(io, callsites[2])
+    print(io, extract_callsite(2))
     @test occursin("return_type < only_ints(::Float64)::Union{} >", String(take!(io)))
 
     @test Cthulhu.get_effects(callinfo1) |> CC.is_foldable_nothrow
@@ -613,19 +621,19 @@ end
     cs = callsites[end]
     checklim(80, cs.info) do str
         @test !occursin("Array{…}", str)
-        @test occursin("::Core.Const(-1)", str)
+        @test occursin("::Const(-1)", str)
     end
     checklim(55, cs.info) do str
         @test !occursin("Array{…}", str)
-        @test !occursin("::Core.Const(-1)", str)
+        @test !occursin("::Const(-1)", str)
     end
     checklim(40, cs.info) do str
         @test occursin("Array{…}", str)
-        @test occursin("::Core.Const(-1)", str)
+        @test occursin("::Const(-1)", str)
     end
     checklim(25, cs.info) do str
         @test occursin("Array{…}", str)
-        @test !occursin("::Core.Const(-1)", str)
+        @test !occursin("::Const(-1)", str)
     end
     checklim(8, cs.info) do str
         @test str == "foo(…)"
@@ -681,7 +689,7 @@ end
     end
     @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
     str = doprint(getfield(m, :f2))
-    @test occursin("y::Core.Const([1, 2, 3", str)
+    @test occursin("y::Const([1, 2, 3", str)
     @test !occursin("500,", str)
 end
 
