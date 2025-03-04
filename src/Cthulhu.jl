@@ -348,6 +348,7 @@ end
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
 get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
 get_effects(result::InferenceResult) = result.ipo_effects
+get_effects(source::InferredSource) = source.effects
 get_effects(result::CC.ConstPropResult) = get_effects(result.result)
 get_effects(result::CC.ConcreteResult) = result.effects
 get_effects(result::CC.SemiConcreteResult) = result.effects

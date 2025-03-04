@@ -81,6 +81,7 @@ function get_inference_key(state::InferenceState)
             # Core.println("Missing edges for ", result.linfo)
             return nothing
         end
+    # XXX: Use `state.result` unconditionally?
     elseif VERSION ≥ v"1.12.0-DEV.317"
         return CC.is_constproped(state) ? state.result : state.linfo
     else
@@ -131,8 +132,10 @@ end
 @static if VERSION ≥ v"1.12.0-alpha1"
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
-    key = CC.is_constproped(state) ? state.result : state.linfo
-    interp.unopt[key] = InferredSource(state)
+    key = get_inference_key(state)
+    if key !== nothing
+        interp.unopt[key] = InferredSource(state)
+    end
     return res
 end
 
