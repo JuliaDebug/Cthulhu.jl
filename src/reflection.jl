@@ -309,10 +309,11 @@ end
 
 function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, caller::MethodInstance; allow_unspecialized::Bool=false)
     interp′ = CthulhuInterpreter(interp)
-    do_typeinf!(interp′, caller)
+    codeinst = do_typeinf!(interp′, caller)
+    @assert codeinst.def === caller
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
-        (; src, rt, infos, slottypes) = lookup(interp′, caller, optimize)
+        (; src, rt, infos, slottypes) = lookup(interp′, codeinst, optimize)
         src = preprocess_ci!(src, caller, optimize, CONFIG)
         callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :

@@ -2,21 +2,26 @@ using Unicode
 
 abstract type CallInfo end
 
+get_mi(ci::CallInfo) = get_ci(ci).def
+
 # Call could be resolved to a singular MI
 struct EdgeCallInfo <: CallInfo
-    ci::CodeInstance
+    ci::Union{CodeInstance,Nothing}
+    mi::MethodInstance
     rt
     effects::Effects
     exct
-    function EdgeCallInfo(ci::CodeInstance, @nospecialize(rt), effects::Effects, @nospecialize(exct=nothing))
+    function EdgeCallInfo(edge::Union{MethodInstance, CodeInstance}, @nospecialize(rt), effects::Effects, @nospecialize(exct=nothing))
+        ci, mi = isa(edge, MethodInstance) ? (nothing, edge) : (edge, edge.def)
         if isa(rt, LimitedAccuracy)
-            return LimitedCallInfo(new(ci, ignorelimited(rt), effects, exct))
+            return LimitedCallInfo(new(ci, mi, ignorelimited(rt), effects, exct))
         else
-            return new(ci, rt, effects, exct)
+            return new(ci, mi, rt, effects, exct)
         end
     end
 end
 get_ci(ci::EdgeCallInfo) = ci.ci
+get_mi(ci::EdgeCallInfo) = ci.mi
 get_rt(ci::EdgeCallInfo) = ci.rt
 get_effects(ci::EdgeCallInfo) = ci.effects
 get_exct(ci::EdgeCallInfo) = ci.exct
@@ -273,7 +278,7 @@ function Base.show(io::IO, (;exct)::ExctWrapper)
 end
 
 function show_callinfo(limiter, ci::EdgeCallInfo)
-    mi = ci.ci.def
+    mi = ci.mi
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     if !isa(mi.def, Method)
         name = ":toplevel"

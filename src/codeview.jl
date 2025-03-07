@@ -429,7 +429,7 @@ It can be used with the following functions:
 * `code_native([::IO,] ::Bookmark)`: pretty-print native code
 """
 struct Bookmark
-    mi::MethodInstance
+    ci::CodeInstance
     interp::AbstractInterpreter
 end
 
@@ -450,21 +450,21 @@ function Base.show(
     optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
     world = get_inference_world(b.interp)
     CI, rt = InteractiveUtils.code_typed(b; optimize)
-    (; interp, mi) = b
-    (; effects) = lookup(interp, mi, optimize)
+    (; interp, ci) = b
+    (; effects) = lookup(interp, ci, optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, EdgeCallInfo(b.mi, rt, Effects()), :invoke))
+        print(io, Callsite(-1, EdgeCallInfo(b.ci, rt, Effects()), :invoke))
         print(io, " (world: ", world, ")")
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, nothing, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
+    cthulhu_typed(io, debuginfo, CI, rt, nothing, effects, b.ci; iswarn, optimize, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
-    (; interp, mi) = b
-    (; src, rt, codeinf) = lookup(interp, mi, optimize)
-    src = preprocess_ci!(src, mi, optimize, CONFIG)
+    (; interp, ci) = b
+    (; src, rt, codeinf) = lookup(interp, ci, optimize)
+    src = preprocess_ci!(src, ci.def, optimize, CONFIG)
     if src isa IRCode
         CC.replace_code_newstyle!(codeinf, src)
     end
@@ -482,9 +482,9 @@ function InteractiveUtils.code_warntype(
     kw...,
 )
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    (; interp, mi) = b
-    (; effects) = lookup(interp, mi, optimize)
-    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; optimize, hide_type_stable, b.interp)
+    (; interp, ci) = b
+    (; effects) = lookup(interp, ci, optimize)
+    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.ci; optimize, hide_type_stable, b.interp)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdout::IO, b; kw...)
@@ -502,7 +502,7 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         config = CONFIG,
     ) = cthulhu_llvm(
         io,
-        b.mi,
+        b.ci.def,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -521,7 +521,7 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         config = CONFIG,
     ) = cthulhu_native(
         io,
-        b.mi,
+        b.ci.def,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -539,10 +539,10 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = CC.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.ci.def, true)
         return cthulhu_llvm(
             io,
-            b.mi,
+            b.ci.def,
             src,
             optimize,
             debuginfo === :source,
@@ -562,10 +562,10 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = CC.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.ci.def, true)
         return cthulhu_native(
             io,
-            b.mi,
+            b.ci.def,
             src,
             optimize,
             debuginfo === :source,

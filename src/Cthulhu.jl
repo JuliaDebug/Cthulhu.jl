@@ -354,14 +354,14 @@ get_effects(result::CC.ConcreteResult) = result.effects
 get_effects(result::CC.SemiConcreteResult) = result.effects
 
 struct LookupResult
-    src::Union{CodeInfo,IRCode}
+    src::Union{CodeInfo,IRCode,Nothing}
     rt
     exct
     infos::Vector{CCCallInfo}
     slottypes::Vector{Any}
     effects::Effects
     codeinf::Union{Nothing,CodeInfo}
-    function LookupResult(src::Union{CodeInfo,IRCode}, @nospecialize(rt), @nospecialize(exct),
+    function LookupResult(src::Union{CodeInfo,IRCode,Nothing}, @nospecialize(rt), @nospecialize(exct),
                           infos::Vector{CCCallInfo}, slottypes::Vector{Any},
                           effects::Effects, codeinf::Union{Nothing,CodeInfo})
         return new(src, rt, exct, infos, slottypes, effects, codeinf)
@@ -391,7 +391,7 @@ function lookup_optimized(interp::CthulhuInterpreter, ci::CodeInstance, allow_no
         # This doesn't showed up as covered, but it is (see the CI test with `coverage=false`).
         # But with coverage on, the empty function body isn't empty due to :code_coverage_effect expressions.
         codeinf = src = nothing
-        infos = []
+        infos = CCCallInfo[]
         slottypes = Any[Base.unwrap_unionall(ci.def.specTypes).parameters...]
     else
         Core.eval(Main, quote
@@ -887,10 +887,10 @@ function _descend(term::AbstractTerminal, @nospecialize(args...);
 end
 
 descend_code_typed(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.interp, b.mi; iswarn=false, kw...)
+    _descend_with_error_handling(b.interp, b.ci.def; iswarn=false, kw...)
 
 descend_code_warntype(b::Bookmark; kw...) =
-    _descend_with_error_handling(b.interp, b.mi; iswarn=true, kw...)
+    _descend_with_error_handling(b.interp, b.ci.def; iswarn=true, kw...)
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 

@@ -43,6 +43,8 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         InferenceDict{PC2Excts}())
 end
 
+Base.show(io::IO, interp::CthulhuInterpreter) = print(io, typeof(interp), "(...)")
+
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 @static if VERSION ≥ v"1.11.0-DEV.851"
 CC.OptimizationParams(interp::CthulhuInterpreter) =
@@ -152,7 +154,11 @@ end
 
 function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     isa(opt, OptimizationState) || return opt
-    @static if VERSION ≥ v"1.11-"
+    @static if VERSION ≥ v"1.13-"
+        result = opt.result::CC.OptimizationResult
+        result.simplified || CC.simplify_ir!(result)
+        ir = CC.compact!(copy(result.ir))
+    elseif VERSION ≥ v"1.11-"
         # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
         ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
     else

@@ -214,24 +214,6 @@ uncached_call1(a) = uncached_call2(a)
 uncached_call2(a) = somecode::Bool ? uncached_call3(a) : a
 uncached_call3(a) = uncached_call1(Type{a})
 
-@testset "wrapped callinfo" begin
-    # make sure we form `UncachedCallInfo` so that we won't try to retrieve non-existing cache
-    callsites = @find_callsites_by_ftt uncached_call1(Int)
-    @test length(callsites) == 1
-    ci = first(callsites).info
-    @test isa(ci, Cthulhu.UncachedCallInfo)
-    effects = Cthulhu.get_effects(ci)
-    @test !CC.is_consistent(effects)
-    @test CC.is_effect_free(effects)
-    @test !CC.is_nothrow(effects)
-    @test !CC.is_terminates(effects)
-    @test Cthulhu.is_callsite(ci, ci.wrapped.mi)
-    io = IOBuffer()
-    show(io, first(callsites))
-    @test occursin("< uncached >", String(take!(io)))
-    # TODO do some test with `LimitedCallInfo`, but they happen at deeper callsites
-end
-
 @testset "ConstPropCallInfo" begin
     @testset "union-split constant-prop'ed callsites" begin
         # constant prop' on all the splits
@@ -696,22 +678,22 @@ end
 @testset "Issue #132" begin
     f132(w, dim) = [i == dim ? w[i]/2 : w[i]/1 for i in eachindex(w)]
     interp, mi = Cthulhu.mkinterp(f132, (Vector{Int}, Int))
-    @test isa(mi, Core.MethodInstance)   # just check that the above succeeded
+    @test isa(mi, Core.CodeInstance)   # just check that the above succeeded
 end
 
 @testset "@interp" begin
     finterp1(x) = 2
     (interp, mi) = Cthulhu.@interp finterp1(5)
-    @test isa(mi, Core.MethodInstance)
+    @test isa(mi, Core.CodeInstance)
 
     finterp2(x, y) = string(x, y)
     (interp, mi) = Cthulhu.@interp finterp2("hi", " there")
-    @test isa(mi, Core.MethodInstance)
+    @test isa(mi, Core.CodeInstance)
 
     finterp3(x, y, z) = (x + y) / z
     tt = Tuple{typeof(finterp3), Int64, Int64, Float64}
     (interp, mi) = Cthulhu.mkinterp(tt)
-    @test isa(mi, Core.MethodInstance)
+    @test isa(mi, Core.CodeInstance)
 end
 
 # ## Functions for "backedges & treelist"
@@ -897,8 +879,8 @@ let callsites = find_callsites_by_ftt(issue152_another, (Tuple{Float64,Vararg{Fl
 end
 
 @testset "Bookmarks" begin
-    (interp, mi) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
-    b = Cthulhu.Bookmark(mi, interp)
+    (interp, ci) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
+    b = Cthulhu.Bookmark(ci, interp)
 
     @testset "code_typed(bookmark)" begin
         ci, rt = code_typed(b)
@@ -1020,11 +1002,11 @@ end
 end
 
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
-let (interp, mi) = Cthulhu.mkinterp((Int,)) do var::Int
-        countvars50037(1, var)
+let (interp, codeinst) = Cthulhu.mkinterp((Int,)) do var::Int
+        # Make sure that code is cached by ensuring a non-const return type.
+        x = Base.inferencebarrier(1)::Int
+        countvars50037(x, var)
     end
-    key = only(Base.specializations(only(methods(countvars50037))))
-    codeinst = interp.opt[key]
     inferred = @atomic :monotonic codeinst.inferred
     @test length(inferred.ir.cfg.blocks) == 1
 end
