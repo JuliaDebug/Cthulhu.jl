@@ -148,7 +148,12 @@ CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
 else
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
 end
-@static if VERSION ≥ v"1.12.0-DEV.1988"
+@static if VERSION ≥ v"1.13.0-DEV.242"
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+    set_cthulhu_source!(caller.result)
+    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+end
+elseif VERSION ≥ v"1.12.0-DEV.1988"
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
