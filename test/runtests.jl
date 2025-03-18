@@ -1,4 +1,5 @@
 using Test, PerformanceTestTools
+using Core: Const # allows correct printing as `Const` instead of `Core.Const`
 
 @testset "runtests.jl" begin
     @testset "test_Cthulhu.jl" begin
