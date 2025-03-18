@@ -34,16 +34,6 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @n
         first = false
         printstyled(env_io, "::", sig[i], color=highlighter(sig[i]))
     end
-    # if kwargs !== nothing
-    #     print(io, "; ")
-    #     first = true
-    #     for (k, t) in kwargs
-    #         first || print(io, ", ")
-    #         first = false
-    #         print(io, k, "::")
-    #         show(io, t)
-    #     end
-    # end
     print(io, ")")
     Base.show_method_params(io, tv)
     nothing

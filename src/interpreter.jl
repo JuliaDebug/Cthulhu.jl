@@ -80,7 +80,6 @@ function get_inference_key(state::InferenceState)
         elseif isdefined(result, :ci)
             return result.ci
         else
-            # Core.println("Missing edges for ", result.linfo)
             return nothing
         end
     # XXX: Use `state.result` unconditionally?
