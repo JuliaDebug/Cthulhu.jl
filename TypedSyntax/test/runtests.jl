@@ -3,7 +3,7 @@ using TypedSyntax: TypedSyntax, TypedSyntaxNode
 using Dates, InteractiveUtils, Test
 using Core.Compiler: widenconst
 
-has_typ(node, @nospecialize(Ts::Tuple)) = any(has_typ(node, T) for T in Ts)
+has_typ(node, @nospecialize(Ts::Tuple)) = any(has_typ(node, Ts[i]) for i in 1:length(Ts))
 has_typ(node, @nospecialize(T)) = node.typ === T || !isnothing(node.typ) && widenconst(node.typ) === T
 has_name_typ(node, name::Symbol, @nospecialize(T)) = kind(node) == K"Identifier" && node.val === name && has_typ(node, T)
 has_name_notyp(node, name::Symbol) = has_name_typ(node, name, nothing)
