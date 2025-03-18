@@ -1,8 +1,8 @@
 module test_Cthulhu
 
 using Test, Cthulhu, StaticArrays, Random
-const CC = Cthulhu.CC
 using Core: Const
+const CC = Cthulhu.CTHULHU_MODULE[].CC
 
 include("setup.jl")
 include("irutils.jl")
