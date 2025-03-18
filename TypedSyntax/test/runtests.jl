@@ -90,7 +90,7 @@ include("test_module.jl")
         )
         rootnode = JuliaSyntax.parsestmt(SyntaxNode, st; filename="TSN3.jl")
         TSN.eval(Expr(rootnode))
-        tsn = TypedSyntaxNode(rootnode, TSN.firstfirst, (Vector{Vector{Real}},))
+        tsn = TypedSyntaxNode(rootnode, @invokelatest(TSN.firstfirst), (Vector{Vector{Real}},))
         sig, body = children(tsn)
         @test child(body, idxsinner...).typ === nothing
         @test child(body, idxsouter...).typ === Vector{Real}
