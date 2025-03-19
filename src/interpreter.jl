@@ -73,7 +73,7 @@ CC.cache_owner(interp::CthulhuInterpreter) = interp.cache_token
 end
 
 function get_inference_key(state::InferenceState)
-    @static if VERSION ≥ v"1.12.0-DEV.1531"
+    @static if VERSION ≥ v"1.12-"
         result = state.result
         if CC.is_constproped(state)
             return result # TODO result.ci_as_edge?
@@ -82,9 +82,6 @@ function get_inference_key(state::InferenceState)
         else
             return nothing
         end
-    # XXX: Use `state.result` unconditionally?
-    elseif VERSION ≥ v"1.12.0-DEV.317"
-        return CC.is_constproped(state) ? state.result : state.linfo
     else
         return CC.any(state.result.overridden_by_const) ? state.result : state.linfo
     end
