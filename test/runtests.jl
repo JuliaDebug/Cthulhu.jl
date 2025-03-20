@@ -1,6 +1,9 @@
 using Test, PerformanceTestTools
 using Core: Const # allows correct printing as `Const` instead of `Core.Const`
 
+using Cthulhu
+Cthulhu.CONFIG.type_depth_limit = nothing # disable type-depth limit printing in tests
+
 @testset "runtests.jl" begin
     @testset "test_Cthulhu.jl" begin
         include("test_Cthulhu.jl")
