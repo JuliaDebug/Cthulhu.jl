@@ -852,6 +852,21 @@ function do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
     return ci
 end
 
+function do_typeinf!(interp::CthulhuInterpreter, mi::MethodInstance)
+    ci = @invoke do_typeinf!(interp::AbstractInterpreter, mi::MethodInstance)
+    resolve_inference_frames!(interp)
+    ci
+end
+
+function resolve_inference_frames!(interp::CthulhuInterpreter)
+    for state in interp.frames_without_ci
+        result = state.result
+        isdefined(result, :ci_as_edge) || error("Failed to retrieve a `CodeInstance` for $(state.linfo) after inference")
+        ci = result.ci_as_edge
+        interp.unopt[ci] = InferredSource(state)
+    end
+end
+
 get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
     get_specialization(Base.signature_type(f, tt))
 get_specialization(@nospecialize tt::Type{<:Tuple}) =

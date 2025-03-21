@@ -362,8 +362,6 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
 
         if !isnothing(callsite_ci) && callsite_ci ∉ visited_cis
             push!(visited_cis, callsite_ci)
-            # TODO: figure out why this `CodeInstance` is not present in the unoptimized cache.
-            callsite_ci.def.def.sig === Tuple{typeof(getproperty), Module, Symbol} && continue
             add_callsites!(d, visited_cis, diagnostics, callsite_ci, source_ci; optimize, annotate_source, interp)
         end
     end

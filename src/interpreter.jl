@@ -28,6 +28,7 @@ struct CthulhuInterpreter <: AbstractInterpreter
     cache_token::CthulhuCacheToken
     native::AbstractInterpreter
     unopt::InferenceDict{InferredSource}
+    frames_without_ci::IdSet{InferenceState}
     remarks::InferenceDict{PC2Remarks}
     effects::InferenceDict{PC2Effects}
     exception_types::InferenceDict{PC2Excts}
@@ -38,6 +39,7 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         CthulhuCacheToken(),
         interp,
         InferenceDict{InferredSource}(),
+        IdSet{InferenceState}(),
         InferenceDict{PC2Remarks}(),
         InferenceDict{PC2Effects}(),
         InferenceDict{PC2Excts}())
@@ -76,7 +78,8 @@ function get_inference_key(state::InferenceState)
     @static if VERSION ≥ v"1.12-"
         result = state.result
         if CC.is_constproped(state)
-            return result # TODO result.ci_as_edge?
+            isdefined(result, :ci_as_edge) || return result
+            result.ci_as_edge
         elseif isdefined(result, :ci)
             return result.ci
         else
@@ -133,6 +136,7 @@ function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::
     key = get_inference_key(state)
     if key !== nothing
         interp.unopt[key] = InferredSource(state)
+        isa(key, InferenceResult) && push!(interp.frames_without_ci, state)
     end
     return res
 end
@@ -143,6 +147,7 @@ function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::
     key = get_inference_key(state)
     if key !== nothing
         interp.unopt[key] = InferredSource(state)
+        isa(key, InferenceResult) && push!(interp.frames_without_ci, state)
     end
     return res
 end
