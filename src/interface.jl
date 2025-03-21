@@ -74,8 +74,6 @@ get_pc_exct(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.exceptio
 # a sensible default cursor for a MethodInstance
 AbstractCursor(interp::AbstractInterpreter, ci::CodeInstance) = CthulhuCursor(ci)
 
-get_mi(curs::AbstractCursor) = get_ci(curs).def
-
 mutable struct CustomToggle
     onoff::Bool
     key::UInt32

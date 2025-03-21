@@ -507,10 +507,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     display_CI = true
     view_cmd = cthulhu_typed
     iostream = term.out_stream::IO
-    function additional_descend(new_mi::MethodInstance)
+    function additional_descend(new_ci::CodeInstance)
         new_interp = CthulhuInterpreter(interp)
-        do_typeinf!(new_interp, new_mi)
-        _descend(term, new_interp, new_mi;
+        _descend(term, new_interp, new_ci;
                  debuginfo, optimize, interruptexc, iswarn, hide_type_stable, remarks,
                  with_effects, exception_type,
                  inline_cost, type_annotations, annotate_source,
@@ -538,20 +537,21 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         # but make something up that looks plausible.
                         callsites = Callsite[]
                         if display_CI
-                            exct = @static VERSION ≥ v"1.11.0-DEV.945" ? codeinst.exct : nothing
+                            exct = @static VERSION ≥ v"1.11.0-DEV.945" ? codeinst.exctype : nothing
                             callsite = Callsite(-1, EdgeCallInfo(codeinst, codeinst.rettype, get_effects(codeinst), exct), :invoke)
                             println(iostream)
                             println(iostream, "│ ─ $callsite")
                             println(iostream, "│  return ", Const(codeinst.rettype_const))
                             println(iostream)
                         end
+                        mi = codeinst.def
                         @goto show_menu
                     else
                         @info """
                         Inference discarded the source for this call because of recursion:
                         Cthulhu nevertheless is trying to retrieve the source for further inspection.
                         """
-                        additional_descend(get_mi(curs))
+                        additional_descend(get_ci(curs))
                         break
                     end
                 end
@@ -575,7 +575,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         end
         pc2excts = nothing
         end
-        callsites, sourcenodes = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, annotate_source, pc2excts)
+        callsites, sourcenodes = find_callsites(interp, src, infos, ci, slottypes, optimize & !annotate_source, annotate_source, pc2excts)
 
         if jump_always
             if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
@@ -671,7 +671,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 if sourcenode !== nothing
                     show_sub_callsites = let callsite=callsite
                         map(info.callinfos) do ci
-                            p = Base.unwrap_unionall(get_mi(ci).specTypes).parameters
+                            p = Base.unwrap_unionall(ci.def.specTypes).parameters
                             if isa(sourcenode, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(JuliaSyntax.children(sourcenode)) + 1
                                 newnode = copy(sourcenode)
                                 for (i, child) in enumerate(JuliaSyntax.children(newnode))
@@ -705,7 +705,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 Inference didn't analyze this call because it is a dynamic call:
                 Cthulhu nevertheless is trying to descend into it for further inspection.
                 """
-                additional_descend(get_mi(info)::MethodInstance)
+                additional_descend(get_ci(info)::CodeInstance)
                 continue
             elseif info isa RTCallInfo
                 @info """

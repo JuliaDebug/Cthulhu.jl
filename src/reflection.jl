@@ -6,18 +6,20 @@ using Base.Meta
 using Base: may_invoke_generator
 
 transform(::Val, callsite) = callsite
-function transform(::Val{:CuFunction}, callsite, callexpr, CI, mi, slottypes; world=get_world_counter())
+function transform(::Val{:CuFunction}, interp, callsite, callexpr, CI, mi, slottypes; world=get_world_counter())
     sptypes = sptypes_from_meth_instance(mi)
     tt = argextype(callexpr.args[4], CI, sptypes, slottypes)
     ft = argextype(callexpr.args[3], CI, sptypes, slottypes)
     isa(tt, Const) || return callsite
-    return Callsite(callsite.id, CuCallInfo(callinfo(Tuple{widenconst(ft), tt.val.parameters...}, Nothing; world)), callsite.head)
+    sig = Tuple{widenconst(ft), tt.val.parameters...}
+    return Callsite(callsite.id, CuCallInfo(callinfo(interp, sig, Nothing; world)), callsite.head)
 end
 
 function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
-                        stmt_infos::Union{Vector{CCCallInfo}, Nothing}, mi::MethodInstance,
+                        stmt_infos::Union{Vector{CCCallInfo}, Nothing}, ci::CodeInstance,
                         slottypes::Vector{Any}, optimize::Bool=true, annotate_source::Bool=false,
                         pc2excts::Union{Nothing,PC2Excts}=nothing)
+    mi = ci.def
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
     if isa(CI, IRCode)
@@ -89,7 +91,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
                         func = args[6]
                         ftype = widenconst(argextype(func, CI, sptypes, slottypes))
                         sig = Tuple{ftype}
-                        callsite = Callsite(id, TaskCallInfo(callinfo(sig, nothing; world=get_inference_world(interp))), head)
+                        callsite = Callsite(id, TaskCallInfo(callinfo(interp, sig, nothing; world=get_inference_world(interp))), head)
                     end
                 end
             end
@@ -101,7 +103,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
                 ci = get_ci(info)
                 meth = ci.def.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), callsite, c, CI, ci.def, slottypes; world=get_inference_world(interp))
+                    callsite = transform(Val(:CuFunction), interp, callsite, c, CI, ci.def, slottypes; world=get_inference_world(interp))
                 end
             end
 
@@ -281,7 +283,7 @@ function preprocess_ci!(ir::IRCode, _::MethodInstance, optimize::Bool, config::C
     return ir
 end
 
-function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
+function callinfo(interp, sig, rt, max_methods=-1; world=get_world_counter())
     methds = Base._methods_by_ftype(sig, max_methods, world)
     methds isa Bool && return FailedCallInfo(sig, rt)
     length(methds) < 1 && return FailedCallInfo(sig, rt)
@@ -295,7 +297,8 @@ function callinfo(sig, rt, max_methods=-1; world=get_world_counter())
         else
             mi = specialize_method(meth, atypes, sparams)
             if mi !== nothing
-                push!(callinfos, EdgeCallInfo(mi, rt, Effects()))
+                edge = do_typeinf!(interp, mi)
+                push!(callinfos, EdgeCallInfo(edge, rt, Effects()))
             else
                 push!(callinfos, FailedCallInfo(sig, rt))
             end
@@ -315,7 +318,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstanc
     for optimize in (true, false)
         (; src, rt, infos, slottypes) = lookup(interp′, codeinst, optimize)
         src = preprocess_ci!(src, caller, optimize, CONFIG)
-        callsites, _ = find_callsites(interp′, src, infos, caller, slottypes, optimize)
+        callsites, _ = find_callsites(interp′, src, infos, codeinst, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)
         foreach(cs -> add_sourceline!(locs, src, cs.id, caller), callsites)

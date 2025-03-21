@@ -2,26 +2,21 @@ using Unicode
 
 abstract type CallInfo end
 
-get_mi(ci::CallInfo) = get_ci(ci).def
-
 # Call could be resolved to a singular MI
 struct EdgeCallInfo <: CallInfo
-    ci::Union{CodeInstance,Nothing}
-    mi::MethodInstance
+    edge::CodeInstance
     rt
     effects::Effects
     exct
-    function EdgeCallInfo(edge::Union{MethodInstance, CodeInstance}, @nospecialize(rt), effects::Effects, @nospecialize(exct=nothing))
-        ci, mi = isa(edge, MethodInstance) ? (nothing, edge) : (edge, edge.def)
+    function EdgeCallInfo(edge::CodeInstance, @nospecialize(rt), effects::Effects, @nospecialize(exct=nothing))
         if isa(rt, LimitedAccuracy)
-            return LimitedCallInfo(new(ci, mi, ignorelimited(rt), effects, exct))
+            return LimitedCallInfo(new(edge, ignorelimited(rt), effects, exct))
         else
-            return new(ci, mi, rt, effects, exct)
+            return new(edge, rt, effects, exct)
         end
     end
 end
-get_ci(ci::EdgeCallInfo) = ci.ci
-get_mi(ci::EdgeCallInfo) = ci.mi
+get_ci(ci::EdgeCallInfo) = ci.edge
 get_rt(ci::EdgeCallInfo) = ci.rt
 get_effects(ci::EdgeCallInfo) = ci.effects
 get_exct(ci::EdgeCallInfo) = ci.exct
@@ -278,7 +273,7 @@ function Base.show(io::IO, (;exct)::ExctWrapper)
 end
 
 function show_callinfo(limiter, ci::EdgeCallInfo)
-    mi = ci.mi
+    mi = ci.edge.def
     tt = (Base.unwrap_unionall(mi.specTypes)::DataType).parameters[2:end]
     if !isa(mi.def, Method)
         name = ":toplevel"
@@ -460,12 +455,12 @@ _wrapped_callinfo(limiter, ::LimitedCallInfo)  = print(limiter, "limited")
 
 # is_callsite returns true if `call` dispatches to `callee`
 # See also `maybe_callsite` below
-is_callsite(call::MethodInstance, callee::MethodInstance) = call === callee
-is_callsite(::Nothing, callee::MethodInstance) = false   # for when `get_mi` returns `nothing`
+is_callsite(call::CodeInstance, callee::MethodInstance) = call.def === callee
+is_callsite(::Nothing, callee::MethodInstance) = false   # for when `get_ci` returns `nothing`
 
 # is_callsite for higher-level inputs
 is_callsite(cs::Callsite, callee::MethodInstance) = is_callsite(cs.info, callee)
-is_callsite(info::CallInfo, callee::MethodInstance) = is_callsite(get_mi(info), callee)
+is_callsite(info::CallInfo, callee::MethodInstance) = is_callsite(get_ci(info), callee)
 # special CallInfo cases:
 function is_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos
@@ -476,7 +471,7 @@ end
 
 # maybe_callsite returns true if `call` *might* dispatch to `callee`
 # See also `is_callsite` above
-function maybe_callsite(call::MethodInstance, callee::MethodInstance)
+function maybe_callsite(call::CodeInstance, callee::MethodInstance)
     # handle comparison among Varargs
     function generalized_va_subtype(@nospecialize(Tshort), @nospecialize(Tlong))
         nshort, nlong = length(Tshort.parameters), length(Tlong.parameters)
@@ -491,7 +486,7 @@ function maybe_callsite(call::MethodInstance, callee::MethodInstance)
         return T <: unwrapva(Tlong.parameters[end])
     end
 
-    Tcall, Tcallee = call.specTypes, callee.specTypes
+    Tcall, Tcallee = call.def.specTypes, callee.specTypes
     Tcall <: Tcallee && return true
     # Make sure we handle Tcall = Tuple{Vararg{String}}, Tcallee = Tuple{String,Vararg{String}}
     if Base.isvatuple(Tcall) && Base.isvatuple(Tcallee)
@@ -506,7 +501,7 @@ end
 # maybe_callsite for higher-level inputs
 maybe_callsite(cs::Callsite, callee::MethodInstance) = maybe_callsite(cs.info, callee)
 maybe_callsite(cs::Callsite, @nospecialize(tt::Type)) = maybe_callsite(cs.info, tt)
-maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_mi(info), callee)
+maybe_callsite(info::CallInfo, callee::MethodInstance) = maybe_callsite(get_ci(info), callee)
 # Special CallInfo cases:
 function maybe_callsite(info::MultiCallInfo, callee::MethodInstance)
     for csi in info.callinfos

@@ -338,7 +338,7 @@ function bar346(x::ComplexF64)
 end
 @testset "issue #346" begin
     let (; interp, src, infos, codeinst, slottypes) = cthulhu_info(bar346, Tuple{ComplexF64}; optimize=false)
-        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst.def, slottypes, false)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst, slottypes, false)
         @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
         @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Const(:re))::Float64", string(callsites[1]))
         @test Cthulhu.get_rt(callsites[end].info) == Const(sin(1.0))
@@ -534,9 +534,9 @@ let callsites = find_callsites_by_ftt(toggler, Tuple{Bool})
         @test first(callsites).info isa Cthulhu.MultiCallInfo
         callinfos = first(callsites).info.callinfos
         @test !isempty(callinfos)
-        mis = map(Cthulhu.get_mi, callinfos)
-        @test any(mi->mi.def.name === :cos, mis)
-        @test any(mi->mi.def.name === :sin, mis)
+        defs = map(get_method, callinfos)
+        @test any(def -> def.name === :cos, defs)
+        @test any(def -> def.name === :sin, defs)
     else
         @test all(cs->cs.info isa Union{Cthulhu.EdgeCallInfo,Cthulhu.MultiCallInfo}, callsites)
     end
@@ -584,7 +584,7 @@ end
             @test !isempty(callsites)
             cs = callsites[end]
             @test cs isa Cthulhu.Callsite
-            mi = cs.info.mi
+            mi = get_mi(cs)
             @test mi.specTypes.parameters[end] === (haslen ? Int : Vararg{Int})
             @test checklim(str -> occursin("...", str) != haslen, 80, cs.info)
         end
@@ -637,9 +637,9 @@ end
     cs = find_callsites_by_ftt(maybeundef, Tuple{Bool})[end]
     @test cs.head === :invoke
     if !isdefined(Base, :_string)
-        @test cs.info.mi.def == which(string, (String,String))
+        @test get_method(cs) == which(string, (String,String))
     else
-        @test cs.info.mi.def ∈ [which(string, (String,String)), only(methods(Base._string))]
+        @test get_method(cs) ∈ [which(string, (String,String)), only(methods(Base._string))]
     end
 end
 
@@ -977,30 +977,6 @@ end
     @test haskey(pc2effects, i4)
 end
 
-@testset "Bare-bones MIs" begin
-    # Get IR for a function, wrap it in a minimal methodinstance
-    (ir, rt) = only(Base.code_ircode(sqrt, (Float64,)))
-    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
-    mi.specTypes = Tuple{map(CC.widenconst, ir.argtypes)...}
-    # Just state that the definition of this MI is the module it was defined in
-    mi.def = @__MODULE__
-
-    # Test that `treelist()` works with this `mi`
-    root = Cthulhu.treelist(mi)
-    @test Cthulhu.count_open_leaves(root) == 1
-    @test root.data.callstr == "sqrt(::Float64)"
-    @test isempty(root.children)
-
-    # Create an EdgeCallInfo for this `mi`, ensure it works with `show_callinfo()`
-    callinfo = Cthulhu.EdgeCallInfo(mi, rt, CC.Effects())
-    io = IOBuffer()
-    Cthulhu.show_callinfo(io, callinfo)
-
-    # Here, since we have purposefully not filled out the definition of `def`,
-    # the `callinfo()` will say `:toplevel` rather than `sqrt`:
-    @test String(take!(io)) == ":toplevel(::Float64)::Float64"
-end
-
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
 let (interp, codeinst) = Cthulhu.mkinterp((Int,)) do var::Int
         # Make sure that code is cached by ensuring a non-const return type.
@@ -1014,7 +990,7 @@ end
 f515() = cglobal((:foo, bar))
 @testset "issue #515" begin
     let (; interp, src, infos, codeinst, slottypes) = cthulhu_info(f515)
-        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst.def, slottypes)
+        callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst, slottypes)
         @test isempty(callsites)
     end
 end

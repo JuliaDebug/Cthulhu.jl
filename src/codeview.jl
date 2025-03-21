@@ -182,10 +182,10 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
-                callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
-                visited_mis = Set{MethodInstance}((mi,))
-                add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
-                for callsite in values(callsite_mis)
+                callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                visited_cis = Set{CodeInstance}((codeinst,))
+                add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, codeinst; optimize, annotate_source, interp)
+                for callsite in values(callsite_cis)
                     if !isnothing(callsite)
                         descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
                     end
@@ -333,13 +333,14 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     end
 end
 
-function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::AbstractVector,
-    mi::MethodInstance, source_mi::MethodInstance=mi;
+function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::AbstractVector,
+    ci::CodeInstance, source_ci::CodeInstance=ci;
     optimize::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
+    mi = ci.def
 
     callsites, src, rt = try
-        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
+        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, ci, optimize & !annotate_source)
 
         src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
         if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
@@ -350,23 +351,25 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
 
         # We pass false as it doesn't affect callsites and skips fetching the method definition
         # using CodeTracking which is slow
-        callsites, _ = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, false)
+        callsites, _ = find_callsites(interp, src, infos, ci, slottypes, optimize & !annotate_source, false)
         callsites, src, rt
     catch
         return nothing
     end
 
     for callsite in callsites
-        callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+        callsite_ci = callsite.info isa MultiCallInfo ? nothing : get_ci(callsite)
 
-        if !isnothing(callsite_mi) && callsite_mi ∉ visited_mis
-            push!(visited_mis, callsite_mi)
-            add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_mi; optimize, annotate_source, interp)
+        if !isnothing(callsite_ci) && callsite_ci ∉ visited_cis
+            push!(visited_cis, callsite_ci)
+            # TODO: figure out why this `CodeInstance` is not present in the unoptimized cache.
+            callsite_ci.def.def.sig === Tuple{typeof(getproperty), Module, Symbol} && continue
+            add_callsites!(d, visited_cis, diagnostics, callsite_ci, source_ci; optimize, annotate_source, interp)
         end
     end
 
-    # Check if callsite is not just filling in default arguments and defined in same file as source_mi
-    if mi == source_mi || mi.def.file != source_mi.def.file
+    # Check if callsite is not just filling in default arguments and defined in same file as source_ci
+    if ci == source_ci || ci.def.def.file != source_ci.def.def.file
         return nothing
     end
     tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
@@ -390,7 +393,7 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
             )
         end
     else
-        d[key] = (mi=mi, tsn=tsn)
+        d[key] = (ci=ci, tsn=tsn)
     end
 end
 
