@@ -10,9 +10,9 @@ using .TestCodeViewSandbox
 Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
 
 @testset "printer test" begin
-    (; interp, src, infos, mi, rt, exct, effects, slottypes) = cthulhu_info(testf_revise);
+    (; interp, src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(testf_revise);
     tf = (true, false)
-
+    mi = codeinst.def
     @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
         if !isdefined(@__MODULE__(), :Revise)
             codeview == Cthulhu.cthulhu_ast && continue
@@ -40,7 +40,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
                         io = IOBuffer()
                         Cthulhu.cthulhu_typed(io, debuginfo,
-                            src, rt, exct, effects, mi;
+                            src, rt, exct, effects, codeinst;
                             iswarn, hide_type_stable, inline_cost, type_annotations)
                         @test !isempty(String(take!(io))) # just check it works
                     end
@@ -52,7 +52,7 @@ end
 
 @testset "hide type-stable statements" begin
     let # optimize code
-        (; src, infos, mi, rt, exct, effects, slottypes) = @eval Module() begin
+        (; src, infos, codeinst, rt, exct, effects, slottypes) = @eval Module() begin
             const globalvar = Ref(42)
             $cthulhu_info() do
                 a = sin(globalvar[])
@@ -62,7 +62,7 @@ end
         end
         function prints(; kwargs...)
             io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; kwargs...)
+            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, codeinst; kwargs...)
             return String(take!(io))
         end
 
@@ -79,7 +79,7 @@ end
     end
 
     let # unoptimize code
-        (; src, infos, mi, rt, exct, effects, slottypes) = @eval Module() begin
+        (; src, infos, codeinst, rt, exct, effects, slottypes) = @eval Module() begin
             const globalvar = Ref(42)
             $cthulhu_info(; optimize=false) do
                 a = sin(globalvar[])
@@ -89,7 +89,7 @@ end
         end
         function prints(; kwargs...)
             io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, mi; kwargs...)
+            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, codeinst; kwargs...)
             return String(take!(io))
         end
 
