@@ -182,12 +182,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
-                callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
-                visited_cis = Set{CodeInstance}((codeinst,))
-                add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, codeinst; optimize, annotate_source, interp)
-                for callsite in values(callsite_cis)
-                    if !isnothing(callsite)
-                        descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                if haskey(interp.unopt, codeinst) # don't process const-proped results
+                    callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                    visited_cis = Set{CodeInstance}((codeinst,))
+                    add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, codeinst; optimize, annotate_source, interp)
+                    for callsite in values(callsite_cis)
+                        if !isnothing(callsite)
+                            descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                        end
                     end
                 end
             end
@@ -358,14 +360,17 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     end
 
     for callsite in callsites
-        callsite_ci = callsite.info isa MultiCallInfo ? nothing : get_ci(callsite)
+        info = callsite.info
+        isa(info, MultiCallInfo) && continue
+        isa(info, ConstPropCallInfo) && continue
+        isa(info, SemiConcreteCallInfo) && continue
 
-        if !isnothing(callsite_ci) && callsite_ci ∉ visited_cis
-            push!(visited_cis, callsite_ci)
-            # TODO: figure out why this `CodeInstance` is not present in the unoptimized cache.
-            callsite_ci.def.def.sig === Tuple{typeof(getproperty), Module, Symbol} && continue
-            add_callsites!(d, visited_cis, diagnostics, callsite_ci, source_ci; optimize, annotate_source, interp)
-        end
+        callsite_ci = get_ci(callsite)
+        isnothing(callsite_ci) && continue
+        in(callsite_ci, visited_cis) && continue
+
+        push!(visited_cis, callsite_ci)
+        add_callsites!(d, visited_cis, diagnostics, callsite_ci, source_ci; optimize, annotate_source, interp)
     end
 
     # Check if callsite is not just filling in default arguments and defined in same file as source_ci
