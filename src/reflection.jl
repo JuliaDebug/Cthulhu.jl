@@ -184,7 +184,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         matches = info.results.matches
         return CallInfo[let
             mi = specialize_method(match)
-            effects = get_effects(interp, mi, false)
+            effects = get_effects(interp, mi, optimize)
             mici = MICallInfo(mi, rt, effects, exct)
             is_cached(mi) ? mici : UncachedCallInfo(mici)
         end for match::Core.MethodMatch in matches]
