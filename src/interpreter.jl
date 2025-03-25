@@ -105,7 +105,7 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-@static if VERSION ≥ v"1.12.0-alpha1"
+@static if VERSION ≥ v"1.12-"
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
     key = CC.is_constproped(state) ? state.result : state.linfo
@@ -143,12 +143,12 @@ function set_cthulhu_source!(result::InferenceResult)
 end
 
 @static if VERSION ≥ v"1.12.0-DEV.1823"
-@static if VERSION ≥ v"1.12.0-alpha1"
+@static if VERSION ≥ v"1.12-"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
 else
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
 end
-@static if VERSION ≥ v"1.13.0-DEV.242"
+@static if VERSION ≥ v"1.13.0-DEV.242" || VERSION ≥ v"1.12.0-DEV.2112"
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
@@ -269,7 +269,7 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     else
         spec_info = CC.MethodInfo(src)
     end
-    if isdefined(Base, :__has_internal_change) && Base.__has_internal_change(v"1.12-alpha", :codeinfonargs)
+    if isdefined(Base, :__has_internal_change) && Base.__has_internal_change(v"1.12-", :codeinfonargs)
         argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     elseif VERSION >= v"1.12.0-DEV.341"
         argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, mi)
