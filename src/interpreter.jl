@@ -127,7 +127,7 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-@static if VERSION ≥ v"1.12.0-alpha1"
+@static if VERSION ≥ v"1.12-"
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
     key = get_inference_key(state)
@@ -169,20 +169,11 @@ function set_cthulhu_source!(result::InferenceResult)
 end
 
 @static if VERSION ≥ v"1.12.0-DEV.1823"
-@static if VERSION ≥ v"1.12.0-alpha1"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
-else
-CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
-end
-@static if VERSION ≥ v"1.13.0-DEV.242"
+@static if VERSION ≥ v"1.12-"
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
-end
-elseif VERSION ≥ v"1.12.0-DEV.1988"
-function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt)
-    set_cthulhu_source!(caller.result)
-    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
 end
 else
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)

@@ -369,7 +369,7 @@ end
             t2 = CC.return_type(only_ints, Tuple{Float64}) # failed `return_type`
             t1, t2
         end
-    @static if VERSION ≥ v"1.12.0-alpha1"
+    @static if VERSION ≥ v"1.12-"
         # We have the function resolved as `getproperty(Compiler, :return_type)` first.
         @test length(callsites) == 4
         extract_callsite(i) = callsites[2i]
