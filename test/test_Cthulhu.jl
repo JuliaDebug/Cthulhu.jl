@@ -89,45 +89,31 @@ end
     calltwice(c) = twice(c[1])
 
     callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{Float64}})
-    @static if VERSION ≥ v"1.11.0-DEV.753"
-        @test any(callsites) do callsite
-            callsite.head === :invoke || return false
-            io = IOBuffer()
-            print(io, callsite)
-            return occursin("invoke twice(::Float64)::Float64", String(take!(io)))
-        end
-        @test any(callsites) do callsite
-            callsite.head === :invoke || return false
-            io = IOBuffer()
-            print(io, callsite)
-            return occursin("invoke throw_boundserror", String(take!(io)))
-        end
-    else
-        @test length(callsites) == 1 && callsites[1].head === :invoke
+    @test any(callsites) do callsite
+        callsite.head === :invoke || return false
         io = IOBuffer()
-        print(io, callsites[1])
-        @test occursin("invoke twice(::Float64)::Float64", String(take!(io)))
+        print(io, callsite)
+        return occursin("invoke twice(::Float64)::Float64", String(take!(io)))
+    end
+    @test any(callsites) do callsite
+        callsite.head === :invoke || return false
+        io = IOBuffer()
+        print(io, callsite)
+        return occursin("invoke throw_boundserror", String(take!(io)))
     end
 
     callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{AbstractFloat}})
-    @static if VERSION ≥ v"1.11.0-DEV.753"
-        @test any(callsites) do callsite
-            callsite.head === :call || return false
-            io = IOBuffer()
-            print(io, callsite)
-            return occursin("call twice(::AbstractFloat)", String(take!(io)))
-        end
-        @test any(callsites) do callsite
-            callsite.head === :invoke || return false
-            io = IOBuffer()
-            print(io, callsite)
-            return occursin("invoke throw_boundserror", String(take!(io)))
-        end
-    else
-        @test length(callsites) == 1 && callsites[1].head === :call
+    @test any(callsites) do callsite
+        callsite.head === :call || return false
         io = IOBuffer()
-        print(io, callsites[1])
-        @test occursin("call twice(::AbstractFloat)", String(take!(io)))
+        print(io, callsite)
+        return occursin("call twice(::AbstractFloat)", String(take!(io)))
+    end
+    @test any(callsites) do callsite
+        callsite.head === :invoke || return false
+        io = IOBuffer()
+        print(io, callsite)
+        return occursin("invoke throw_boundserror", String(take!(io)))
     end
 
     # Note the failure of `callinfo` to properly handle specialization
@@ -171,27 +157,12 @@ boundscheck_dce_inbounds(x) = @inbounds _boundscheck_dce(x)
 boundscheck_dce(x) = _boundscheck_dce(x)
 
 @testset "DCE & boundscheck" begin
-    @static if VERSION ≥ v"1.11.0-DEV.377"
-        # no boundscheck elimination on Julia-level compilation
-        for f in (boundscheck_dce_inbounds, boundscheck_dce)
-            let (; src) = cthulhu_info(f, Tuple{Vector{Float64}})
-                @test count(src.stmts.stmt) do stmt
-                    isexpr(stmt, :boundscheck)
-                end == 1
-            end
-        end
-    else
-        let (; src) = cthulhu_info(boundscheck_dce_inbounds, Tuple{Vector{Float64}})
-            stmts = @static VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
-            @test all(stmts) do stmt
-                isa(stmt, Core.GotoNode) || (isa(stmt, Core.ReturnNode) && isdefined(stmt, :val))
-            end
-        end
-        let (; src) = cthulhu_info(boundscheck_dce, Tuple{Vector{Float64}})
-            stmts = @static VERSION < v"1.11.0-DEV.258" ? src.stmts.inst : src.stmts.stmt
-            @test count(!isnothing, stmts) == 2
-            stmt = stmts[end]
-            @test isa(stmt, Core.ReturnNode) && !isdefined(stmt, :val)
+    # no boundscheck elimination on Julia-level compilation
+    for f in (boundscheck_dce_inbounds, boundscheck_dce)
+        let (; src) = cthulhu_info(f, Tuple{Vector{Float64}})
+            @test count(src.stmts.stmt) do stmt
+                isexpr(stmt, :boundscheck)
+            end == 1
         end
     end
 end
@@ -369,14 +340,9 @@ end
             t2 = CC.return_type(only_ints, Tuple{Float64}) # failed `return_type`
             t1, t2
         end
-    @static if VERSION ≥ v"1.12-"
-        # We have the function resolved as `getproperty(Compiler, :return_type)` first.
-        @test length(callsites) == 4
-        extract_callsite(i) = callsites[2i]
-    else
-        @test length(callsites) == 2
-        extract_callsite(i) = callsites[i]
-    end
+    # We have the function resolved as `getproperty(Compiler, :return_type)` first.
+    @test length(callsites) == 4
+    extract_callsite(i) = callsites[2i]
     callinfo1 = extract_callsite(1).info
     @test callinfo1 isa Cthulhu.ReturnTypeCallInfo
     @test callinfo1.vmi isa Cthulhu.EdgeCallInfo

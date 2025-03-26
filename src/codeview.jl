@@ -20,68 +20,37 @@ function highlight(io, x, lexer, config::CthulhuConfig)
     end
 end
 
-@static if VERSION < v"1.12.0-DEV.669"
-    function cthulhu_llvm(io::IO, mi, optimize::Bool, debuginfo, world::UInt,
-                          config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-        dump = InteractiveUtils._dump_function_llvm(
-            mi, world,
-            #=wrapper=# false, !raw,
-            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
-            Base.CodegenParams())
-        highlight(io, dump, "llvm", config)
-    end
+function cthulhu_llvm(io::IO, mi, src::CodeInfo, optimize::Bool, debuginfo, world::UInt,
+                        config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
+    dump = InteractiveUtils._dump_function_llvm(
+        mi, src,
+        #=wrapper=# false, !raw,
+        dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
+        Base.CodegenParams())
+    highlight(io, dump, "llvm", config)
+end
 
-    function cthulhu_native(io::IO, mi, ::Bool, debuginfo, world::UInt,
-                            config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-        if dump_module
-            dump = InteractiveUtils._dump_function_native_assembly(
-                mi, world,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false, raw,
-                Base.CodegenParams())
-        else
-            dump = InteractiveUtils._dump_function_native_disassembly(
-                mi, world,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false)
-        end
-        highlight(io, dump, "asm", config)
-    end
-else
-    function cthulhu_llvm(io::IO, mi, src::CodeInfo, optimize::Bool, debuginfo, world::UInt,
-                          config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-        dump = InteractiveUtils._dump_function_llvm(
+function cthulhu_native(io::IO, mi, src::CodeInfo, ::Bool, debuginfo, world::UInt,
+                        config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
+    if dump_module
+        dump = InteractiveUtils._dump_function_native_assembly(
             mi, src,
-            #=wrapper=# false, !raw,
-            dump_module, optimize, debuginfo != DInfo.none ? :source : :none,
+            #=wrapper=# false, #=syntax=# config.asm_syntax,
+            debuginfo != DInfo.none ? :source : :none,
+            #=binary=# false, raw,
             Base.CodegenParams())
-        highlight(io, dump, "llvm", config)
+    else
+        dump = InteractiveUtils._dump_function_native_disassembly(
+            mi, world,
+            #=wrapper=# false, #=syntax=# config.asm_syntax,
+            debuginfo != DInfo.none ? :source : :none,
+            #=binary=# false)
     end
+    highlight(io, dump, "asm", config)
+end
 
-    function cthulhu_native(io::IO, mi, src::CodeInfo, ::Bool, debuginfo, world::UInt,
-                            config::CthulhuConfig, dump_module::Bool=false, raw::Bool=false)
-        if dump_module
-            dump = InteractiveUtils._dump_function_native_assembly(
-                mi, src,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false, raw,
-                Base.CodegenParams())
-        else
-            dump = InteractiveUtils._dump_function_native_disassembly(
-                mi, world,
-                #=wrapper=# false, #=syntax=# config.asm_syntax,
-                debuginfo != DInfo.none ? :source : :none,
-                #=binary=# false)
-        end
-        highlight(io, dump, "asm", config)
-    end
-
-    function cthulhu_ast(io::IO, mi, ::CodeInfo, optimize::Bool, debuginfo, world::UInt, config::CthulhuConfig)
-        return cthulhu_ast(io, mi, optimize, debuginfo, world, config)
-    end
+function cthulhu_ast(io::IO, mi, ::CodeInfo, optimize::Bool, debuginfo, world::UInt, config::CthulhuConfig)
+    return cthulhu_ast(io, mi, optimize, debuginfo, world, config)
 end
 
 function cthulhu_ast(io::IO, mi, ::Bool, debuginfo, ::UInt, config::CthulhuConfig)
@@ -219,23 +188,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     # preprinter configuration
     preprinter = if inline_cost
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        if isa(src, IRCode)
-            @static if VERSION < v"1.11.0-DEV.258"
-                code = src.stmts.inst
-            else
-                code = src.stmts.stmt
-            end
-        else
-            code = src.code
-        end
+        code = isa(src, IRCode) ? src.stmts.stmt : src.code
         cst = Vector{Int}(undef, length(code))
         params = CC.OptimizationParams(interp)
         sparams = CC.VarState[CC.VarState(sparam, false) for sparam in mi.sparam_vals]
-        @static if VERSION ≥ v"1.11.0-DEV.32"
-            CC.statement_costs!(cst, code, src, sparams, params)
-        else
-            CC.statement_costs!(cst, code, src, sparams, false, params)
-        end
+        CC.statement_costs!(cst, code, src, sparams, params)
         total_cost = sum(cst)
         nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)
@@ -499,18 +456,20 @@ InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdo
 InteractiveUtils.code_native(b::Bookmark; kw...) =
     InteractiveUtils.code_native(stdout::IO, b; kw...)
 
-@static if VERSION < v"1.12.0-DEV.669"
-    InteractiveUtils.code_llvm(
-        io::IO,
-        b::Bookmark;
-        optimize = true,
-        debuginfo = :source,
-        dump_module = false,
-        raw = false,
-        config = CONFIG,
-    ) = cthulhu_llvm(
+function InteractiveUtils.code_llvm(
+    io::IO,
+    b::Bookmark;
+    optimize = true,
+    debuginfo = :source,
+    dump_module = false,
+    raw = false,
+    config = CONFIG,
+)
+    src = CC.typeinf_code(b.interp, b.ci.def, true)
+    return cthulhu_llvm(
         io,
         b.ci.def,
+        src,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -518,18 +477,22 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         dump_module,
         raw,
     )
+end
 
-    InteractiveUtils.code_native(
-        io::IO,
-        b::Bookmark;
-        optimize = true,
-        debuginfo = :source,
-        dump_module = false,
-        raw = false,
-        config = CONFIG,
-    ) = cthulhu_native(
+function InteractiveUtils.code_native(
+    io::IO,
+    b::Bookmark;
+    optimize = true,
+    debuginfo = :source,
+    dump_module = false,
+    raw = false,
+    config = CONFIG,
+)
+    src = CC.typeinf_code(b.interp, b.ci.def, true)
+    return cthulhu_native(
         io,
         b.ci.def,
+        src,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -537,50 +500,4 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         dump_module,
         raw,
     )
-else
-    function InteractiveUtils.code_llvm(
-        io::IO,
-        b::Bookmark;
-        optimize = true,
-        debuginfo = :source,
-        dump_module = false,
-        raw = false,
-        config = CONFIG,
-    )
-        src = CC.typeinf_code(b.interp, b.ci.def, true)
-        return cthulhu_llvm(
-            io,
-            b.ci.def,
-            src,
-            optimize,
-            debuginfo === :source,
-            get_inference_world(b.interp),
-            config,
-            dump_module,
-            raw,
-        )
-    end
-
-    function InteractiveUtils.code_native(
-        io::IO,
-        b::Bookmark;
-        optimize = true,
-        debuginfo = :source,
-        dump_module = false,
-        raw = false,
-        config = CONFIG,
-    )
-        src = CC.typeinf_code(b.interp, b.ci.def, true)
-        return cthulhu_native(
-            io,
-            b.ci.def,
-            src,
-            optimize,
-            debuginfo === :source,
-            get_inference_world(b.interp),
-            config,
-            dump_module,
-            raw,
-        )
-    end
 end

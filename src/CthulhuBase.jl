@@ -15,7 +15,7 @@ using .CC: AbstractInterpreter, ApplyCallInfo, CallInfo as CCCallInfo, ConstCall
     EFFECTS_TOTAL, Effects, IncrementalCompact, InferenceParams, InferenceResult,
     InferenceState, IRCode, LimitedAccuracy, MethodMatchInfo, MethodResultPure,
     NativeInterpreter, NoCallInfo, OptimizationParams, OptimizationState,
-    UnionSplitApplyCallInfo, UnionSplitInfo, WorldRange, WorldView,
+    UnionSplitApplyCallInfo, UnionSplitInfo, WorldRange, WorldView, get_inference_world,
     argextype, argtypes_to_type, compileable_specialization, ignorelimited, singleton_type,
     specialize_method, sptypes_from_meth_instance, widenconst
 using Base: @constprop, default_tt, isvarargtype, unwrapva, unwrap_unionall, rewrap_unionall
@@ -23,12 +23,7 @@ const mapany = Base.mapany
 
 const ArgTypes = Vector{Any}
 
-@static if VERSION ≥ v"1.11.0-DEV.1498"
-    import .CC: get_inference_world
-    using Base: get_world_counter
-else
-    import .CC: get_world_counter, get_world_counter as get_inference_world
-end
+using Base: get_world_counter
 
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
@@ -152,32 +147,9 @@ default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
 descend_impl(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=true, kwargs...)
 
-@static if VERSION ≥ v"1.11.0-DEV.207"
-    using .CC: cached_return_type
-else
-function cached_return_type(code::CodeInstance)
-    rettype = code.rettype
-    isdefined(code, :rettype_const) || return rettype
-    rettype_const = code.rettype_const
-    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-        return Core.PartialStruct(rettype, rettype_const)
-    elseif isa(rettype_const, Core.PartialOpaque) && rettype <: Core.OpaqueClosure
-        return rettype_const
-    elseif isa(rettype_const, CC.InterConditional) && !(CC.InterConditional <: rettype)
-        return rettype_const
-    else
-        return Const(rettype_const)
-    end
-end
-end
+using .CC: cached_return_type
 
-function cached_exception_type(code::CodeInstance)
-    @static if VERSION ≥ v"1.11.0-DEV.945"
-        return code.exctype
-    else
-        return nothing
-    end
-end
+cached_exception_type(code::CodeInstance) = code.exctype
 
 get_effects(codeinst::CodeInstance) = CC.decode_effects(codeinst.ipo_purity_bits)
 get_effects(codeinst::CodeInfo) = CC.decode_effects(codeinst.purity)
@@ -266,7 +238,7 @@ function lookup_constproped_optimized(interp::CthulhuInterpreter, override::Infe
     # e.g. when we switch from constant-prop' unoptimized source
     src = CC.copy(opt.ir)
     rt = override.result
-    exct = @static hasfield(InferenceResult, :exc_result) ? override.exc_result : nothing
+    exct = override.exc_result
     infos = src.stmts.info
     slottypes = src.argtypes
     codeinf = opt.src
@@ -371,7 +343,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                         # but make something up that looks plausible.
                         callsites = Callsite[]
                         if display_CI
-                            exct = @static VERSION ≥ v"1.11.0-DEV.945" ? codeinst.exctype : nothing
+                            exct = cached_exception_type(codeinst)
                             callsite = Callsite(-1, EdgeCallInfo(codeinst, codeinst.rettype, get_effects(codeinst), exct), :invoke)
                             println(iostream)
                             println(iostream, "│ ─ $callsite")
@@ -401,14 +373,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             @assert length(src.code) == length(infos)
         end
         infkey = override isa InferenceResult ? override : ci
-        @static if VERSION ≥ v"1.11.0-DEV.1127"
         pc2excts = exception_type ? get_pc_exct(interp, infkey) : nothing
-        else
-        if exception_type
-            @warn "Statement-wise and call-wise exception type information is available only on v\"1.11.0-DEV.1127\" and later"
-        end
-        pc2excts = nothing
-        end
         callsites, sourcenodes = find_callsites(interp, src, infos, ci, slottypes, optimize & !annotate_source, annotate_source, pc2excts)
 
         if jump_always
@@ -641,12 +606,8 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             view_cmd = CODEVIEWS[toggle]
             world = get_inference_world(interp)
             println(iostream)
-            @static if VERSION < v"1.12.0-DEV.669"
-                view_cmd(iostream, mi, optimize, debuginfo, world, CONFIG)
-            else
-                src = CC.typeinf_code(interp, mi, true)
-                view_cmd(iostream, mi, src, optimize, debuginfo, world, CONFIG)
-            end
+            src = CC.typeinf_code(interp, mi, true)
+            view_cmd(iostream, mi, src, optimize, debuginfo, world, CONFIG)
             display_CI = false
         else
             local i = findfirst(ct->ct.toggle === toggle, custom_toggles)

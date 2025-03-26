@@ -35,11 +35,7 @@ end
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
 isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-@static if VERSION ≥ v"1.12.0-DEV.1667"
 isinvoke(pred::Function, @nospecialize(x)) = isexpr(x, :invoke) && pred(x.args[1]::CodeInstance)
-else
-isinvoke(pred::Function, @nospecialize(x)) = isexpr(x, :invoke) && pred(x.args[1]::MethodInstance)
-end
 
 function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
     code = code_typed1(args...; kwargs...).code
