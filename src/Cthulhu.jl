@@ -3,13 +3,8 @@ module Cthulhu
 export @descend, @descend_code_typed, @descend_code_warntype,
     descend, descend_code_typed, descend_code_warntype, ascend
 
-@static if VERSION ≥ v"1.12.0-DEV.1581"
-    const CC = Base.Compiler
-    const IRShow = Base.IRShow
-else
-    const CC = Core.Compiler
-    const IRShow = Base.IRShow
-end
+const CC = Base.Compiler
+const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 
@@ -202,10 +197,8 @@ using PrecompileTools
 
         @compile_workload descend(gcd, (Int, Int); terminal=term)
 
-        # @static if VERSION ≥ v"1.12.0-DEV.1581"
-        #     using Compiler
-        #     @compile_workload descend(gcd, (Int, Int); terminal=term)
-        # end
+    #     using Compiler
+    #     @compile_workload descend(gcd, (Int, Int); terminal=term)
 
         # declare we are done with streams
         close(input.in)

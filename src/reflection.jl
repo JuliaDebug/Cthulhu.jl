@@ -22,15 +22,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
     mi = ci.def
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
-    if isa(CI, IRCode)
-        @static if VERSION < v"1.11.0-DEV.258"
-            stmts = CI.stmts.inst
-        else
-            stmts = CI.stmts.stmt
-        end
-    else
-        stmts = CI.code
-    end
+    stmts = isa(CI, IRCode) ? CI.stmts.stmt : CI.code
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, CI, nothing; warn=false) : (nothing, nothing)
 
@@ -126,7 +118,7 @@ function process_const_info(interp::AbstractInterpreter, @nospecialize(thisinfo)
     @nospecialize(exct))
     if isnothing(result)
         return thisinfo
-    elseif (@static VERSION ≥ v"1.11.0-DEV.851" && true) && result isa CC.VolatileInferenceResult
+    elseif result isa CC.VolatileInferenceResult
         # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
         #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
         return thisinfo
@@ -175,11 +167,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             end
         end for edge in info.edges if edge !== nothing]
     elseif isa(info, UnionSplitInfo)
-        @static if hasfield(UnionSplitInfo, :split)
-            return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
-        else
-            return mapreduce(process_recursive, vcat, info.matches; init=CallInfo[])::Vector{CallInfo}
-        end
+        return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
         return mapreduce(process_recursive, vcat, info.infos; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, ApplyCallInfo)
@@ -214,7 +202,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         end
         info = OCCallInfo(innerinfo)
         return CallInfo[info]
-    elseif (@static VERSION ≥ v"1.12.0-DEV.1870" && true) && isa(info, CC.GlobalAccessInfo)
+    elseif isa(info, CC.GlobalAccessInfo)
         return CallInfo[] # TODO return something informative here?
     elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
@@ -348,24 +336,11 @@ function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstanc
 end
 
 function add_sourceline!(locs::Vector{Tuple{Core.LineInfoNode,Int}}, src::Union{CodeInfo,IRCode}, stmtidx::Int, caller::MethodInstance)
-    @static if VERSION ≥ v"1.12.0-DEV.173"
     stack = IRShow.buildLineInfoNode(src.debuginfo, caller, stmtidx)
     for (i, di) in enumerate(stack)
         loc = Core.LineInfoNode(Main, di.method, di.file, di.line, zero(Int32))
         push!(locs, (loc, i-1))
     end
-    else # VERSION < v"1.12.0-DEV.173"
-    if isa(src, IRCode)
-        stack = IRShow.compute_loc_stack(src.linetable, src.stmts.line[stmtidx])
-        for (i, idx) in enumerate(stack)
-            line = src.linetable[idx]
-            line.line == 0 && continue
-            push!(locs, (src.linetable[idx], i-1))
-        end
-    else
-        push!(locs, (src.linetable[src.codelocs[stmtidx]], 0))
-    end
-    end # @static if
     return locs
 end
 

@@ -3,9 +3,7 @@ if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
 
-# @static if VERSION ≥ v"1.12.0-DEV.1581"
 # InteractiveUtils.@activate Compiler # use the Compiler.jl stdlib for the Base reflections too
-# end
 
 function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
                       optimize=true, interp=Cthulhu.CC.NativeInterpreter())

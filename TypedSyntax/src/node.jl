@@ -12,11 +12,7 @@ TypedSyntaxData(sd::SyntaxData, src::CodeInfo, typ=nothing) = TypedSyntaxData(sd
 const TypedSyntaxNode = JuliaSyntax.TreeNode{TypedSyntaxData}
 const MaybeTypedSyntaxNode = Union{SyntaxNode,TypedSyntaxNode}
 
-@static if VERSION ≥ v"1.11.0-DEV.337"
-    const SlotType = Core.SlotNumber
-else
-    const SlotType = Union{Core.SlotNumber, Core.Compiler.TypedSlot}
-end
+const SlotType = Core.SlotNumber
 
 struct NoDefaultValue end
 const no_default_value = NoDefaultValue()
@@ -313,21 +309,7 @@ function sparam_name(mi::MethodInstance, i::Int)
     return sig.var.name
 end
 
-@static if isdefined(Base, :method_instances)
 using Base: method_instances
-else
-function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
-    tt = Base.signature_type(f, t)
-    results = Core.MethodInstance[]
-    # this make a better error message than the typeassert that follows
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    for match in Base._methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match)
-        push!(results, instance)
-    end
-    return results
-end
-end
 
 struct InferredResult
     mi::MethodInstance
@@ -360,12 +342,8 @@ function code_typed1_by_method_instance(mi::MethodInstance;
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection should not be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
-    @static if VERSION < v"1.12.0-DEV.669"
-        code, rt = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
-    else
-        code = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
-        rt = code.rettype
-    end
+    code = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    rt = code.rettype
     code isa CodeInfo || error("no code is available for ", mi)
     debuginfo === :none && Base.remove_linenums!(code)
     return Pair{CodeInfo,Any}(code, rt)
@@ -450,7 +428,6 @@ end
 
 ## utility function to extract the line number at a particular program counter (ignoring inlining).
 ## return <= 0 if there is no line number change caused by this statement
-@static if VERSION ≥ v"1.12.0-DEV.173"
 function getline(lt::Core.DebugInfo, i::Int)
     while true
         codeloc = Base.IRShow.getdebugidx(lt, i)
@@ -498,26 +475,6 @@ function getnextline(lt::Core.DebugInfo, i::Int, Δline)
     return typemax(Int)
 end
 
-else # VERSION < v"1.12.0-DEV.173"
-function getline(lt, j)
-    linfo = (j == 0 ? first(lt) : lt[j])::Core.LineInfoNode
-    linfo.inlined_at == 0 && return linfo.line
-    @assert linfo.method === Symbol("macro expansion")
-    linfo = lt[linfo.inlined_at]::Core.LineInfoNode
-    return linfo.line
-end
-function getnextline(lt, j, Δline)
-    j == 0 && return typemax(Int)
-    j += 1
-    while j <= length(lt)
-        linfo = lt[j]::Core.LineInfoNode
-        linfo.inlined_at == 0 && return linfo.line + Δline
-        j += 1
-    end
-    return typemax(Int)
-end
-end # @static if
-
 # Main logic for mapping `src.code[i]` to node(s) in the SyntaxNode tree
 # Success: when we map it to a unique node
 # Δline is the (Revise) offset of the line number
@@ -550,13 +507,8 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     # Append (to `mapped`) all nodes in `targets` that are consistent with the line number of the `i`th stmt
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
-        @static if VERSION ≥ v"1.12.0-DEV.173"
-            j = i
-            lt = src.debuginfo
-        else
-            j = src.codelocs[i]
-            lt = src.linetable::Vector
-        end
+        j = i
+        lt = src.debuginfo
         start = getline(lt, j) + Δline
         stop = getnextline(lt, j, Δline) - 1
         linerange = start : stop
