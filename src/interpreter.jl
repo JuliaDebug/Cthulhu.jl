@@ -16,19 +16,18 @@ struct OptimizedSource
     effects::Effects
 end
 
-const InferenceKey = Union{MethodInstance,InferenceResult}
-const InferenceDict{T} = IdDict{InferenceKey, T}
-const OptimizationDict = IdDict{MethodInstance, CodeInstance}
+const InferenceKey = Union{CodeInstance,InferenceResult} # TODO make this `CodeInstance` fully
+const InferenceDict{InferenceValue} = IdDict{InferenceKey, InferenceValue}
 const PC2Remarks = Vector{Pair{Int, String}}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
 
+mutable struct CthulhuCacheToken end
+
 struct CthulhuInterpreter <: AbstractInterpreter
+    cache_token::CthulhuCacheToken
     native::AbstractInterpreter
-
     unopt::InferenceDict{InferredSource}
-    opt::OptimizationDict
-
     remarks::InferenceDict{PC2Remarks}
     effects::InferenceDict{PC2Effects}
     exception_types::InferenceDict{PC2Excts}
@@ -36,13 +35,15 @@ end
 
 function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
     return CthulhuInterpreter(
+        CthulhuCacheToken(),
         interp,
         InferenceDict{InferredSource}(),
-        OptimizationDict(),
         InferenceDict{PC2Remarks}(),
         InferenceDict{PC2Effects}(),
         InferenceDict{PC2Excts}())
 end
+
+Base.show(io::IO, interp::CthulhuInterpreter) = print(io, typeof(interp), "(...)")
 
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 @static if VERSION ≥ v"1.11.0-DEV.851"
@@ -68,30 +69,51 @@ CC.method_table(interp::CthulhuInterpreter) = CC.method_table(interp.native)
 # internal code cache, technically, there's no requirement to supply `cache_owner` as an
 # identifier for the internal code cache. However, the definition of `cache_owner` is
 # necessary for utilizing the default `CodeInstance` constructor, define the overload here.
-struct CthulhuCacheToken
-    token
-end
-CC.cache_owner(interp::CthulhuInterpreter) = CthulhuCacheToken(CC.cache_owner(interp.native))
+CC.cache_owner(interp::CthulhuInterpreter) = interp.cache_token
 end
 
-struct CthulhuCache
-    cache::OptimizationDict
+function get_inference_key(state::InferenceState)
+    @static if VERSION ≥ v"1.12-"
+        result = state.result
+        if CC.is_constproped(state)
+            return result # TODO result.ci_as_edge?
+        elseif isdefined(result, :ci)
+            return result.ci
+        else
+            return nothing
+        end
+    else
+        return CC.any(state.result.overridden_by_const) ? state.result : state.linfo
+    end
 end
-CC.code_cache(interp::CthulhuInterpreter) = WorldView(CthulhuCache(interp.opt), WorldRange(get_inference_world(interp)))
-CC.get(wvc::WorldView{CthulhuCache}, mi::MethodInstance, default) = get(wvc.cache.cache, mi, default)
-CC.haskey(wvc::WorldView{CthulhuCache}, mi::MethodInstance) = haskey(wvc.cache.cache, mi)
-CC.setindex!(wvc::WorldView{CthulhuCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.cache, ci, mi)
 
 function CC.add_remark!(interp::CthulhuInterpreter, sv::InferenceState, msg)
-    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
+    key = get_inference_key(sv)
+    key === nothing && return nothing
     push!(get!(PC2Remarks, interp.remarks, key), sv.currpc=>msg)
 end
 
 function CC.merge_effects!(interp::CthulhuInterpreter, sv::InferenceState, effects::Effects)
-    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(sv) : CC.any(sv.result.overridden_by_const)) ? sv.result : sv.linfo
+    key = get_inference_key(sv)
+    key === nothing && return nothing
     pc2effects = get!(interp.effects, key, PC2Effects())
-    pc2effects[sv.currpc] = CC.merge_effects(get!(pc2effects, sv.currpc, EFFECTS_TOTAL), effects)
+    old_effects = get(pc2effects, sv.currpc, EFFECTS_TOTAL)
+    pc2effects[sv.currpc] = CC.merge_effects(effects, old_effects)
     @invoke CC.merge_effects!(interp::AbstractInterpreter, sv::InferenceState, effects::Effects)
+end
+
+@static if VERSION ≥ v"1.11.0-DEV.1127"
+function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct),
+                                  frame::InferenceState)
+    key = get_inference_key(frame)
+    if key !== nothing
+        pc2excts = get!(PC2Excts, interp.exception_types, key)
+        old_exct = get(pc2excts, frame.currpc, Union{})
+        pc2excts[frame.currpc] = CC.tmerge(CC.typeinf_lattice(interp), exct, old_exct)
+    end
+    return @invoke CC.update_exc_bestguess!(interp::AbstractInterpreter, exct::Any,
+                                            frame::InferenceState)
+end
 end
 
 function InferredSource(state::InferenceState)
@@ -108,16 +130,20 @@ end
 @static if VERSION ≥ v"1.12-"
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
-    key = CC.is_constproped(state) ? state.result : state.linfo
-    interp.unopt[key] = InferredSource(state)
+    key = get_inference_key(state)
+    if key !== nothing
+        interp.unopt[key] = InferredSource(state)
+    end
     return res
 end
 
 else
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter)
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter)
-    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(state) : CC.any(state.result.overridden_by_const)) ? state.result : state.linfo
-    interp.unopt[key] = InferredSource(state)
+    key = get_inference_key(state)
+    if key !== nothing
+        interp.unopt[key] = InferredSource(state)
+    end
     return res
 end
 end
@@ -143,20 +169,11 @@ function set_cthulhu_source!(result::InferenceResult)
 end
 
 @static if VERSION ≥ v"1.12.0-DEV.1823"
-@static if VERSION ≥ v"1.12-"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
-else
-CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(CC.finishinfer!, state, interp)
-end
-@static if VERSION ≥ v"1.13.0-DEV.242" || VERSION ≥ v"1.12.0-DEV.2112"
+@static if VERSION ≥ v"1.12-"
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
-end
-elseif VERSION ≥ v"1.12.0-DEV.1988"
-function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt)
-    set_cthulhu_source!(caller.result)
-    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
 end
 else
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState)
@@ -259,7 +276,7 @@ end
 
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
-    inferred = @atomic :monotonic code.inferred
+    inferred = code.inferred
     inferred === nothing && return nothing
     inferred = inferred::OptimizedSource
     ir = CC.copy(inferred.ir)
@@ -276,15 +293,4 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     end
     return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
-end
-
-@static if VERSION ≥ v"1.11.0-DEV.1127"
-function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct),
-                                  frame::InferenceState)
-    key = (@static VERSION ≥ v"1.12.0-DEV.317" ? CC.is_constproped(frame) : CC.any(frame.result.overridden_by_const)) ? frame.result : frame.linfo
-    pc2excts = get!(PC2Excts, interp.exception_types, key)
-    pc2excts[frame.currpc] = CC.tmerge(CC.typeinf_lattice(interp), exct, get(pc2excts, frame.currpc, Union{}))
-    return @invoke CC.update_exc_bestguess!(interp::AbstractInterpreter, exct::Any,
-                                            frame::InferenceState)
-end
 end

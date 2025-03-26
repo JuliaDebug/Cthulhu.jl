@@ -4,14 +4,13 @@
 Required overloads:
 - `Cthulhu.lookup(interp::AbstractInterpreter, curs::AbstractCursor, optimize::Bool)`
 - `Cthulhu.lookup_constproped(interp::AbstractInterpreter, curs::AbstractCursor, override::InferenceResult, optimize::Bool)`
-- `Cthulhu.get_mi(curs::AbstractCursor) -> MethodInstance`
-- `Cthulhu.get_optimized_codeinst(interp::AbstractInterpreter, curs::AbstractCursor) -> CodeInstance`
+- `Cthulhu.get_ci(curs::AbstractCursor) -> CodeInstance`
 - `Cthulhu.update_cursor(curs::AbstractCursor, mi::MethodInstance)`
 - `Cthulhu.navigate(curs::AbstractCursor, callsite::Callsite) -> AbstractCursor`
 """
 abstract type AbstractCursor; end
 struct CthulhuCursor <: AbstractCursor
-    mi::MethodInstance
+    ci::CodeInstance
 end
 
 lookup(interp::AbstractInterpreter, curs::AbstractCursor, optimize::Bool) = error(lazy"""
@@ -19,7 +18,7 @@ missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$lookup(interp::$(typeof(interp)), curs::$(typeof(curs)), optimize::Bool)` interface.
 """)
 lookup(interp::CthulhuInterpreter, curs::CthulhuCursor, optimize::Bool) =
-    lookup(interp, get_mi(curs), optimize)
+    lookup(interp, get_ci(curs), optimize)
 
 lookup_constproped(interp::AbstractInterpreter, curs::AbstractCursor, override::InferenceResult, optimize::Bool) = error(lazy"""
 missing `$AbstractCursor` API:
@@ -35,23 +34,17 @@ missing `$AbstractCursor` API:
 lookup_semiconcrete(interp::CthulhuInterpreter, ::CthulhuCursor, override::SemiConcreteCallInfo, optimize::Bool) =
     lookup_semiconcrete(interp, override, optimize)
 
-get_mi(curs::AbstractCursor) = error(lazy"""
+get_ci(curs::AbstractCursor) = error(lazy"""
 missing `$AbstractCursor` API:
-`$(typeof(curs))` is required to implement the `$get_mi(curs::$(typeof(curs))) -> MethodInstance` interface.
+`$(typeof(curs))` is required to implement the `$get_ci(curs::$(typeof(curs))) -> CodeInstance` interface.
 """)
-get_mi(curs::CthulhuCursor) = curs.mi
+get_ci(curs::CthulhuCursor) = curs.ci
 
-get_optimized_codeinst(interp::AbstractInterpreter, curs::AbstractCursor) = error(lazy"""
-missing `$AbstractCursor` API:
-`$(typeof(curs))` is required to implement the `$get_optimized_codeinst(interp::$(typeof(interp)), curs::$(typeof(curs))) -> CodeInstance` interface.
-""")
-get_optimized_codeinst(interp::CthulhuInterpreter, curs::CthulhuCursor) = interp.opt[curs.mi]
-
-update_cursor(curs::AbstractCursor, ::MethodInstance) = error(lazy"""
+update_cursor(curs::AbstractCursor, ::CodeInstance) = error(lazy"""
 missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$update_cursor(curs::$(typeof(curs)), mi::MethodInstance) -> $(typeof(curs))` interface.
 """)
-update_cursor(curs::CthulhuCursor, mi::MethodInstance) = CthulhuCursor(mi)
+update_cursor(curs::CthulhuCursor, ci::CodeInstance) = CthulhuCursor(ci)
 
 # TODO: This interface is incomplete, should probably also take a current cursor,
 # or maybe be `CallSite based`
@@ -60,31 +53,26 @@ missing `$AbstractInterpreter` API:
 `$(typeof(interp))` is required to implement the `$can_descend(interp::$(typeof(interp)), @nospecialize(key), optimize::Bool) -> Bool` interface.
 """)
 can_descend(interp::CthulhuInterpreter, @nospecialize(key), optimize::Bool) =
-    haskey(optimize ? interp.opt : interp.unopt, key)
+    haskey(optimize ? key isa CodeInstance : interp.unopt, key)
 
 navigate(curs::AbstractCursor, callsite::Callsite) = error(lazy"""
 missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$navigate(curs::$(typeof(curs)), callsite::Callsite) -> AbstractCursor` interface.
 """)
-navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_mi(callsite))
+navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_ci(callsite))
 
-get_remarks(::AbstractInterpreter, ::InferenceKey) = nothing
-get_remarks(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.remarks, key, nothing)
+get_pc_remarks(::AbstractInterpreter, ::InferenceKey) = nothing
+get_pc_remarks(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.remarks, key, nothing)
 
-get_effects(::AbstractInterpreter, ::InferenceKey) = nothing
-get_effects(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.effects, key, nothing)
+get_pc_effects(::AbstractInterpreter, ::InferenceKey) = nothing
+get_pc_effects(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.effects, key, nothing)
 
-get_excts(::AbstractInterpreter, ::InferenceKey) = nothing
-get_excts(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.exception_types, key, nothing)
+get_pc_exct(::AbstractInterpreter, ::InferenceKey) = nothing
+get_pc_exct(interp::CthulhuInterpreter, key::InferenceKey) = get(interp.exception_types, key, nothing)
 
 # This method is optional, but should be implemented if there is
 # a sensible default cursor for a MethodInstance
-AbstractCursor(interp::AbstractInterpreter, mi::MethodInstance) = CthulhuCursor(mi)
-
-function get_effects(interp::CthulhuInterpreter, mi::MethodInstance, opt::Bool)
-    effects = opt ? interp.opt : interp.unopt
-    return haskey(effects, mi) ? get_effects(effects[mi]) : Effects()
-end
+AbstractCursor(interp::AbstractInterpreter, ci::CodeInstance) = CthulhuCursor(ci)
 
 mutable struct CustomToggle
     onoff::Bool

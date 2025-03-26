@@ -10,7 +10,7 @@ include("IRShowSandbox.jl")
     tf = (true, false)
 
     @testset "optimize: $optimize" for optimize in tf
-        (; src, infos, mi, rt, exct, effects, slottypes) = cthulhu_info(IRShowSandbox.foo, (Int, Int); optimize);
+        (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(IRShowSandbox.foo, (Int, Int); optimize);
 
         @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
             @testset "iswarn: $iswarn" for iswarn in tf
@@ -22,7 +22,7 @@ include("IRShowSandbox.jl")
 
                             s = sprint(; context=:color=>true) do io
                                 Cthulhu.cthulhu_typed(io, debuginfo,
-                                                      src, rt, exct, effects, mi;
+                                                      src, rt, exct, effects, codeinst;
                                                       iswarn, hide_type_stable, inline_cost, type_annotations)
                             end
                             s = strip_base_linenums(s)

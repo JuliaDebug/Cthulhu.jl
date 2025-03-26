@@ -117,29 +117,21 @@ is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(t
 
 cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
 function cthulhu_warntype(io::IO, debuginfo::AnyDebugInfo,
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, mi::Union{Nothing,MethodInstance}=nothing;
+    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, codeinst::Union{Nothing,CodeInstance}=nothing;
     hide_type_stable::Bool=false, inline_cost::Bool=false, optimize::Bool=false,
     interp::CthulhuInterpreter=CthulhuInterpreter())
     if inline_cost
         isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
     end
-    cthulhu_typed(io, debuginfo, src, rt, nothing, effects, mi; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
+    cthulhu_typed(io, debuginfo, src, rt, nothing, effects, codeinst; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
     return nothing
 end
-
-# # for API consistency with the others
-# function cthulhu_typed(io::IO, mi::MethodInstance, optimize, debuginfo, params, config::CthulhuConfig)
-#     interp = mkinterp(mi)
-#     (; src, rt, infos, slottypes) = lookup(interp, mi, optimize)
-#     ci = Cthulhu.preprocess_ci!(src, mi, optimize, config)
-#     cthulhu_typed(io, debuginfo, src, rt, mi)
-# end
 
 cthulhu_typed(io::IO, debuginfo::DebugInfo, args...; kwargs...) =
     cthulhu_typed(io, Symbol(debuginfo), args...; kwargs...)
 function cthulhu_typed(io::IO, debuginfo::Symbol,
     src::Union{CodeInfo,IRCode}, @nospecialize(rt), @nospecialize(exct),
-    effects::Effects, mi::Union{Nothing,MethodInstance};
+    effects::Effects, codeinst::Union{Nothing,CodeInstance};
     iswarn::Bool=false, hide_type_stable::Bool=false, optimize::Bool=true,
     pc2remarks::Union{Nothing,PC2Remarks}=nothing,
     pc2effects::Union{Nothing,PC2Effects}=nothing,
@@ -147,6 +139,8 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     inline_cost::Bool=false, type_annotations::Bool=true, annotate_source::Bool=false,
     inlay_types_vscode::Bool=false, diagnostics_vscode::Bool=false, jump_always::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
+
+    mi = codeinst === nothing ? nothing : codeinst.def
 
     debuginfo = IRShow.debuginfo(debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -188,12 +182,14 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (diagnostics_vscode || inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints=>vscode_io[:inlay_hints], :diagnostics=>vscode_io[:diagnostics])
-                callsite_mis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
-                visited_mis = Set{MethodInstance}((mi,))
-                add_callsites!(callsite_mis, visited_mis, callsite_diagnostics, mi; optimize, annotate_source, interp)
-                for callsite in values(callsite_mis)
-                    if !isnothing(callsite)
-                        descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                if haskey(interp.unopt, codeinst) # don't process const-proped results
+                    callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                    visited_cis = Set{CodeInstance}((codeinst,))
+                    add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, codeinst; optimize, annotate_source, interp)
+                    for callsite in values(callsite_cis)
+                        if !isnothing(callsite)
+                            descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
+                        end
                     end
                 end
             end
@@ -316,11 +312,11 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         end
         println(lambda_io)
     else
-        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
+        isa(codeinst, CodeInstance) || throw("`codeinst::CodeInstance` is required")
         cfg = src isa IRCode ? src.cfg : CC.compute_basic_blocks(src.code)
         max_bb_idx_size = length(string(length(cfg.blocks)))
         str = irshow_config.line_info_preprinter(lambda_io, " "^(max_bb_idx_size + 2), -1)
-        callsite = Callsite(0, MICallInfo(mi, rettype, effects, exct), :invoke)
+        callsite = Callsite(0, EdgeCallInfo(codeinst, rettype, effects, exct), :invoke)
         println(lambda_io, "∘ ", "─"^(max_bb_idx_size), str, " ", callsite)
     end
 
@@ -339,13 +335,14 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     end
 end
 
-function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::AbstractVector,
-    mi::MethodInstance, source_mi::MethodInstance=mi;
+function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::AbstractVector,
+    ci::CodeInstance, source_ci::CodeInstance=ci;
     optimize::Bool=true, annotate_source::Bool=false,
     interp::AbstractInterpreter=CthulhuInterpreter())
+    mi = ci.def
 
     callsites, src, rt = try
-        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, mi, optimize & !annotate_source)
+        (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, ci, optimize & !annotate_source)
 
         src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
         if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
@@ -356,23 +353,28 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
 
         # We pass false as it doesn't affect callsites and skips fetching the method definition
         # using CodeTracking which is slow
-        callsites, _ = find_callsites(interp, src, infos, mi, slottypes, optimize & !annotate_source, false)
+        callsites, _ = find_callsites(interp, src, infos, ci, slottypes, optimize & !annotate_source, false)
         callsites, src, rt
     catch
         return nothing
     end
 
     for callsite in callsites
-        callsite_mi = callsite.info isa MultiCallInfo ? nothing : get_mi(callsite)
+        info = callsite.info
+        isa(info, MultiCallInfo) && continue
+        isa(info, ConstPropCallInfo) && continue
+        isa(info, SemiConcreteCallInfo) && continue
 
-        if !isnothing(callsite_mi) && callsite_mi ∉ visited_mis
-            push!(visited_mis, callsite_mi)
-            add_callsites!(d, visited_mis, diagnostics, callsite_mi, source_mi; optimize, annotate_source, interp)
-        end
+        callsite_ci = get_ci(callsite)
+        isnothing(callsite_ci) && continue
+        in(callsite_ci, visited_cis) && continue
+
+        push!(visited_cis, callsite_ci)
+        add_callsites!(d, visited_cis, diagnostics, callsite_ci, source_ci; optimize, annotate_source, interp)
     end
 
-    # Check if callsite is not just filling in default arguments and defined in same file as source_mi
-    if mi == source_mi || mi.def.file != source_mi.def.file
+    # Check if callsite is not just filling in default arguments and defined in same file as source_ci
+    if ci == source_ci || ci.def.def.file != source_ci.def.def.file
         return nothing
     end
     tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
@@ -396,7 +398,7 @@ function add_callsites!(d::AbstractDict, visited_mis::AbstractSet, diagnostics::
             )
         end
     else
-        d[key] = (mi=mi, tsn=tsn)
+        d[key] = (ci=ci, tsn=tsn)
     end
 end
 
@@ -435,7 +437,7 @@ It can be used with the following functions:
 * `code_native([::IO,] ::Bookmark)`: pretty-print native code
 """
 struct Bookmark
-    mi::MethodInstance
+    ci::CodeInstance
     interp::AbstractInterpreter
 end
 
@@ -456,21 +458,21 @@ function Base.show(
     optimize::Bool=false, debuginfo::AnyDebugInfo=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
     world = get_inference_world(b.interp)
     CI, rt = InteractiveUtils.code_typed(b; optimize)
-    (; interp, mi) = b
-    (; effects) = lookup(interp, mi, optimize)
+    (; interp, ci) = b
+    (; effects) = lookup(interp, ci, optimize)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, MICallInfo(b.mi, rt, Effects()), :invoke))
+        print(io, Callsite(-1, EdgeCallInfo(b.ci, rt, Effects()), :invoke))
         print(io, " (world: ", world, ")")
         return
     end
     println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, debuginfo, CI, rt, nothing, effects, b.mi; iswarn, optimize, hide_type_stable, b.interp)
+    cthulhu_typed(io, debuginfo, CI, rt, nothing, effects, b.ci; iswarn, optimize, hide_type_stable, b.interp)
 end
 
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
-    (; interp, mi) = b
-    (; src, rt, codeinf) = lookup(interp, mi, optimize)
-    src = preprocess_ci!(src, mi, optimize, CONFIG)
+    (; interp, ci) = b
+    (; src, rt, codeinf) = lookup(interp, ci, optimize)
+    src = preprocess_ci!(src, ci.def, optimize, CONFIG)
     if src isa IRCode
         CC.replace_code_newstyle!(codeinf, src)
     end
@@ -488,9 +490,9 @@ function InteractiveUtils.code_warntype(
     kw...,
 )
     CI, rt = InteractiveUtils.code_typed(b; kw...)
-    (; interp, mi) = b
-    (; effects) = lookup(interp, mi, optimize)
-    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.mi; optimize, hide_type_stable, b.interp)
+    (; interp, ci) = b
+    (; effects) = lookup(interp, ci, optimize)
+    cthulhu_warntype(io, debuginfo, CI, rt, effects, b.ci; optimize, hide_type_stable, b.interp)
 end
 
 InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdout::IO, b; kw...)
@@ -508,7 +510,7 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         config = CONFIG,
     ) = cthulhu_llvm(
         io,
-        b.mi,
+        b.ci.def,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -527,7 +529,7 @@ InteractiveUtils.code_native(b::Bookmark; kw...) =
         config = CONFIG,
     ) = cthulhu_native(
         io,
-        b.mi,
+        b.ci.def,
         optimize,
         debuginfo === :source,
         get_inference_world(b.interp),
@@ -545,10 +547,10 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = CC.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.ci.def, true)
         return cthulhu_llvm(
             io,
-            b.mi,
+            b.ci.def,
             src,
             optimize,
             debuginfo === :source,
@@ -568,10 +570,10 @@ else
         raw = false,
         config = CONFIG,
     )
-        src = CC.typeinf_code(b.interp, b.mi, true)
+        src = CC.typeinf_code(b.interp, b.ci.def, true)
         return cthulhu_native(
             io,
-            b.mi,
+            b.ci.def,
             src,
             optimize,
             debuginfo === :source,

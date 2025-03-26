@@ -13,30 +13,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - version: '1' # current stable
+          # - version: '1' # current stable
+          #   os: ubuntu-latest
+          #   arch: x64
+          - version: '1.12-nightly' # lowest version supported
             os: ubuntu-latest
             arch: x64
-          - version: '1.10' # lowest version supported
+          - version: '1.13-nightly' # next release
             os: ubuntu-latest
             arch: x64
-          - version: '1.12-nightly' # next release
-            os: ubuntu-latest
-            arch: x64
-          - version: 'nightly' # dev
-            os: ubuntu-latest
-            arch: x64
-          - version: '1' # x86 ubuntu
-            os: ubuntu-latest
-            arch: x86
-          - version: '1' # x86 windows
-            os: windows-latest
-            arch: x86
-          - version: '1' # x64 windows
-            os: windows-latest
-            arch: x64
-          - version: '1' # x64 macOS
-            os: macos-latest
-            arch: x64
+          # - version: 'nightly' # dev
+          #   os: ubuntu-latest
+          #   arch: x64
+          # - version: '1' # x86 ubuntu
+          #   os: ubuntu-latest
+          #   arch: x86
+          # - version: '1' # x86 windows
+          #   os: windows-latest
+          #   arch: x86
+          # - version: '1' # x64 windows
+          #   os: windows-latest
+          #   arch: x64
+          # - version: '1' # x64 macOS
+          #   os: macos-latest
+          #   arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
