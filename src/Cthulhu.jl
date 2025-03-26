@@ -197,8 +197,8 @@ using PrecompileTools
 
         @compile_workload descend(gcd, (Int, Int); terminal=term)
 
-    #     using Compiler
-    #     @compile_workload descend(gcd, (Int, Int); terminal=term)
+        # using Compiler
+        # @compile_workload descend(gcd, (Int, Int); terminal=term)
 
         # declare we are done with streams
         close(input.in)
