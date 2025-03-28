@@ -1,4 +1,4 @@
-using JuliaSyntax: JuliaSyntax, SyntaxNode, children, child, sourcetext, kind, @K_str
+using JuliaSyntax: JuliaSyntax, SyntaxNode, children, sourcetext, kind, @K_str
 using TypedSyntax: TypedSyntax, TypedSyntaxNode
 using Dates, InteractiveUtils, Test
 using Core.Compiler: widenconst
@@ -38,9 +38,9 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(rootnode, TSN.g, (Int16, Int16, Int32))
     sig, body = children(tsn)
     @test length(children(sig)) == 4
-    @test children(body)[2].typ === Int32
+    @test body[2].typ === Int32
     # Check that `x` gets an assigned type
-    nodex = child(body, 1, 1)
+    nodex = body[1][1]
     @test nodex.typ === Int16
 
     # Target ambiguity
@@ -49,22 +49,22 @@ include("test_module.jl")
     TSN.eval(Expr(rootnode))
     tsn = TypedSyntaxNode(rootnode, TSN.math, (Int,))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 1), :x, Int)
-    @test has_name_typ(child(body, 3, 2, 1), :x, Int)
-    pi4 = child(body, 3, 2, 3)
+    @test has_name_typ(body[1], :x, Int)
+    @test has_name_typ(body[3][2][1], :x, Int)
+    pi4 = body[3][2][3]
     @test kind(pi4) == K"call" && pi4.typ === Core.Const(π / 4)
     tsn = TypedSyntaxNode(TSN.has2xa, (Real,))
     @test tsn.typ === Any
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :x, Real)
-    @test has_name_typ(child(body, 1, 2), :x, Real)
-    @test has_name_typ(child(body, 1, 1), :x, Any)
+    @test has_name_typ(sig[2], :x, Real)
+    @test has_name_typ(body[1][2], :x, Real)
+    @test has_name_typ(body[1][1], :x, Any)
     tsn = TypedSyntaxNode(TSN.has2xb, (Real,))
     @test tsn.typ === Any
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :x, Real)
-    @test has_name_typ(child(body, 1, 2), :x, Real)
-    @test has_name_typ(child(body, 1, 1), :x, Any)
+    @test has_name_typ(sig[2], :x, Real)
+    @test has_name_typ(body[1][2], :x, Real)
+    @test has_name_typ(body[1][1], :x, Any)
 
     # Target duplication
     st = "math2(x) = sin(x) + sin(x)"
@@ -73,11 +73,11 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(rootnode, TSN.math2, (Int,))
     sig, body = children(tsn)
     @test body.typ === Float64
-    @test_broken child(body, 1).typ === Float64
+    @test_broken body[1].typ === Float64
     tsn = TypedSyntaxNode(TSN.simplef, Tuple{Float32, Int32})
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 1, 2, 1), :a, Float32)
-    @test has_name_typ(child(body, 1, 2, 3), :a, Float32)
+    @test has_name_typ(body[1][2][1], :a, Float32)
+    @test has_name_typ(body[1][2][3], :a, Float32)
 
     # Inner functions
     for (st, idxsinner, idxsouter) in (
@@ -92,32 +92,34 @@ include("test_module.jl")
         TSN.eval(Expr(rootnode))
         tsn = TypedSyntaxNode(rootnode, @invokelatest(TSN.firstfirst), (Vector{Vector{Real}},))
         sig, body = children(tsn)
-        @test child(body, idxsinner...).typ === nothing
-        @test child(body, idxsouter...).typ === Vector{Real}
+        getindexitr(body, idx, idxs...) = getindexitr(body[idx], idxs...)
+        getindexitr(body) = body
+        @test getindexitr(body, idxsinner...).typ === nothing
+        @test getindexitr(body, idxsouter...).typ === Vector{Real}
     end
 
     # body macros
     tsn = TypedSyntaxNode(TSN.hasmacro, (Tuple{Int,Int}, Char))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 2, 2, 2), :t, Tuple{Int,Int})
-    @test has_name_typ(child(body, 2, 3), :x, Char)
+    @test has_name_typ(body[2][2][2], :t, Tuple{Int,Int})
+    @test has_name_typ(body[2][3], :x, Char)
 
     # signature macros
     tsn = TypedSyntaxNode(TSN.nospec, (Any,))
     sig, body = children(tsn)
-    node = child(sig, 2)
+    node = sig[2]
     @test kind(node) == K"macrocall"
-    @test child(node, 1).val == Symbol("@nospecialize")
-    @test has_name_typ(child(node, 2), :x, Any)
+    @test node[1].val == Symbol("@nospecialize")
+    @test has_name_typ(node[2], :x, Any)
     @test body.typ === Any
     tsn = TypedSyntaxNode(TSN.nospec2, (AbstractVecOrMat,))
     sig, body = children(tsn)
-    node = child(sig, 2)
+    node = sig[2]
     @test kind(node) == K"macrocall"
-    @test child(node, 1).val == Symbol("@nospecialize")
-    arg = child(node, 2)
+    @test node[1].val == Symbol("@nospecialize")
+    arg = node[2]
     @test kind(arg) == K"::"
-    @test has_name_typ(child(arg, 1), :x, AbstractVecOrMat)
+    @test has_name_typ(arg[1], :x, AbstractVecOrMat)
     @test body.typ === Any
     tsn = TypedSyntaxNode(eltype, (TSN.ReadOnly,))
     @test tsn.typ === Type{Int}
@@ -126,19 +128,19 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.withrt, (IO,))
     @test tsn.typ === Bool
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 1, 2, 1), :io, IO)
+    @test has_name_typ(sig[1][2][1], :io, IO)
     tsn = TypedSyntaxNode(TSN.mytimes, (Bool,Float16))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 1, 1, 2, 1), :x, Bool)
-    @test has_name_typ(child(sig, 1, 1, 3, 1), :y, Float16)
+    @test has_name_typ(sig[1][1][2][1], :x, Bool)
+    @test has_name_typ(sig[1][1][3][1], :y, Float16)
 
     # operators
     tsn = TypedSyntaxNode(+, (TSN.MyInt, TSN.MyInt))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2, 1), :a, TSN.MyInt)
+    @test has_name_typ(sig[2][1], :a, TSN.MyInt)
     tsn = TypedSyntaxNode(-, (TSN.MyInt, TSN.MyInt))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2, 1), :a, TSN.MyInt)
+    @test has_name_typ(sig[2][1], :a, TSN.MyInt)
 
     # `ref` indexing
     st = """
@@ -150,15 +152,15 @@ include("test_module.jl")
     TSN.eval(Expr(rootnode))
     tsn = TypedSyntaxNode(rootnode, TSN.setlist!, (Vector{Vector{Float32}}, Vector{Vector{UInt8}}, Int, Int))
     sig, body = children(tsn)
-    nodelist = child(body, 1, 2, 1, 1)                             # `listget`
+    nodelist = body[1][2][1][1]                             # `listget`
     @test sourcetext(nodelist) == "listget" && nodelist.typ === Vector{Vector{UInt8}}
     @test nodelist.parent.typ === Vector{UInt8}                    # `listget[i]`
-    @test sourcetext(child(nodelist.parent, 2)) == "i"
+    @test sourcetext(nodelist.parent[2]) == "i"
     @test nodelist.parent.parent.typ === UInt8                     # `listget[i][j]`
 
-    nodelist = child(body, 1, 1, 1, 1)                             # `listset`
+    nodelist = body[1][1][1][1]                             # `listset`
     @test sourcetext(nodelist) == "listset" && nodelist.typ === Vector{Vector{Float32}}
-    @test sourcetext(child(nodelist.parent, 2)) == "i+1"
+    @test sourcetext(nodelist.parent[2]) == "i+1"
     @test nodelist.parent.typ === Vector{Float32}                  # `listset[i+1]`
     @test kind(nodelist.parent.parent.parent) == K"="              # the `setindex!` call
 
@@ -174,43 +176,43 @@ include("test_module.jl")
     TSN.eval(Expr(rootnode))
     tsn = TypedSyntaxNode(rootnode, TSN.callfindmin, (Vector{Float64},))
     sig, body = children(tsn)
-    t = child(body, 1, 1)
+    t = body[1][1]
     @test kind(t) == K"tuple"
-    @test has_name_typ(child(t, 1), :val, Float64)
-    @test has_name_typ(child(t, 2), :idx, Int)
-    t = child(body, 2, 1)
+    @test has_name_typ(t[1], :val, Float64)
+    @test has_name_typ(t[2], :idx, Int)
+    t = body[2][1]
     @test kind(t) == K"tuple"
-    @test has_name_typ(child(t, 1), :x, Int)
-    @test has_name_typ(child(t, 2), :y, Float64)
+    @test has_name_typ(t[1], :x, Int)
+    @test has_name_typ(t[2], :y, Float64)
 
     tsn = TypedSyntaxNode(TSN.bar381, (TSN.Foo381,))
     sig, body = children(tsn)
-    lhs = child(body, 1, 1)
-    @test has_name_typ(child(lhs, 1), :a, Any)
-    @test has_name_typ(child(lhs, 2, 1), :b1, Any)
-    @test has_name_typ(child(lhs, 2, 2), :b2, Any)
+    lhs = body[1][1]
+    @test has_name_typ(lhs[1], :a, Any)
+    @test has_name_typ(lhs[2][1], :b1, Any)
+    @test has_name_typ(lhs[2][2], :b2, Any)
 
     tsn = TypedSyntaxNode(TSN.extrema2, (Tuple{Int,Int}, Tuple{Int,Int}))
     sig, body = children(tsn)
-    @test child(sig, 2).typ == Tuple{Int,Int}
+    @test sig[2].typ == Tuple{Int,Int}
 
     g = Base.Generator(identity, 1.0:4.0)
     tsn = TypedSyntaxNode(TSN.typeof_first_item, (typeof(g),))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 3, 1, 1), :val, Float64)
+    @test has_name_typ(body[3][1][1], :val, Float64)
 
     # GlobalRefs
     tsn = TypedSyntaxNode(TSN.getchar1, (Int,))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 1), :charset1, Any)
+    @test has_name_typ(body[1], :charset1, Any)
     tsn = TypedSyntaxNode(TSN.getchar2, (Int,))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 1), :charset2, typeof(TSN.charset2))
+    @test has_name_typ(body[1], :charset2, typeof(TSN.charset2))
 
     # Generators & comprehensions
     tsn = TypedSyntaxNode(TSN.boxedgenerator368, (Int,))
     sig, body = children(tsn)
-    cnode = child(body, 2)
+    cnode = body[2]
     @test kind(cnode) == K"comprehension"
     @test cnode.typ == Vector
     tsn = TypedSyntaxNode(TSN.nestedgenerators, (Int, Int))
@@ -225,7 +227,7 @@ include("test_module.jl")
     sig, body = children(tsn)
     @test kind(body) == K"comprehension"
     @test body.typ <: Vector
-    node = child(body, 1)
+    node = body[1]
     @test kind(node) == K"generator"
     @test TypedSyntax.unwrapinternal(node.typ) <: Base.Generator
 
@@ -233,34 +235,34 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.fbroadcast, (Vector{Int},))
     sig, body = children(tsn)
     @test body.typ === Float64
-    cnode = child(body, 2)
+    cnode = body[2]
     @test kind(cnode) == K"dotcall"
     @test cnode.typ == Vector{Float64}
     tsn = TypedSyntaxNode(TSN.fbroadcast_explicit, (Vector{Int},))
     sig, body = children(tsn)
     @test body.typ === Float64
-    cnode = child(body, 2)
+    cnode = body[2]
     @test cnode.typ === Vector{Float64}
-    cnodef = child(cnode, 1, 2, 1)
+    cnodef = cnode[1][2][1]
     @test kind(cnodef) == K"Identifier" && cnodef.val == :materialize
-    cnode = child(body, 2, 2)
-    cnodef = child(cnode, 1, 2, 1)
+    cnode = body[2][2]
+    cnodef = cnode[1][2][1]
     @test kind(cnodef) == K"Identifier" && cnodef.val == :broadcasted
     @test cnode.typ <: Broadcast.Broadcasted
     tsn = TypedSyntaxNode(TSN.fbroadcast2, (Vector{Int},))
     sig, body = children(tsn)
-    node = child(body, 2)
+    node = body[2]
     src = tsn.typedsource
     @test kind(node) == K"dotcall" && node.typ === Vector{String}
     tsn = TypedSyntaxNode(TSN.bcast415, (TSN.B415, Float64))
     sig, body = children(tsn)
-    @test child(body, 1).typ === Float64
+    @test body[1].typ === Float64
 
     # Misc lowering
     tsn = TypedSyntaxNode(TSN.myunique, (AbstractRange,))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 2), :r, AbstractRange)
-    @test_broken has_name_typ(child(body, 3, 2), :r, AbstractRange)
+    @test has_name_typ(body[2], :r, AbstractRange)
+    @test_broken has_name_typ(body[3][2], :r, AbstractRange)
 
     # kwfuncs
     st = """
@@ -284,93 +286,93 @@ include("test_module.jl")
     m = which(TSN.avoidzero, (Int,))
     tsn = TypedSyntaxNode(rootnode, Base.bodyfunction(m), (Bool, typeof(TSN.avoidzero), Int,))
     sig, body = children(tsn)
-    isz = child(body, 2, 1, 1)
-    @test kind(isz) == K"call" && child(isz, 1).val == :iszero
+    isz = body[2][1][1]
+    @test kind(isz) == K"call" && isz[1].val == :iszero
     @test isz.typ === Bool
-    @test child(body, 2, 1, 2).typ === Core.Const(NaN)
+    @test body[2][1][2].typ === Core.Const(NaN)
 
     # default positional arguments
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :x, Float32)
-    @test has_name_notyp(child(sig, 3, 1), :y)
+    @test has_name_typ(sig[2], :x, Float32)
+    @test has_name_notyp(sig[3][1], :y)
     # there is no argument 2 in tsn.typedsource
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,Int))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :x, Float32)
-    nodearg = child(sig, 3)
+    @test has_name_typ(sig[2], :x, Float32)
+    nodearg = sig[3]
     @test kind(nodearg) == K"="
-    @test has_name_typ(child(nodearg, 1), :y, Int)
+    @test has_name_typ(nodearg[1], :y, Int)
     # default position args that are types
     tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, (Type{Float32},))
     sig, body = children(tsn)
-    arg = child(sig, 1, 2, 1)
+    arg = sig[1][2][1]
     @test kind(arg) == K"::" && arg.typ === Core.Const(Float32)
     tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, ())
     sig, body = children(tsn)
-    arg = child(sig, 1, 2, 1)
+    arg = sig[1][2][1]
     @test_broken kind(arg) == K"::" && arg.typ === Type{Rational{Int}}  # maybe this shouldn't even be true
 
     # macros in function definition
     tsn = TypedSyntaxNode(TSN.mysin, (Int,))
     @test kind(tsn) == K"macrocall"
-    sig, body = children(child(tsn, 2))
-    @test has_name_typ(child(sig, 2, 1), :x, Int)
-    @test has_name_typ(child(body, 1, 1), :xf, Float64)
+    sig, body = children(tsn[2])
+    @test has_name_typ(sig[2][1], :x, Int)
+    @test has_name_typ(body[1][1], :xf, Float64)
 
     # generated functions
     # This mostly tests that we don't choke on assignments to variables whose names do not show up in the source
     tsn = TypedSyntaxNode(TSN.generated385, (Vector{Int},))
     @test kind(tsn) == K"macrocall"
-    sig, body = children(child(tsn, 2))
-    @test has_name_typ(child(sig, 2, 1), :dest, Vector{Int})
+    sig, body = children(tsn[2])
+    @test has_name_typ(sig[2][1], :dest, Vector{Int})
 
     # `for` loops
     tsn = TypedSyntaxNode(TSN.summer, (Vector{Float64},))
     @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :list, Vector{Float64})
-    @test has_name_typ(child(body, 1, 1), :s, Core.Const(0))
-    @test has_name_typ(child(body, 2, 1, 1), :x, Float64)
-    node = child(body, 2, 2, 1)
-    @test kind(node) == K"+="
-    @test has_name_typ(child(node, 1), :s, Float64) ||   # if this line runs, the LHS now has type `Float64`
-          has_name_typ(child(node, 1), :s, Union{Float64, Int})   # but Julia 1.11 infers this still as the Union
-    @test has_name_typ(child(node, 2), :x, Float64)
-    @test has_name_typ(child(body, 3, 1), :s, Union{Float64, Int})
+    @test has_name_typ(sig[2], :list, Vector{Float64})
+    @test has_name_typ(body[1][1], :s, Core.Const(0))
+    @test has_name_typ(body[2][1][1], :x, Float64)
+    node = body[2][2][1]
+    @test kind(node) == K"op="
+    @test has_name_typ(node[1], :s, Float64) ||   # if this line runs, the LHS now has type `Float64`
+          has_name_typ(node[1], :s, Union{Float64, Int})   # but Julia 1.11 infers this still as the Union
+    @test has_name_typ(node[2], :x, Float64)
+    @test has_name_typ(body[3][1], :s, Union{Float64, Int})
     tsn = TypedSyntaxNode(TSN.summer_iterate, (Vector{Float64},))
     @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 2, 1), :ret, Union{Nothing, Tuple{Float64, Int}})
-    @test has_name_typ(child(body, 3, 2, 1, 1, 1), :x, Float64)
+    @test has_name_typ(body[2][1], :ret, Union{Nothing, Tuple{Float64, Int}})
+    @test has_name_typ(body[3][2][1][1][1], :x, Float64)
 
     # `where`, unnamed arguments, and types-as-arguments
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     sig, body = children(tsn)
-    @test child(sig, 1, 2).typ === Vector{Int16}
+    @test sig[1][2].typ === Vector{Int16}
     @test body.typ === Core.Const(Int16(0))
-    @test has_name_typ(child(body, 2), :T, (Core.Const(Int16), Type{Int16}))
+    @test has_name_typ(body[2], :T, (Core.Const(Int16), Type{Int16}))
     # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
     m = @which TSN.vaparam(rand(3,3), ("hello", false))
     mi = first(specializations(m))
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 1, 3, 1), :I, Tuple{String, Bool})
+    @test has_name_typ(sig[1][3][1], :I, Tuple{String, Bool})
     tsn = TypedSyntaxNode(TSN.myplustv, (Char, UInt8))
     sig, body = children(TypedSyntax.get_function_def(tsn))
-    @test has_name_typ(child(sig, 1, 2, 1), :x, Char)
-    @test has_name_typ(child(sig, 1, 3, 1), :y, UInt8)
+    @test has_name_typ(sig[1][2][1], :x, Char)
+    @test has_name_typ(sig[1][3][1], :y, UInt8)
     tsn = TypedSyntaxNode(TSN.myplustv, (AbstractChar, UInt8))
     sig, body = children(TypedSyntax.get_function_def(tsn))
-    @test has_name_typ(child(sig, 1, 2, 1), :x, AbstractChar)
-    @test has_name_typ(child(sig, 1, 3, 1), :y, UInt8)
+    @test has_name_typ(sig[1][2][1], :x, AbstractChar)
+    @test has_name_typ(sig[1][3][1], :y, UInt8)
     tsn = TypedSyntaxNode(TSN.cb, (Vector{Int16}, Int))
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 2), :Bool, Type{Bool})
+    @test has_name_typ(body[2], :Bool, Type{Bool})
     tsn = TypedSyntaxNode(TSN.unnamedargs, (Type{Matrix{Float32}}, Type{Int}))
     sig, body = children(tsn)
-    @test child(sig, 1, 2).typ === Core.Const(Matrix{Float32})
-    @test child(sig, 1, 3).typ === Core.Const(Int)
+    @test sig[1][2].typ === Core.Const(Matrix{Float32})
+    @test sig[1][3].typ === Core.Const(Int)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, Int)
     fbody = Base.bodyfunction(m)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int; a="hello")
@@ -386,10 +388,10 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test child(sig, 1, 2).typ === Core.Const(Matrix{Float32})
-    @test child(sig, 1, 3).typ === Core.Const(Int)
-    @test has_name_notyp(child(sig, 1, 4, 1), :c)
-    @test has_name_typ(child(sig, 1, 5, 1, 1), :a, String)
+    @test sig[1][2].typ === Core.Const(Matrix{Float32})
+    @test sig[1][3].typ === Core.Const(Int)
+    @test has_name_notyp(sig[1][4][1], :c)
+    @test has_name_typ(sig[1][5][1][1], :a, String)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, :c; a="hello")
     mi = nothing
     for _mi in specializations(m)
@@ -401,10 +403,10 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test child(sig, 1, 2).typ === Core.Const(Matrix{Float32})
-    @test child(sig, 1, 3).typ === Core.Const(Int)
-    @test child(sig, 1, 4, 1).typ === Symbol
-    @test child(sig, 1, 5, 1, 1).typ === String
+    @test sig[1][2].typ === Core.Const(Matrix{Float32})
+    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][4][1].typ === Symbol
+    @test sig[1][5][1][1].typ === String
     mbody = only(methods(fbody))
     mi = nothing
     for _mi in specializations(mbody)
@@ -416,61 +418,61 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test child(sig, 1, 2).typ === Core.Const(Matrix{Float32})
-    @test child(sig, 1, 3).typ === Core.Const(Int)
-    @test child(sig, 1, 4, 1).typ === Symbol
-    @test child(sig, 1, 5, 1, 1).typ === String
+    @test sig[1][2].typ === Core.Const(Matrix{Float32})
+    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][4][1].typ === Symbol
+    @test sig[1][5][1][1].typ === String
     tsn = TypedSyntaxNode(TSN.unnamedargs2, (Type{Matrix}, Symbol))
     sig, body = children(tsn)
-    @test child(sig, 2).typ === Type{Matrix}
-    @test child(sig, 3, 1).typ === Symbol
-    @test has_name_notyp(child(sig, 4, 1, 1, 1), :padding)
+    @test sig[2].typ === Type{Matrix}
+    @test sig[3][1].typ === Symbol
+    @test has_name_notyp(sig[4][1][1][1], :padding)
 
     # Values as static_parameters
     tsn = TypedSyntaxNode(TSN.val, (Val{4},))
     sig, body = children(tsn)
-    @test TypedSyntax.child(body, 1, 1, 1).typ == Core.Const(4)
+    @test TypedSyntax.body[1][1][1].typ == Core.Const(4)
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
     sig, body = children(tsn)
-    nodeva = child(sig, 1, 2)
+    nodeva = sig[1][2]
     @test kind(nodeva) == K"..."
-    @test has_name_typ(child(nodeva, 1, 1), :X, Tuple{Int,Int})
+    @test has_name_typ(nodeva[1][1], :X, Tuple{Int,Int})
     tsn = TypedSyntaxNode(TSN.cbva, (Matrix{Float32}, Int, Int))
     sig, body = children(tsn)
     @test body.typ === Bool
-    @test has_name_typ(child(body, 2), :Bool, Type{Bool})
-    @test has_name_typ(child(body, 3), :a, Matrix{Float32})
-    nodeva = child(body, 4)
+    @test has_name_typ(body[2], :Bool, Type{Bool})
+    @test has_name_typ(body[3], :a, Matrix{Float32})
+    nodeva = body[4]
     @test kind(nodeva) == K"..."
-    @test has_name_typ(child(nodeva, 1), :i, Tuple{Int,Int})
+    @test has_name_typ(nodeva[1], :i, Tuple{Int,Int})
     tsn = TypedSyntaxNode(TSN.splats, (Tuple{Int,Int}, Tuple{Int}))
     sig, body = children(tsn)
     @test body.typ === Vector{Int}
-    @test has_name_typ(child(body, 2, 1), :x, Tuple{Int,Int})
-    @test has_name_typ(child(body, 3, 1), :y, Tuple{Int})
+    @test has_name_typ(body[2][1], :x, Tuple{Int,Int})
+    @test has_name_typ(body[3][1], :y, Tuple{Int})
     m = @which TSN.anykwargs(; cat=1, dog=2)
     mi = first(specializations(m))
     tsn = TypedSyntaxNode(mi)
     src = tsn.typedsource
     @test Symbol("kwargs...") ∈ src.slotnames
     sig, body = children(tsn)
-    @test TypedSyntax.unwrapinternal(child(body, 2, 1).typ) <: Base.Iterators.Pairs
+    @test TypedSyntax.unwrapinternal(body[2][1].typ) <: Base.Iterators.Pairs
 
     # quoted symbols that could be confused for function definition
     tsn = TypedSyntaxNode(TSN.isexpreq, (Expr,))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2, 1), :ex, Expr)
+    @test has_name_typ(sig[2][1], :ex, Expr)
 
     # Unused statements
     tsn = TypedSyntaxNode(TSN.mycheckbounds, (Vector{Int}, Int))
     @test tsn.typ === Nothing
     sig, body = children(tsn)
-    errnode = child(body, 1, 2)
-    errf = child(errnode, 1)
+    errnode = body[1][2]
+    errf = errnode[1]
     @test errnode.typ === nothing && errf.typ === Core.Const(Base.throw_boundserror)
-    retnode = child(body, 2)
+    retnode = body[2]
     @test kind(retnode) == K"return"
     @test retnode.typ === Core.Const(nothing) || retnode.typ === nothing  # julia 1.10 doesn't assign a type to the Core.ReturnNode
 
@@ -478,18 +480,18 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.setglobal, (Char,))
     # Agnostic about whether it's good to tag the type of `myglobal`, but at least `val` should be tagged
     sig, body = children(tsn)
-    @test has_name_typ(child(body, 1, 1, 2), :val, Char)
+    @test has_name_typ(body[1][1][2], :val, Char)
 
     # DataTypes
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
     sig, body = children(tsn)
-    node = child(body, 1)
+    node = body[1]
     @test node.typ === Core.Const(Float64)
     tsn = TypedSyntaxNode(TSN.DefaultArray{Float32}, (Vector{Int}, Int))
     sig, body = children(tsn)
     @test kind(sig) == K"where"
-    @test kind(child(sig, 1)) == K"call"
-    f = child(sig, 1, 1)
+    @test kind(sig[1]) == K"call"
+    f = sig[1][1]
     @test kind(f) == K"curly" && f.typ === Type{TSN.DefaultArray{Float32}}
 
     # Field access & a more complex example
@@ -497,30 +499,30 @@ include("test_module.jl")
     @test tsn.typ === Float64
     sig, body = children(tsn)
     @test kind(body) == K"?"
-    @test child(body, 1).typ === Bool
-    nodeidx = child(body, 2)
+    @test body[1].typ === Bool
+    nodeidx = body[2]
     @test nodeidx.typ === Float64
-    @test child(nodeidx, 1).typ === Matrix{Float64}
-    default = child(body, 3)
+    @test nodeidx[1].typ === Matrix{Float64}
+    default = body[3]
     @test default.typ === Float64
-    @test child(default, 1).typ === TSN.DefaultArray{Float64,2,Matrix{Float64}}
+    @test default[1].typ === TSN.DefaultArray{Float64,2,Matrix{Float64}}
 
     # global
     tsn = TypedSyntaxNode(TSN.in_let, (Int,))
-    sig, body = children(child(tsn, 1))
-    @test has_name_typ(child(sig, 2), :x, Int)
+    sig, body = children(tsn[1])
+    @test has_name_typ(sig[2], :x, Int)
     @test_broken body.typ == Int
 
     # Construction from MethodInstance
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
     sig, body = children(tsn)
-    node = child(body, 1)
+    node = body[1]
     @test node.typ === Core.Const(Float64)
 
     # UnionAll in signature (issue #409)
     tsn = TypedSyntaxNode(Core.kwcall, (NamedTuple, typeof(issorted), Vector{Int}))
     sig, body = children(tsn)
-    @test has_name_typ(child(sig, 2), :itr, Vector{Int})
+    @test has_name_typ(sig[2], :itr, Vector{Int})
 
     # Empty `return` (issue #458)
     tsn = TypedSyntaxNode(TSN.f458, ())
