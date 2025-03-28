@@ -86,10 +86,10 @@ end
 
 # Recursive construction of the TypedSyntaxNode tree from the SyntaxNodeTree
 function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mappings)
-    if haschildren(parent) && tparent.children === nothing
+    if !is_leaf(parent) && tparent.children === nothing
         tparent.children = TypedSyntaxNode[]
     end
-    for child in children(parent)
+    for child in getchildren(parent)
         tnode = TypedSyntaxNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, gettyp(node2ssa, child, src)))
         if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
             tnode.typ = get(symtyps, child, nothing)
@@ -98,7 +98,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
         addchildren!(tnode, child, src, node2ssa, symtyps, mappings)
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
-    if kind(tparent) == K"return" && haschildren(tparent)
+    if kind(tparent) == K"return" && !is_leaf(tparent)
         childs = children(tparent)
         tparent.typ = isempty(childs) ? Nothing : only(childs).typ
     end
@@ -121,7 +121,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
             nchildren = length(children(arg))
             nchildren == 1 && return nothing, defaultval
             @assert nchildren == 2
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         if kind(arg) == K"$"
             return nothing, defaultval
@@ -132,14 +132,14 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
                 @assert kind(only(children(arg))) == K"$"
                 return nothing, defaultval
             end
-            @assert kind(arg) == K"quote"
+            @assert kind(arg) in KSet"quote $"
             arg = only(children(arg))
         end
         if kind(arg) == K"curly"
             arg = first(children(arg))
         end
         if kind(arg) == K"var"
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         kind(arg) == K"tuple" && return nothing, defaultval     # FIXME? see extrema2 test
         @assert kind(arg) == K"Identifier" || is_operator(arg)
@@ -147,7 +147,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
     end
 
     while kind(sig) ∈ KSet"where ::"   # handle MyType{T}(args...) and return-type annotations
-        sig = child(sig, 1)
+        sig = sig[1]
     end
     @assert kind(sig) == K"call"
     # First, match named args, since those have to be unique
@@ -241,14 +241,14 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         end
         idx == 0 && continue
         if kind(arg) == K"::" && length(children(arg)) == 2
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         arg.typ = slottypes[idx]
     end
 
     # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
     # Strip the type annotation from the function name
-    arg, _ = argidentifier(child(sig, 1))
+    arg, _ = argidentifier(sig[1])
     if arg !== nothing
         arg.typ = nothing
     end
@@ -264,8 +264,8 @@ function striparg(arg)
             arg = only(children(arg))
         end
         if kind(arg) == K"="
-            defaultval = child(arg, 2)
-            arg = child(arg, 1)
+            defaultval = arg[2]
+            arg = arg[1]
         end
         if kind(arg) == K"macrocall"
             arg = last(children(arg))    # FIXME: is the variable always the final argument?
@@ -352,9 +352,9 @@ end
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
     if kind(node) == K"=" && length(children(node)) >= 1
-        sig = child(node, 1)
+        sig = node[1]
         while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
-            sig = child(sig, 1)
+            sig = sig[1]
         end
         kind(sig) == K"call" && return true
     end
@@ -366,7 +366,7 @@ function get_function_def(rootnode)
     while kind(rootnode) ∈ KSet"macrocall global local const"
         idx = findlast(node -> is_function_def(node) || kind(node) == K"macrocall", children(rootnode))
         idx === nothing && break
-        rootnode = child(rootnode, idx)
+        rootnode = rootnode[idx]
     end
     return rootnode
 end
@@ -375,7 +375,7 @@ function num_positional_args(tsn::AbstractSyntaxNode)
     TypedSyntax.is_function_def(tsn) || return 0
     sig, _ = children(tsn)
     while kind(sig) ∈ KSet"where ::"
-        sig = child(sig, 1)
+        sig = sig[1]
     end
     @assert kind(sig) == K"call"
     for (i, node) in enumerate(children(sig))
@@ -392,7 +392,7 @@ function collect_symbol_nodes(rootnode)
     rootnode = get_function_def(rootnode)
     is_function_def(rootnode) || error("expected function definition, got ", sourcetext(rootnode))
     symlocs = Dict{Any,Vector{typeof(rootnode)}}()
-    return collect_symbol_nodes!(symlocs, child(rootnode, 2))
+    return collect_symbol_nodes!(symlocs, rootnode[2])
 end
 
 function collect_symbol_nodes!(symlocs::AbstractDict, node)
@@ -409,10 +409,10 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
         locs = get!(Vector{typeof(node)}, symlocs, node.val)
         push!(locs, node)
     end
-    if haschildren(node)
+    if !is_leaf(node)
         if kind(node) == K"do"
             # process only `g(args...)` in `g(args...) do ... end`
-            collect_symbol_nodes!(symlocs, child(node, 1))
+            collect_symbol_nodes!(symlocs, node[1])
         elseif kind(node) == K"generator"
             for c in Iterators.drop(children(node), 1)
                 collect_symbol_nodes!(symlocs, c)
@@ -560,7 +560,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                 argnode = p
                 p = argnode.parent::MaybeTypedSyntaxNode
             end
-            is_prec_assignment(p) && argnode == child(p, 1 + is_rhs)  # is it the correct side of an assignment?
+            is_prec_assignment(p) && argnode == p[1 + is_rhs]  # is it the correct side of an assignment?
         end
         return targets
     end
@@ -719,7 +719,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                         while !is_prec_assignment(lhsnode) && (lhsparent = lhsnode.parent; lhsparent !== nothing)
                             lhsnode = lhsparent
                         end
-                        lhsnode, found = find_identifier_or_tuplechild(child(lhsnode, 1), sym)
+                        lhsnode, found = find_identifier_or_tuplechild(lhsnode[1], sym)
                         if found
                             symtyps[lhsnode] = ssavaluetypes[i]
                         end
@@ -750,7 +750,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                                 for t in itr
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
-                                        is_prec_assignment(node) && t == child(node, 1) && continue
+                                        is_prec_assignment(node) && t == node[1] && continue
                                         symtyps[t] = if j > 0
                                             ssavaluetypes[j]
                                         elseif have_slottypes

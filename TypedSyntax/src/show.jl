@@ -1,5 +1,7 @@
 ## Extensions of JuliaSyntax to cover TypedSyntaxNode
 
+getchildren(node) = !is_leaf(node) ? children(node) : ()
+
 function Base.show(io::IO, ::MIME"text/plain", node::TypedSyntaxNode; show_byte_offsets=false)
     println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ type")
     JuliaSyntax._show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
@@ -12,18 +14,16 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     end
     val = node.val
-    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
-    isa(val, Symbol) ? string(val) : repr(val)
+    nodestr = !is_leaf(node) ? "[$(untokenize(head(node)))]" :
+        isa(val, Symbol) ? string(val) : repr(val)
     treestr = string(indent, nodestr)
     if node.typ !== nothing
         treestr = string(rpad(treestr, 40), "│$(node.typ)")
     end
     println(io, posstr, treestr)
-    if haschildren(node)
-        new_indent = indent*"  "
-        for n in children(node)
-            JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
-        end
+    new_indent = indent*"  "
+    for n in getchildren(node)
+        JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
     end
 end
 
@@ -66,14 +66,14 @@ end
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
-    if haschildren(node)
+    if !is_leaf(node)
         cs = children(node)
         if !isempty(cs)   # `haschildren(node)` returns `true` as long as the node has the *capacity* to store children
             position = catchup(io, first(children(node)), position, nd)
         end
     end
     _print(io, pre, node.source, position)
-    for (i, child) in enumerate(children(node))
+    for (i, child) in enumerate(getchildren(node))
         i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)

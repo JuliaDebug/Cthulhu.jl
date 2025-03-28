@@ -5,7 +5,7 @@ using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax
-using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, child, children
+using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, children
 using TypedSyntax
 using WidthLimitedIO
 
