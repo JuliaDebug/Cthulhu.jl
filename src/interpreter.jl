@@ -116,18 +116,24 @@ function CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycl
     return res
 end
 
+function retrieve_ir(opt::OptimizationState)
+    @static if VERSION ≥ v"1.13-"
+        optresult = opt.optresult::CC.OptimizationResult
+        optresult.simplified || CC.simplify_ir!(optresult)
+        return CC.compact!(copy(optresult.ir))
+    else
+        # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
+        return CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
+    end
+end
+
+@static if VERSION ≥ v"1.13-"
+
 function CC.transform_result_for_local_cache(interp::CthulhuInterpreter, result::InferenceResult)
     src = @invoke CC.transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
     isa(src, OptimizationState) || return src
     opt = src
-    @static if VERSION ≥ v"1.13-"
-        optresult = opt.optresult::CC.OptimizationResult
-        optresult.simplified || CC.simplify_ir!(optresult)
-        ir = CC.compact!(copy(optresult.ir))
-    else
-        # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
-        ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
-    end
+    ir = retrieve_ir(opt)
     return OptimizedSource(ir, opt.src, opt.src.inlineable, result.ipo_effects)
 end
 
@@ -137,6 +143,26 @@ function CC.transform_result_for_cache(interp::CthulhuInterpreter, result::Infer
     end
     result.src = CC.transform_result_for_local_cache(interp, result)
 end
+
+else
+
+function create_cthulhu_source(result::InferenceResult)
+    isa(result.src, OptimizationState) || return result.src
+    opt = result.src
+    ir = retrieve_ir(opt)
+    return OptimizedSource(ir, opt.src, opt.src.inlineable, result.ipo_effects)
+end
+
+function set_cthulhu_source!(result::InferenceResult)
+    result.src = create_cthulhu_source(result)
+end
+
+function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+    set_cthulhu_source!(caller.result)
+    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+end
+
+end # @static if
 
 function CC.src_inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt32)
