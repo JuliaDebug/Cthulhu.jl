@@ -1,7 +1,5 @@
 module generate_irshow
 
-using Cthulhu
-
 include("setup.jl")
 include("irshowutils.jl")
 include("IRShowSandbox.jl")

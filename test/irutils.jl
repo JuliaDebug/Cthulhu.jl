@@ -1,5 +1,4 @@
 using Core.IR
-using Cthulhu: Cthulhu
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 

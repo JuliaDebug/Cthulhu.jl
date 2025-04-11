@@ -1,8 +1,7 @@
 module test_Cthulhu
 
-using Test, Cthulhu, StaticArrays, Random
+using Test, StaticArrays, Random
 using Core: Const
-const CC = Cthulhu.CTHULHU_MODULE[].CC
 
 include("setup.jl")
 include("irutils.jl")
@@ -774,14 +773,13 @@ end
 @testset "ascend interface" begin
     m = Module()
     @eval m begin
-        using Cthulhu
         struct FunnyMI end
         struct HasName
             name::Symbol
         end
-        Cthulhu.method(::FunnyMI) = HasName(:funny)
+        $Cthulhu.method(::FunnyMI) = HasName(:funny)
         funny(c::Char) = "haha"
-        Cthulhu.specTypes(::FunnyMI) = Tuple{typeof(funny),Char}
+        $Cthulhu.specTypes(::FunnyMI) = Tuple{typeof(funny),Char}
     end
 
     io = IOBuffer()

@@ -1,8 +1,9 @@
 module test_codeview_vscode
 
-using Cthulhu, Test, Revise, REPL, ..VSCodeServer, TypedSyntax
+using Test, Revise, REPL, ..VSCodeServer, TypedSyntax
 import TypedSyntax: InlayHintKinds
 
+include("cthulhu.jl")
 include("test_vscode_example_functions.jl")
 
 @testset "VSCode descend test" begin

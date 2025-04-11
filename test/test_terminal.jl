@@ -1,9 +1,11 @@
 module test_terminal
 
-using Test, REPL, Cthulhu, Revise
+using Test, REPL, Revise
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
+
+include("cthulhu.jl")
 
 if !isdefined(@__MODULE__, :fake_terminal)
     @eval (@__MODULE__) begin
