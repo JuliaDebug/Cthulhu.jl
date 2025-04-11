@@ -119,7 +119,7 @@ end
 function create_cthulhu_source(@nospecialize(opt), effects::Effects)
     isa(opt, OptimizationState) || return opt
     @static if VERSION ≥ v"1.13-"
-        result = opt.result::CC.OptimizationResult
+        result = opt.optresult::CC.OptimizationResult
         result.simplified || CC.simplify_ir!(result)
         ir = CC.compact!(copy(result.ir))
     else
