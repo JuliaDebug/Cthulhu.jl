@@ -1,9 +1,11 @@
 module test_AbstractInterpreter
 
-using Test, Cthulhu
+using Test
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
+
+include("cthulhu.jl")
 
 @doc """
     @newinterp NewInterpreter [ephemeral_cache::Bool=false]
@@ -65,8 +67,6 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
         end)
     end
 end
-
-const CC = Cthulhu.CC
 
 # `OverlayMethodTable`
 # --------------------

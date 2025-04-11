@@ -1,12 +1,14 @@
-using Test, Cthulhu, InteractiveUtils
+using Test, InteractiveUtils
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
 
 # InteractiveUtils.@activate Compiler # use the Compiler.jl stdlib for the Base reflections too
 
+include("cthulhu.jl")
+
 function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
-                      optimize=true, interp=Cthulhu.CC.NativeInterpreter())
+                      optimize=true, interp=CC.NativeInterpreter())
     (interp, codeinst) = Cthulhu.mkinterp(f, tt; interp)
     (; src, rt, exct, infos, slottypes, effects) =
         Cthulhu.lookup(interp, codeinst, optimize; allow_no_src=true)

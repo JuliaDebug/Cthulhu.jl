@@ -1,6 +1,6 @@
 module tests_irshow
 
-using Cthulhu, Test, DeepDiffs
+using Test, DeepDiffs
 
 include("setup.jl")
 include("irshowutils.jl")

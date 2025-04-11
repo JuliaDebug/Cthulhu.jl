@@ -1,6 +1,6 @@
 module test_codeview
 
-using Cthulhu, Test, Revise
+using Test, Revise
 
 include("setup.jl")
 
