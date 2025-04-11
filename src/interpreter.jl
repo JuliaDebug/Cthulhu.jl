@@ -116,13 +116,13 @@ function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::
     return res
 end
 
-function create_cthulhu_source(interp::CthulhuInterpreter, result::InferenceResult, effects::Effects)
+function create_cthulhu_source(result::InferenceResult, effects::Effects)
     isa(result.src, OptimizationState) || return result.src
     opt = result.src
     @static if VERSION ≥ v"1.13-"
         optresult = opt.optresult::CC.OptimizationResult
         optresult.simplified || CC.simplify_ir!(optresult)
-        opt.src.inlining_cost = CC.compute_inlining_cost(interp, result, optresult)
+        opt.src.inlining_cost = CC.compute_inlining_cost(opt.inlining.interp, result, optresult)
         ir = CC.compact!(copy(optresult.ir))
     else
         # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
@@ -131,13 +131,13 @@ function create_cthulhu_source(interp::CthulhuInterpreter, result::InferenceResu
     return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
 end
 
-function set_cthulhu_source!(interp::CthulhuInterpreter, result::InferenceResult)
-    result.src = create_cthulhu_source(interp, result, result.ipo_effects)
+function set_cthulhu_source!(result::InferenceResult)
+    result.src = create_cthulhu_source(result, result.ipo_effects)
 end
 
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
-    set_cthulhu_source!(interp, caller.result)
+    set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
 end
 
@@ -150,7 +150,7 @@ function CC.src_inlining_policy(interp::CthulhuInterpreter,
         return false
     else
         @assert src isa CC.IRCode || src === nothing "invalid Cthulhu code cache"
-        # the default inlining policy may try additional effor to find the source in a local cache
+        # the default inlining policy may try additional effort to find the source in a local cache
         return @invoke CC.src_inlining_policy(interp::AbstractInterpreter,
             src::Any, info::CCCallInfo, stmt_flag::UInt32)
     end
