@@ -13,6 +13,11 @@
 > Generally, Julia's package manager automatically selects a compatible Cthulhu version for
 > your Julia installation.
 > If you simply want to use Cthulhu, running `pkg> add Cthulhu` will install an appropriate version.
+>
+> **Note for nightly users:**
+> If you're using the latest Julia nightly build, we recommend regularly checking that your
+> Cthulhu installation is up-to-date (`pkg> update Cthulhu`) to have compatibility with
+> recent internal changes.
 
 [^old-version-branch-ex]: For example, Cthulhu code compatible with Julia v1.10 and v1.11 is
   maintained in the [`2.16`](https://github.com/JuliaDebug/Cthulhu.jl/tree/2.16) branch.
