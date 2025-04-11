@@ -1,8 +1,21 @@
 # Cthulhu.jl [![CI](https://github.com/JuliaDebug/Cthulhu.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/JuliaDebug/Cthulhu.jl/actions/workflows/CI.yml)
 
-*The slow descent into madness*
+> *The slow descent into madness*
 
-:warning: The latest stable version is only compatible with Julia v1.8.5 and higher.
+> [!warning]
+> This package relies on internal APIs of the Julia base compiler.
+> As such, its behavior may change depending on your Julia version.
+> For maintenance reasons, the latest version of Cthulhu (typically managed in the `master`
+> branch) does not guarantee compatibility with older Julia versions.
+> Versions of Cthulhu compatible with earlier Julia releases may be maintained in dedicated branches[^old-version-branch-ex].
+>
+> Please refer to the `Project.toml` file for details on supported Julia versions.
+> Generally, Julia's package manager automatically selects a compatible Cthulhu version for
+> your Julia installation.
+> If you simply want to use Cthulhu, running `pkg> add Cthulhu` will install an appropriate version.
+
+[^old-version-branch-ex]: For example, Cthulhu code compatible with Julia v1.10 and v1.11 is
+  maintained in the [`2.16`](https://github.com/JuliaDebug/Cthulhu.jl/tree/2.16) branch.
 
 Cthulhu can help you debug type inference issues by recursively showing the
 type-inferred code until you find the exact point where inference gave up,
