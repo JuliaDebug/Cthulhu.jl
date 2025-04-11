@@ -132,6 +132,9 @@ function CC.transform_result_for_local_cache(interp::CthulhuInterpreter, result:
 end
 
 function CC.transform_result_for_cache(interp::CthulhuInterpreter, result::InferenceResult, edges::Core.SimpleVector)
+    if isa(result.src, CodeInfo)
+        result.src.edges = edges
+    end
     result.src = CC.transform_result_for_local_cache(interp, result)
 end
 
