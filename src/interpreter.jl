@@ -150,6 +150,9 @@ function cthulhu_finish(@specialize(finishfunc), frame::InferenceState, interp::
     return res
 end
 
+# Rebuild a `CC.UnionSplitApplyCallInfo` structure where inner `ApplyCallInfo`s wrap a `CthulhuCallInfo`.
+# Note that technically, `rt`/`exct`/`effects`/`refinements` are incorrect for each apply call as they
+# apply to the union split as a whole, not to individual branches. The idea is simply to preserve them.
 function pack_cthulhuinfo_in_unionsplit(call::CallMeta, info::CC.UnionSplitApplyCallInfo)
     infos = CC.ApplyCallInfo[]
     for apply in info.infos
@@ -159,6 +162,7 @@ function pack_cthulhuinfo_in_unionsplit(call::CallMeta, info::CC.UnionSplitApply
     return CC.UnionSplitApplyCallInfo(infos)
 end
 
+# Build a `CthulhuCallInfo` structure wrapping `CC.UnionSplitApplyCallInfo`.
 function unpack_cthulhuinfo_from_unionsplit(info::CC.UnionSplitApplyCallInfo)
     isempty(info.infos) && return nothing
     apply = info.infos[1]
