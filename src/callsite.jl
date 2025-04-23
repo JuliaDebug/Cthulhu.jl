@@ -172,6 +172,14 @@ get_ci(gci::CuCallInfo) = get_ci(gci.ci)
 get_rt(gci::CuCallInfo) = get_rt(gci.ci)
 get_effects(gci::CuCallInfo) = get_effects(gci.ci)
 
+struct CthulhuCallInfo <: CCCallInfo
+    meta::CallMeta
+end
+CC.add_edges_impl(edges::Vector{Any}, info::CthulhuCallInfo) = CC.add_edges!(edges, info.meta.info)
+CC.nsplit_impl(info::CthulhuCallInfo) = CC.nsplit(info.meta.info)
+CC.getsplit_impl(info::CthulhuCallInfo, idx::Int) = CC.getsplit(info.meta.info, idx)
+CC.getresult_impl(info::CthulhuCallInfo, idx::Int) = CC.getresult(info.meta.info, idx)
+
 struct Callsite
     id::Int # ssa-id
     info::CallInfo

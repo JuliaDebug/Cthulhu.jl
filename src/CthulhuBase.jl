@@ -11,7 +11,7 @@ using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
 using Core.IR
-using .CC: AbstractInterpreter, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
+using .CC: AbstractInterpreter, CallMeta, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
     EFFECTS_TOTAL, Effects, IncrementalCompact, InferenceParams, InferenceResult,
     InferenceState, IRCode, LimitedAccuracy, MethodMatchInfo, MethodResultPure,
     NativeInterpreter, NoCallInfo, OptimizationParams, OptimizationState,

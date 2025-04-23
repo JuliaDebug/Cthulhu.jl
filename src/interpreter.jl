@@ -19,6 +19,7 @@ end
 const InferenceKey = Union{CodeInstance,InferenceResult} # TODO make this `CodeInstance` fully
 const InferenceDict{InferenceValue} = IdDict{InferenceKey, InferenceValue}
 const PC2Remarks = Vector{Pair{Int, String}}
+const PC2CallMeta = Dict{Int, CallMeta}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
 
@@ -29,6 +30,7 @@ struct CthulhuInterpreter <: AbstractInterpreter
     native::AbstractInterpreter
     unopt::InferenceDict{InferredSource}
     remarks::InferenceDict{PC2Remarks}
+    calls::InferenceDict{PC2CallMeta}
     effects::InferenceDict{PC2Effects}
     exception_types::InferenceDict{PC2Excts}
 end
@@ -39,6 +41,7 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         interp,
         InferenceDict{InferredSource}(),
         InferenceDict{PC2Remarks}(),
+        InferenceDict{PC2CallMeta}(),
         InferenceDict{PC2Effects}(),
         InferenceDict{PC2Excts}())
 end
@@ -96,6 +99,21 @@ function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct
                                             frame::InferenceState)
 end
 
+function CC.abstract_call(interp::CthulhuInterpreter, arginfo::CC.ArgInfo, sstate::CC.StatementState, sv::InferenceState)
+    call = @invoke CC.abstract_call(interp::AbstractInterpreter, arginfo::CC.ArgInfo, sstate::CC.StatementState, sv::InferenceState)
+    if isa(sv, InferenceState)
+        key = get_inference_key(sv)
+        if key !== nothing
+            CC.Future{Any}(call, interp, sv) do call, interp, sv
+                calls = get!(PC2CallMeta, interp.calls, key)
+                calls[sv.currpc] = call
+                nothing
+            end
+        end
+    end
+    return call
+end
+
 function InferredSource(state::InferenceState)
     unoptsrc = copy(state.src)
     exct = state.result.exc_result
@@ -107,13 +125,51 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
-    res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
-    key = get_inference_key(state)
-    if key !== nothing
-        interp.unopt[key] = InferredSource(state)
+function cthulhu_finish(@specialize(finishfunc), frame::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
+    res = @invoke finishfunc(frame::InferenceState, interp::AbstractInterpreter, cycleid::Int)
+    key = get_inference_key(frame)
+    key === nothing && return res
+    interp.unopt[key] = InferredSource(frame)
+
+    # Wrap `CallInfo`s with `CthulhuCallInfo`s post-inference.
+    calls = get(interp.calls, key, nothing)
+    isnothing(calls) && return res
+    for (i, info) in enumerate(frame.stmt_info)
+        info === NoCallInfo() && continue
+        call = get(calls, i, nothing)
+        call === nothing && continue
+        if isa(info, CC.UnionSplitApplyCallInfo)
+            # XXX: `UnionSplitApplyCallInfo` is specially handled in `CC.inline_apply!`,
+            # so we can't shove it under a `CthulhuCallInfo`.
+            frame.stmt_info[i] = pack_cthulhuinfo_in_unionsplit(call, info)
+        else
+            frame.stmt_info[i] = CthulhuCallInfo(call)
+        end
     end
+
     return res
+end
+
+function pack_cthulhuinfo_in_unionsplit(call::CallMeta, info::CC.UnionSplitApplyCallInfo)
+    infos = CC.ApplyCallInfo[]
+    for apply in info.infos
+        meta = CallMeta(call.rt, call.exct, call.effects, apply.call, call.refinements)
+        push!(infos, CC.ApplyCallInfo(CthulhuCallInfo(meta), apply.arginfo))
+    end
+    return CC.UnionSplitApplyCallInfo(infos)
+end
+
+function unpack_cthulhuinfo_from_unionsplit(info::CC.UnionSplitApplyCallInfo)
+    isempty(info.infos) && return nothing
+    apply = info.infos[1]
+    isa(apply.call, CthulhuCallInfo) || return nothing
+    (; rt, exct, effects, refinements) = apply.call.meta
+    infos = CC.ApplyCallInfo[]
+    for apply in info.infos
+        push!(infos, CC.ApplyCallInfo(apply.call.meta.info, apply.arginfo))
+    end
+    call = CallMeta(rt, exct, effects, CC.UnionSplitApplyCallInfo(infos), refinements)
+    return CthulhuCallInfo(call)
 end
 
 function create_cthulhu_source(result::InferenceResult, effects::Effects)
