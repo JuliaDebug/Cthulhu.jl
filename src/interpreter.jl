@@ -125,15 +125,24 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-function cthulhu_finish(@specialize(finishfunc), frame::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
-    res = @invoke finishfunc(frame::InferenceState, interp::AbstractInterpreter, cycleid::Int)
+@static if VERSION ≥ v"1.13-"
+function _finishinfer!(frame::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
+    return @invoke CC.finishinfer!(frame::InferenceState, interp::AbstractInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
+end
+else
+function _finishinfer!(frame::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
+    return @invoke CC.finishinfer!(frame::InferenceState, interp::AbstractInterpreter, cycleid::Int)
+end
+end
+
+function cthulhu_finish(result::Union{Nothing, InferenceResult}, frame::InferenceState, interp::CthulhuInterpreter)
     key = get_inference_key(frame)
-    key === nothing && return res
+    key === nothing && return result
     interp.unopt[key] = InferredSource(frame)
 
     # Wrap `CallInfo`s with `CthulhuCallInfo`s post-inference.
     calls = get(interp.calls, key, nothing)
-    isnothing(calls) && return res
+    isnothing(calls) && return result
     for (i, info) in enumerate(frame.stmt_info)
         info === NoCallInfo() && continue
         call = get(calls, i, nothing)
@@ -147,7 +156,7 @@ function cthulhu_finish(@specialize(finishfunc), frame::InferenceState, interp::
         end
     end
 
-    return res
+    return result
 end
 
 # Rebuild a `CC.UnionSplitApplyCallInfo` structure where inner `ApplyCallInfo`s wrap a `CthulhuCallInfo`.
@@ -195,7 +204,12 @@ function set_cthulhu_source!(result::InferenceResult)
     result.src = create_cthulhu_source(result, result.ipo_effects)
 end
 
-CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
+@static if VERSION ≥ v"1.13-"
+CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance}) = cthulhu_finish(_finishinfer!(state, interp, cycleid, opt_cache), state, interp)
+else
+CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(_finishinfer!(state, interp, cycleid), state, interp)
+end
+
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
