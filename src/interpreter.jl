@@ -107,15 +107,6 @@ function InferredSource(state::InferenceState)
         exct)
 end
 
-function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
-    res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
-    key = get_inference_key(state)
-    if key !== nothing
-        interp.unopt[key] = InferredSource(state)
-    end
-    return res
-end
-
 function create_cthulhu_source(result::InferenceResult, effects::Effects)
     isa(result.src, OptimizationState) || return result.src
     opt = result.src
@@ -135,7 +126,28 @@ function set_cthulhu_source!(result::InferenceResult)
     result.src = create_cthulhu_source(result, result.ipo_effects)
 end
 
+@static if VERSION ≥ v"1.13-"
+CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance}) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid, opt_cache)
+function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
+    res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
+    key = get_inference_key(state)
+    if key !== nothing
+        interp.unopt[key] = InferredSource(state)
+    end
+    return res
+end
+else
+function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
+    res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int)
+    key = get_inference_key(state)
+    if key !== nothing
+        interp.unopt[key] = InferredSource(state)
+    end
+    return res
+end
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid)
+end
+
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     set_cthulhu_source!(caller.result)
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
