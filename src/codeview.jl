@@ -344,7 +344,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     # e.g. if f(x) = x is called with different types we print nothing.
     key = (mi.def.file, mi.def.line)
     if haskey(d, key)
-        if !isnothing(d[key]) && mi != d[key].mi
+        if !isnothing(d[key]) && mi != d[key].ci.def
             d[key] = nothing
             push!(diagnostics,
                 TypedSyntax.Diagnostic(
