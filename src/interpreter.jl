@@ -126,7 +126,7 @@ function set_cthulhu_source!(result::InferenceResult)
     result.src = create_cthulhu_source(result, result.ipo_effects)
 end
 
-if VERSION ≥ v"1.13-"
+@static if VERSION ≥ v"1.13-"
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance}) = cthulhu_finish(CC.finishinfer!, state, interp, cycleid, opt_cache)
 function cthulhu_finish(@specialize(finishfunc), state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
     res = @invoke finishfunc(state::InferenceState, interp::AbstractInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance})
