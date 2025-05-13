@@ -11,7 +11,7 @@ using WidthLimitedIO
 
 using Core: MethodInstance, MethodMatch
 using Core.IR
-using .CC: AbstractInterpreter, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
+using .CC: AbstractInterpreter, CallMeta, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
     EFFECTS_TOTAL, Effects, IncrementalCompact, InferenceParams, InferenceResult,
     InferenceState, IRCode, LimitedAccuracy, MethodMatchInfo, MethodResultPure,
     NativeInterpreter, NoCallInfo, OptimizationParams, OptimizationState,
@@ -469,7 +469,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 if sourcenode !== nothing
                     show_sub_callsites = let callsite=callsite
                         map(info.callinfos) do ci
-                            p = Base.unwrap_unionall(ci.def.specTypes).parameters
+                            p = Base.unwrap_unionall(get_ci(ci).def.specTypes).parameters
                             if isa(sourcenode, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(JuliaSyntax.children(sourcenode)) + 1
                                 newnode = copy(sourcenode)
                                 for (i, child) in enumerate(JuliaSyntax.children(newnode))

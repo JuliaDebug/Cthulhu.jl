@@ -33,7 +33,18 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
         if stmt_infos !== nothing && is_call_expr(stmt, optimize)
             info = stmt_infos[id]
             if info !== nothing
-                rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
+                if isa(info, CC.UnionSplitApplyCallInfo)
+                    info = something(unpack_cthulhuinfo_from_unionsplit(info), info)
+                end
+                if isa(info, CthulhuCallInfo)
+                    # We have a `CallMeta` available.
+                    (; info, rt, exct, effects) = info.meta
+                    @assert !isa(info, CthulhuCallInfo)
+                else
+                    rt = ignorelimited(argextype(SSAValue(id), CI, sptypes, slottypes))
+                    exct = isnothing(pc2excts) ? nothing : get(pc2excts, id, nothing)
+                    effects = nothing
+                end
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
                 local args = stmt.args
@@ -50,8 +61,7 @@ function find_callsites(interp::AbstractInterpreter, CI::Union{CodeInfo,IRCode},
                     t = argextype(args[i], CI, sptypes, slottypes)
                     argtypes[i] = ignorelimited(t)
                 end
-                exct = isnothing(pc2excts) ? nothing : get(pc2excts, id, nothing)
-                callinfos = process_info(interp, info, argtypes, rt, optimize, exct)
+                callinfos = process_info(interp, info, argtypes, rt, optimize, exct, effects)
                 isempty(callinfos) && continue
                 callsite = let
                     if length(callinfos) == 1
@@ -146,8 +156,8 @@ end
 
 function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInfo),
                       argtypes::ArgTypes, @nospecialize(rt), optimize::Bool,
-                      @nospecialize(exct))
-    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize, exct)
+                      @nospecialize(exct), effects::Union{Effects, Nothing})
+    process_recursive(@nospecialize(newinfo)) = process_info(interp, newinfo, argtypes, rt, optimize, exct, effects)
 
     if isa(info, MethodResultPure)
         if isa(info.info, CC.ReturnTypeCallInfo)
@@ -162,7 +172,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
             if edge === nothing
                 RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
             else
-                effects = get_effects(edge)
+                effects = @something(effects, get_effects(edge))
                 EdgeCallInfo(edge, rt, effects, exct)
             end
         end for edge in info.edges if edge !== nothing]
@@ -183,7 +193,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
     elseif isa(info, CC.InvokeCallInfo)
         edge = info.edge
         if edge !== nothing
-            effects = get_effects(edge)
+            effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
             innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
         else
@@ -194,7 +204,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
     elseif isa(info, CC.OpaqueClosureCallInfo)
         edge = info.edge
         if edge !== nothing
-            effects = get_effects(edge)
+            effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
             innerinfo = process_const_info(interp, thisinfo, argtypes, rt, info.result, optimize, exct)
         else
@@ -212,7 +222,7 @@ function process_info(interp::AbstractInterpreter, @nospecialize(info::CCCallInf
         return CallInfo[]
     elseif isa(info, CC.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]
-        callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize, exct)
+        callinfos = process_info(interp, info.info, newargtypes, unwrapType(widenconst(rt)), optimize, exct, effects)
         if length(callinfos) == 1
             vmi = only(callinfos)
         else
