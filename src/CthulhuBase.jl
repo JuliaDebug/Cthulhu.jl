@@ -142,7 +142,11 @@ function __descend_with_error_handling(args...; terminal=default_terminal(), kwa
     return nothing
 end
 
-default_terminal() = REPL.LineEdit.terminal(Base.active_repl)
+function default_terminal()
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
+    return term
+end
 
 descend_impl(@nospecialize(args...); kwargs...) =
     _descend_with_error_handling(args...; iswarn=true, kwargs...)
