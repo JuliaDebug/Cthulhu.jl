@@ -40,9 +40,7 @@ macro with_try_stderr(out, expr)
 end
 
 @testset "Terminal" begin
-    if isdefined(Base, :active_repl)
-        @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
-    end
+    @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     colorize(use_color::Bool, c::Char) = Cthulhu.stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
