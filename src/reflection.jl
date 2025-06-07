@@ -271,6 +271,7 @@ function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::Cthu
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
         if ir.debuginfo.def === nothing
+            # `replace_code_newstyle!` expects this to be set
             ir.debuginfo.def = Symbol("")
         end
         CC.replace_code_newstyle!(ci, ir)
