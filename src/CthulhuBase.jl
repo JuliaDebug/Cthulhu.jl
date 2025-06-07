@@ -222,10 +222,10 @@ function lookup_unoptimized(interp::CthulhuInterpreter, ci::CodeInstance)
     (; rt, exct) = unopt
     infos = unopt.stmt_info
     effects = unopt.effects
-    if isnothing(src.slottypes)
-        src.slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-    end
     slottypes = src.slottypes
+    if isnothing(slottypes)
+        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+    end
     return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
