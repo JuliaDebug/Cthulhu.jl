@@ -25,6 +25,8 @@ const ArgTypes = Vector{Any}
 
 using Base: get_world_counter
 
+get_mi(ci::CodeInstance) = CC.get_ci_mi(ci)
+
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
@@ -220,10 +222,10 @@ function lookup_unoptimized(interp::CthulhuInterpreter, ci::CodeInstance)
     (; rt, exct) = unopt
     infos = unopt.stmt_info
     effects = unopt.effects
-    slottypes = src.slottypes
-    if isnothing(slottypes)
-        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
+    if isnothing(src.slottypes)
+        src.slottypes = Any[ Any for i = 1:length(src.slotflags) ]
     end
+    slottypes = src.slottypes
     return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
@@ -339,7 +341,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 (; src, rt, exct, infos, slottypes, codeinf, effects) = lookup_semiconcrete(interp, curs, override, optimize & !annotate_source)
         else
             if optimize && !annotate_source
-                codeinst = curs.ci
+                codeinst = get_ci(curs)
                 if codeinst.inferred === nothing
                     if isdefined(codeinst, :rettype_const)
                         # TODO use `codeinfo_for_const`
@@ -354,27 +356,36 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                             println(iostream, "│  return ", Const(codeinst.rettype_const))
                             println(iostream)
                         end
-                        mi = codeinst.def
+                        mi = get_mi(codeinst)
                         @goto show_menu
                     else
                         @info """
                         Inference discarded the source for this call because of recursion:
                         Cthulhu nevertheless is trying to retrieve the source for further inspection.
                         """
-                        additional_descend(get_ci(curs))
-                        break
+                        ci = get_ci(curs)
+                        if !haskey(interp.unopt, ci)
+                            additional_descend(ci)
+                            break
+                        else
+                            (; src, rt, exct, infos, slottypes, effects, codeinf) = lookup_unoptimized(interp, ci)
+                            optimize = false
+                            @goto lookup_complete
+                        end
                     end
                 end
             end
             (; src, rt, exct, infos, slottypes, effects, codeinf) = lookup(interp, curs, optimize & !annotate_source)
         end
+        @label lookup_complete
         ci = get_ci(curs)
-        mi = ci.def
-        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
-        if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
-            infos = src.stmts.info
-        else
+        mi = get_mi(ci)
+        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG, interp)::Union{CodeInfo, IRCode}
+        if isa(src, CodeInfo) && optimize & !annotate_source
+            # optimization might have deleted some statements
             @assert length(src.code) == length(infos)
+        elseif isa(src, IRCode)
+            infos = src.stmts.info
         end
         infkey = override isa InferenceResult ? override : ci
         pc2excts = exception_type ? get_pc_exct(interp, infkey) : nothing
@@ -507,7 +518,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                 Inference didn't analyze this call because it is a dynamic call:
                 Cthulhu nevertheless is trying to descend into it for further inspection.
                 """
-                additional_descend(get_mi(info)::CodeInstance)
+                additional_descend(get_ci(info)::CodeInstance)
                 continue
             elseif info isa RTCallInfo
                 @info """
