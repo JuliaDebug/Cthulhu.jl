@@ -12,7 +12,7 @@ function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
         Cthulhu.lookup(interp, codeinst, optimize; allow_no_src=true)
     if src !== nothing
         config = Cthulhu.CthulhuConfig(; dead_code_elimination=true)
-        src = Cthulhu.preprocess_ci!(src, codeinst.def, optimize, config)
+        src = Cthulhu.preprocess_ci!(src, codeinst.def, optimize, config, interp)
     end
     return (; interp, src, infos, codeinst, rt, exct, slottypes, effects)
 end

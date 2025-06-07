@@ -264,17 +264,22 @@ function dce!(ir::IRCode)
     return ir
 end
 
-function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::CthulhuConfig)
+function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::CthulhuConfig, interp::AbstractInterpreter)
     if optimize && config.dead_code_elimination
-        argtypes = CC.matching_cache_argtypes(mi, nothing, false)[1]
+        𝕃ᵢ = CC.typeinf_lattice(interp)
+        argtypes = CC.matching_cache_argtypes(𝕃ᵢ, mi)
         ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
         ir = dce!(ir)
-        ci = CC.replace_code_newstyle!(ci, ir)
+        if ir.debuginfo.def === nothing
+            # `replace_code_newstyle!` expects this to be set
+            ir.debuginfo.def = Symbol("")
+        end
+        CC.replace_code_newstyle!(ci, ir)
     end
     return ci
 end
 
-function preprocess_ci!(ir::IRCode, _::MethodInstance, optimize::Bool, config::CthulhuConfig)
+function preprocess_ci!(ir::IRCode, _::MethodInstance, optimize::Bool, config::CthulhuConfig, interp::AbstractInterpreter)
     if optimize && config.dead_code_elimination
         ir = dce!(ir)
     end
@@ -315,7 +320,7 @@ function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstanc
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
         (; src, rt, infos, slottypes) = lookup(interp′, codeinst, optimize)
-        src = preprocess_ci!(src, caller, optimize, CONFIG)
+        src = preprocess_ci!(src, caller, optimize, CONFIG, interp)
         callsites, _ = find_callsites(interp′, src, infos, codeinst, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)

@@ -301,7 +301,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     callsites, src, rt = try
         (; src, rt, infos, slottypes, effects, codeinf) = lookup(interp, ci, optimize & !annotate_source)
 
-        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG)
+        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG, interp)
         if (optimize & !annotate_source) || isa(src, IRCode) # optimization might have deleted some statements
             infos = src.stmts.info
         else
@@ -429,7 +429,7 @@ end
 function InteractiveUtils.code_typed(b::Bookmark; optimize::Bool=true)
     (; interp, ci) = b
     (; src, rt, codeinf) = lookup(interp, ci, optimize)
-    src = preprocess_ci!(src, ci.def, optimize, CONFIG)
+    src = preprocess_ci!(src, ci.def, optimize, CONFIG, interp)
     if src isa IRCode
         CC.replace_code_newstyle!(codeinf, src)
     end
