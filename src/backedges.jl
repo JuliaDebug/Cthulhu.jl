@@ -17,9 +17,9 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @n
     ft = sig[1]
     uw = Base.unwrap_unionall(ft)
     if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
-            isdefined(uw.name.module, uw.name.mt.name) &&
-            ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        print(env_io, (demangle ? Base.demangle_function_name : identity)(uw.name.mt.name))
+            isdefined(uw.name.module, uw.name.singletonname) &&
+            ft == typeof(getfield(uw.name.module, uw.name.singletonname))
+        print(env_io, (demangle ? Base.demangle_function_name : identity)(uw.name.singletonname))
     elseif isa(ft, DataType) && ft.name === Type.body.name && !CC.has_free_typevars(ft)
         f = ft.parameters[1]
         print(env_io, f)

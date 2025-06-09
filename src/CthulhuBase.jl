@@ -31,7 +31,6 @@ Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
     highlighter::Cmd = `pygmentize -l`
     asm_syntax::Symbol = :att
-    dead_code_elimination::Bool = true
     pretty_ast::Bool = false
     interruptexc::Bool = true
     debuginfo::Symbol = :compact
@@ -59,9 +58,6 @@ end
    code as stdin. Defaults to `$(CthulhuConfig().highlighter)`.
 - `asm_syntax::Symbol`: Set the syntax of assembly code being used.
   Defaults to `$(CthulhuConfig().asm_syntax)`.
-- `dead_code_elimination::Bool`: Enable dead-code elimination for high-level Julia IR.
-  Defaults to `true`. DCE is known to be buggy and you may want to disable it if you
-  encounter errors. Please report such bugs with a MWE to Julia or Cthulhu.
 - `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
 - `interruptexc::Bool`: Use <q>-key to quit or ascend. Defaults to `false`.
 - `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
@@ -380,13 +376,6 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         @label lookup_complete
         ci = get_ci(curs)
         mi = get_mi(ci)
-        src = preprocess_ci!(src, mi, optimize & !annotate_source, CONFIG, interp)::Union{CodeInfo, IRCode}
-        if isa(src, CodeInfo) && optimize & !annotate_source
-            # optimization might have deleted some statements
-            @assert length(src.code) == length(infos)
-        elseif isa(src, IRCode)
-            infos = src.stmts.info
-        end
         infkey = override isa InferenceResult ? override : ci
         pc2excts = exception_type ? get_pc_exct(interp, infkey) : nothing
         callsites, sourcenodes = find_callsites(interp, src, infos, ci, slottypes, optimize & !annotate_source, annotate_source, pc2excts)

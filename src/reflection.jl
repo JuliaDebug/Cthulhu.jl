@@ -258,34 +258,6 @@ function is_call_expr(x::Expr, optimize::Bool)
     return isexpr(ignorelhs(x), :call)
 end
 
-function dce!(ir::IRCode)
-    ir = CC.compact!(ir, #=allow_cfg_transform=#true)
-    ir = CC.compact!(ir, #=allow_cfg_transform=#true)
-    return ir
-end
-
-function preprocess_ci!(ci::CodeInfo, mi::MethodInstance, optimize, config::CthulhuConfig, interp::AbstractInterpreter)
-    if optimize && config.dead_code_elimination
-        𝕃ᵢ = CC.typeinf_lattice(interp)
-        argtypes = CC.matching_cache_argtypes(𝕃ᵢ, mi)
-        ir = CC.inflate_ir(ci, sptypes_from_meth_instance(mi), argtypes)
-        ir = dce!(ir)
-        if ir.debuginfo.def === nothing
-            # `replace_code_newstyle!` expects this to be set
-            ir.debuginfo.def = Symbol("")
-        end
-        CC.replace_code_newstyle!(ci, ir)
-    end
-    return ci
-end
-
-function preprocess_ci!(ir::IRCode, _::MethodInstance, optimize::Bool, config::CthulhuConfig, interp::AbstractInterpreter)
-    if optimize && config.dead_code_elimination
-        ir = dce!(ir)
-    end
-    return ir
-end
-
 function callinfo(interp, sig, rt, max_methods=-1; world=get_world_counter())
     methds = Base._methods_by_ftype(sig, max_methods, world)
     methds isa Bool && return FailedCallInfo(sig, rt)
@@ -320,7 +292,6 @@ function find_caller_of(interp::AbstractInterpreter, callee::Union{MethodInstanc
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
         (; src, rt, infos, slottypes) = lookup(interp′, codeinst, optimize)
-        src = preprocess_ci!(src, caller, optimize, CONFIG, interp)
         callsites, _ = find_callsites(interp′, src, infos, codeinst, slottypes, optimize)
         callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
                                           filter(cs->is_callsite(cs, callee), callsites)

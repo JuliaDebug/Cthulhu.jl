@@ -25,7 +25,6 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "enable_highlighter" => config.enable_highlighter,
         "highlighter" => config.highlighter.exec,
         "asm_syntax" => String(config.asm_syntax),
-        "dead_code_elimination" => config.dead_code_elimination,
         "pretty_ast" => config.pretty_ast,
         "debuginfo" => String(config.debuginfo),
         "optimize" => config.optimize,
@@ -45,7 +44,6 @@ function read_config!(config::CthulhuConfig)
     config.enable_highlighter = @load_preference("enable_highlighter", config.enable_highlighter)
     config.highlighter = Cmd(@load_preference("highlighter", config.highlighter))
     config.asm_syntax = Symbol(@load_preference("asm_syntax", config.asm_syntax))
-    config.dead_code_elimination = @load_preference("dead_code_elimination", config.dead_code_elimination)
     config.pretty_ast = @load_preference("pretty_ast", config.pretty_ast)
     config.debuginfo = Symbol(@load_preference("debuginfo", config.debuginfo))
     config.optimize = @load_preference("optimize", config.optimize)
