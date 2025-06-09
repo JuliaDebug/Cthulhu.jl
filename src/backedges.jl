@@ -1,5 +1,8 @@
 # A lightly-modified version of the same function in Base
 # Highlights argument types with color specified by highlighter(typ)
+
+get_fname(@nospecialize(fT::DataType)) = @static VERSION ≥ v"1.13.0-DEV.647" ? fT.name.singletonname : fT.name.mt.name
+
 function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @nospecialize(sig::Type), demangle=false #=, kwargs=nothing =#)
     if sig === Tuple
         print(io, demangle ? Base.demangle_function_name(name) : name, "(...)")
@@ -17,9 +20,9 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @n
     ft = sig[1]
     uw = Base.unwrap_unionall(ft)
     if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
-            isdefined(uw.name.module, uw.name.singletonname) &&
-            ft == typeof(getfield(uw.name.module, uw.name.singletonname))
-        print(env_io, (demangle ? Base.demangle_function_name : identity)(uw.name.singletonname))
+            isdefined(uw.name.module, get_fname(uw)) &&
+            ft == typeof(getfield(uw.name.module, get_fname(uw)))
+        print(env_io, (demangle ? Base.demangle_function_name : identity)(get_fname(uw)))
     elseif isa(ft, DataType) && ft.name === Type.body.name && !CC.has_free_typevars(ft)
         f = ft.parameters[1]
         print(env_io, f)
