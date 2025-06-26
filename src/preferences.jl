@@ -21,7 +21,7 @@ julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next ti
 ```
 """
 function save_config!(config::CthulhuConfig=CONFIG)
-    @set_preferences!(
+    set_preferences!(Cthulhu,
         "enable_highlighter" => config.enable_highlighter,
         "highlighter" => config.highlighter.exec,
         "asm_syntax" => String(config.asm_syntax),
@@ -36,24 +36,23 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "annotate_source" => config.annotate_source,
         "inlay_types_vscode" => config.inlay_types_vscode,
         "diagnostics_vscode" => config.diagnostics_vscode,
-        "jump_always" => config.jump_always,
-    )
+        "jump_always" => config.jump_always)
 end
 
 function read_config!(config::CthulhuConfig)
-    config.enable_highlighter = @load_preference("enable_highlighter", config.enable_highlighter)
-    config.highlighter = Cmd(@load_preference("highlighter", config.highlighter))
-    config.asm_syntax = Symbol(@load_preference("asm_syntax", config.asm_syntax))
-    config.pretty_ast = @load_preference("pretty_ast", config.pretty_ast)
-    config.debuginfo = Symbol(@load_preference("debuginfo", config.debuginfo))
-    config.optimize = @load_preference("optimize", config.optimize)
-    config.iswarn = @load_preference("iswarn", config.iswarn)
-    config.remarks = @load_preference("remarks", config.remarks)
-    config.with_effects = @load_preference("with_effects", config.with_effects)
-    config.inline_cost = @load_preference("inline_cost", config.inline_cost)
-    config.type_annotations = @load_preference("type_annotations", config.type_annotations)
-    config.annotate_source = @load_preference("annotate_source", config.annotate_source)
-    config.inlay_types_vscode = @load_preference("inlay_types_vscode", config.inlay_types_vscode)
-    config.diagnostics_vscode = @load_preference("diagnostics_vscode", config.diagnostics_vscode)
-    config.jump_always = @load_preference("jump_always", config.jump_always)
+    config.enable_highlighter = load_preference(Cthulhu, "enable_highlighter", config.enable_highlighter)
+    config.highlighter = Cmd(load_preference(Cthulhu, "highlighter", config.highlighter))
+    config.asm_syntax = Symbol(load_preference(Cthulhu, "asm_syntax", config.asm_syntax))
+    config.pretty_ast = load_preference(Cthulhu, "pretty_ast", config.pretty_ast)
+    config.debuginfo = Symbol(load_preference(Cthulhu, "debuginfo", config.debuginfo))
+    config.optimize = load_preference(Cthulhu, "optimize", config.optimize)
+    config.iswarn = load_preference(Cthulhu, "iswarn", config.iswarn)
+    config.remarks = load_preference(Cthulhu, "remarks", config.remarks)
+    config.with_effects = load_preference(Cthulhu, "with_effects", config.with_effects)
+    config.inline_cost = load_preference(Cthulhu, "inline_cost", config.inline_cost)
+    config.type_annotations = load_preference(Cthulhu, "type_annotations", config.type_annotations)
+    config.annotate_source = load_preference(Cthulhu, "annotate_source", config.annotate_source)
+    config.inlay_types_vscode = load_preference(Cthulhu, "inlay_types_vscode", config.inlay_types_vscode)
+    config.diagnostics_vscode = load_preference(Cthulhu, "diagnostics_vscode", config.diagnostics_vscode)
+    config.jump_always = load_preference(Cthulhu, "jump_always", config.jump_always)
 end
