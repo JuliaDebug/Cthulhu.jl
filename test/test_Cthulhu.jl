@@ -22,6 +22,8 @@ end
 
 function empty_func(::Bool) end
 
+pure_concrete_eval() = exp((1, 1)[1])
+
 anykwargs(a; kwargs...) = println(a, " keyword args: ", kwargs...)
 hasdefaultargs(a, b=2) = a + b
 
@@ -47,9 +49,10 @@ end
     @test isempty(callsites)
 
     # handle pure
-    callsites = find_callsites_by_ftt(iterate, Tuple{SVector{3,Int}, Tuple{SOneTo{3}}}; optimize=false)
+    callsites = find_callsites_by_ftt(pure_concrete_eval; optimize=false)
     @test occursin("::Const((1, 1))", string(callsites[1]))
-    @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[2]))
+    @test occursin(r"< (constprop|concrete eval) > getindex\(::.*Const.*,::.*Const\(1\)\)::.*Const\(1\)", string(callsites[1]))
+
     callsites = @eval find_callsites_by_ftt(; optimize=false) do
         length($(QuoteNode(Core.svec(0,1,2))))
     end
