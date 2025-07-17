@@ -175,6 +175,10 @@ end
         @test occursin("Base.mul_float(a, a)::Float32", text)
         @test occursin('[' * colorize(true, 'T') * "]yped", displayed)
 
+        # Parameter dumping
+        write(input, 'P')
+        displayed, text = read_from(output)
+
         # Revise
         # Use delays to ensure unambiguous differences in time stamps
         # (macOS is particularly sensitive) and execution of @async processes
@@ -257,7 +261,6 @@ end
         FakeTerminals.cleanup_fake_terminal(terminal, input, output, err)
 
         # Fallback to typed code
-
         terminal, input, output, err = FakeTerminals.fake_terminal()
         task = @async @with_try_stderr output redirect_stderr(err) do
             descend(x -> [x], (Int,); annotate_source=true, interruptexc=false, optimize=false, terminal)
@@ -273,7 +276,7 @@ end
         wait(task)
         FakeTerminals.cleanup_fake_terminal(terminal, input, output, err)
 
-        # ascend
+        # `ascend`
         @noinline inner3(x) = 3x
         @inline   inner2(x) = 2*inner3(x)
                   inner1(x) = -1*inner2(x)
