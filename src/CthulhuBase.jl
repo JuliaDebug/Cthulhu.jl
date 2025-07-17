@@ -26,6 +26,7 @@ const ArgTypes = Vector{Any}
 using Base: get_world_counter
 
 get_mi(ci::CodeInstance) = CC.get_ci_mi(ci)
+get_mi(mi::MethodInstance) = mi
 
 Base.@kwdef mutable struct CthulhuConfig
     enable_highlighter::Bool = false
@@ -574,7 +575,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
             display_CI = false
         elseif toggle === :dump_params
             @info "Dumping inference cache."
-            Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(get_inference_cache(interp))))
+            Core.show(mapany(((i, x),) -> (i, x.result, x.linfo), enumerate(CC.get_inference_cache(interp))))
             Core.println()
             display_CI = false
         elseif toggle === :bookmark
@@ -735,10 +736,8 @@ function ascend_impl(term, mi; interp::AbstractInterpreter=NativeInterpreter(), 
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            interp′ = CthulhuInterpreter(interp)
-            do_typeinf!(interp′, mi)
-            browsecodetyped && _descend(term, interp′, mi; annotate_source=true, iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, mi; interp, annotate_source=true, iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end
-ascend_impl(mi; kwargs...) = ascend(default_terminal(), mi; kwargs...)
+ascend_impl(mi; kwargs...) = ascend_impl(default_terminal(), mi; kwargs...)

@@ -54,9 +54,9 @@ function cthulhu_ast(io::IO, mi, ::CodeInfo, optimize::Bool, debuginfo, world::U
 end
 
 function cthulhu_ast(io::IO, mi, ::Bool, debuginfo, ::UInt, config::CthulhuConfig)
-    meth = mi.def::Method
-    ast = definition(Expr, meth)
-    if ast!==nothing
+    method = mi.def::Method
+    ast = definition(Expr, method)
+    if ast !== nothing
         if !config.pretty_ast
             dump(io, ast; maxdepth=typemax(Int))
         else
@@ -65,7 +65,7 @@ function cthulhu_ast(io::IO, mi, ::Bool, debuginfo, ::UInt, config::CthulhuConfi
             # Could even highlight the above as some kind-of LISP
         end
     else
-        @warn "Could not retrieve AST of $meth. AST display requires Revise.jl to be loaded."
+        @warn "Could not retrieve AST of $method. AST display requires Revise.jl to be loaded."
     end
 end
 
