@@ -42,6 +42,15 @@ macro with_try_stderr(out, expr)
     end
 end
 
+function wait_for(task::Task, timeout::Float64 = 10.0)
+    t0 = time()
+    while time() - t0 < timeout
+        istaskfailed(task) && return wait(task)
+        istaskdone(task) && return true
+    end
+    return false
+end
+
 @testset "Terminal" begin
     @test _Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     colorize(use_color::Bool, c::Char) = _Cthulhu.stringify() do io
@@ -197,7 +206,7 @@ end
         displayed, text = read_from(terminal)
         @test_broken occursin("z = a * b", displayed)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # Multicall & iswarn=true
@@ -221,7 +230,7 @@ end
         @test occursin("%3 = fmulti(::Float32)::Union{Float32, $Int}", displayed)
         @test occursin("%3 = fmulti(::Char)::Union{Float32, $Int}", displayed)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # Tasks (see the special handling in `_descend`)
@@ -235,7 +244,7 @@ end
         displayed, text = read_from(terminal)
         @test occursin("call show(::IO,::String)", text)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # descend with MethodInstances
@@ -246,7 +255,7 @@ end
         displayed, text = read_from(terminal)
         @test occursin("fmulti(::Any)", text)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         terminal = FakeTerminal()
@@ -255,7 +264,7 @@ end
         displayed, text = read_from(terminal)
         @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # Fallback to typed code
@@ -270,7 +279,7 @@ end
         @test occursin("dynamic Base.vect(x)", text)
         @test occursin("(::$Int)::Vector{$Int}", text)
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # `ascend`
@@ -297,7 +306,7 @@ end
         @test occursin("inner2", lines[from + 3])
         write(terminal, 'q')
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # With backtraces
@@ -312,7 +321,7 @@ end
         @test occursin("Select a call to descend into or ↩ to ascend.", text)
         write(terminal, 'q')
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # With stacktraces
@@ -327,7 +336,7 @@ end
         @test occursin("Select a call to descend into or ↩ to ascend.", text)
         write(terminal, 'q')
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
 
         # With ExceptionStack (e.g., REPL's global `err` variable)
@@ -342,7 +351,7 @@ end
         @test occursin("Select a call to descend into or ↩ to ascend.", text)
         write(terminal, 'q')
         write(terminal, 'q')
-        wait(task)
+        @assert wait_for(task)
         finalize(terminal)
     finally
         # Restore the previous settings
