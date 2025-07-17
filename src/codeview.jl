@@ -186,7 +186,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
     end
 
     # preprinter configuration
-    preprinter = if inline_cost
+    preprinter = if inline_cost & optimize
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
         code = isa(src, IRCode) ? src.stmts.stmt : src.code
         cst = Vector{Int}(undef, length(code))

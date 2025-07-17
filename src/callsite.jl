@@ -222,6 +222,7 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecia
 
     with_effects && (limiter.width += textwidth(repr(effects)) + 1)
     exception_type && (limiter.width += textwidth(string(exct)) + 1)
+    limiter.limit = max(limiter.width, limiter.limit)
     if !has_space(limiter, name)
         print(limiter, '…')
         @goto print_effects
