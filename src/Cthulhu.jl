@@ -195,8 +195,6 @@ using PrecompileTools
         @compile_workload begin
             terminal = Testing.FakeTerminal()
             task = @async @descend terminal=terminal.tty gcd(1, 2)
-            write(terminal, 'T')
-            write(terminal, 'o')
             write(terminal, 'q')
             wait(task)
             finalize(terminal)
