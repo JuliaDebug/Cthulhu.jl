@@ -1,7 +1,7 @@
 # A lightly-modified version of the same function in Base
 # Highlights argument types with color specified by highlighter(typ)
 
-get_fname(@nospecialize(fT::DataType)) = @static VERSION ≥ v"1.13.0-DEV.647" ? fT.name.singletonname : fT.name.mt.name
+get_fname(@nospecialize(fT::DataType)) = fT.name.singletonname
 
 function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @nospecialize(sig::Type), demangle=false #=, kwargs=nothing =#)
     if sig === Tuple
