@@ -42,11 +42,12 @@ macro with_try_stderr(out, expr)
     end
 end
 
-function wait_for(task::Task, timeout::Float64 = 10.0)
+function wait_for(task::Task, timeout = 10.0)
     t0 = time()
     while time() - t0 < timeout
         istaskfailed(task) && return wait(task)
         istaskdone(task) && return true
+        yield()
     end
     return false
 end
@@ -206,6 +207,7 @@ end
         displayed, text = read_from(terminal)
         @test_broken occursin("z = a * b", displayed)
         write(terminal, 'q')
+        readavailable(terminal.output)
         @assert wait_for(task)
         finalize(terminal)
 
