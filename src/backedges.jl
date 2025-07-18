@@ -136,7 +136,9 @@ function nextnode end
 
 backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _emptybackedges
 method(mi::MethodInstance) = mi.def
+method(edge::CodeInstance) = method(get_mi(edge))
 specTypes(mi::MethodInstance) = mi.specTypes
+specTypes(edge::CodeInstance) = specTypes(get_mi(edge))
 instance(mi::MethodInstance) = mi
 nextnode(mi, edge) = edge
 
@@ -182,9 +184,11 @@ function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Ba
     push!(visited, imi)
     indent *= " "
     for edge in backedges(mi)
+        isa(edge, MethodInstance) || isa(edge, CodeInstance) || continue
         str = indent * callstring(io, edge)
-        child = Node(typeof(parent.data)(str, instance(edge)), parent)
-        treelist!(child, io, nextnode(mi, edge), indent, visited)
+        edge_mi = get_mi(edge)
+        child = Node(typeof(parent.data)(str, instance(edge_mi)), parent)
+        treelist!(child, io, nextnode(mi, edge_mi), indent, visited)
     end
     return parent
 end

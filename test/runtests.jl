@@ -2,34 +2,14 @@ using Test, PerformanceTestTools
 using Core: Const # allows correct printing as `Const` instead of `Core.Const`
 
 @testset "runtests.jl" begin
-    @testset "test_Cthulhu.jl" begin
-        include("test_Cthulhu.jl")
-    end
-
-    @testset "test_codeview.jl" begin
-        include("test_codeview.jl")
-    end
-
+    @testset "Core functionality" include("test_Cthulhu.jl")
+    @testset "Code view" include("test_codeview.jl")
+    @testset "Terminal tests" include("test_terminal.jl")
+    @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
     # TODO enable these tests
-    if false
-        @testset "test_irshow.jl" begin
-            include("test_irshow.jl")
-        end
-    else
-        @info "skipped test_irshow.jl"
-    end
-    if false
-        @testset "test_terminal.jl" begin
-            include("test_terminal.jl")
-        end
-    else
-        @info "skipped test_terminal.jl"
-    end
-
-    @testset "test_AbstractInterpreter.jl" begin
-        include("test_AbstractInterpreter.jl")
-    end
-end
+    false || return @info "skipped test_irshow.jl"
+    @testset "IRShow display tests" include("test_irshow.jl")
+end;
 
 # TODO enable the VSCode-related tests
 

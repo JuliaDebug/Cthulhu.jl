@@ -11,6 +11,7 @@ const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 __init__() = read_config!(CONFIG)
 
 include("CthulhuBase.jl")
+include("testing.jl")
 
 """
     @descend
@@ -191,17 +192,13 @@ end
 using PrecompileTools
 @setup_workload begin
     try
-        input = Base.link_pipe!(Pipe(), reader_supports_async=true, writer_supports_async=true)
-        term = REPL.Terminals.TTYTerminal("dumb", input.out, devnull, devnull)
-        write(input.in, 'q')
-
-        @compile_workload descend(gcd, (Int, Int); terminal=term)
-
-        # using Compiler
-        # @compile_workload descend(gcd, (Int, Int); terminal=term)
-
-        # declare we are done with streams
-        close(input.in)
+        @compile_workload begin
+            terminal = Testing.FakeTerminal()
+            task = @async @descend terminal=terminal.tty gcd(1, 2)
+            write(terminal, 'q')
+            wait(task)
+            finalize(terminal)
+        end
     catch err
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
