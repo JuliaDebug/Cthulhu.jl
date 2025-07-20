@@ -128,10 +128,10 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         end
         if kind(arg) == K"."
             arg = last(children(arg))
-            if kind(arg) == K"inert"
-                @assert kind(only(children(arg))) == K"$"
-                return nothing, defaultval
-            end
+            # if kind(arg) == K"inert"
+            #     @assert kind(only(children(arg))) == K"$"
+            #     return nothing, defaultval
+            # end
             @assert kind(arg) in KSet"quote $"
             arg = only(children(arg))
         end
