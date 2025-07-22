@@ -2,6 +2,28 @@ using REPL.TerminalMenus
 import REPL.TerminalMenus: request
 using FoldingTrees
 
+mutable struct CustomToggle
+    onoff::Bool
+    key::UInt32
+    toggle::Symbol
+    description::String
+    callback_on
+    callback_off
+    function CustomToggle(onoff::Bool, key, description,
+        @nospecialize(callback_on), @nospecialize(callback_off))
+        key = convert(UInt32, key)
+        desc = convert(String, description)
+        toggle = Symbol(desc)
+        if haskey(TOGGLES, key)
+            error(lazy"invalid Cthulhu API: key `$key` is already used.")
+        elseif toggle in values(TOGGLES)
+            error(lazy"invalid Cthulhu API: toggle `$toggle` is already used.")
+        end
+        return new(onoff, key, toggle, desc, callback_on, callback_off)
+    end
+end
+custom_toggles(provider::AbstractProvider) = CustomToggle[]
+
 mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     options::Vector{String}
     pagesize::Int

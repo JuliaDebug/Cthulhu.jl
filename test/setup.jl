@@ -9,7 +9,7 @@ function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
                       optimize=true, interp=Cthulhu.CC.NativeInterpreter())
     (interp, codeinst) = Cthulhu.mkinterp(f, tt; interp)
     (; src, rt, exct, infos, slottypes, effects) =
-        Cthulhu.lookup(interp, codeinst, optimize; allow_no_src=true)
+        Cthulhu.lookup(interp, codeinst, optimize)
     return (; interp, src, infos, codeinst, rt, exct, slottypes, effects)
 end
 
