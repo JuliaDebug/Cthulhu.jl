@@ -292,7 +292,7 @@ end
         mi = _Cthulhu.get_specialization(inner3, Tuple{UInt16})
         terminal = FakeTerminal()
         task = @async @with_try_stderr output redirect_stderr(terminal.error) do
-            ascend(terminal, mi)
+            ascend(terminal, mi; pagesize=11)
         end
 
         write(terminal, keys[:down])

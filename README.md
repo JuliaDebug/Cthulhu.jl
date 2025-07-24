@@ -160,8 +160,9 @@ Choose a call for analysis (q to quit):
          union!(::Set{Symbol}, ::Set{Symbol}, ::Set{Symbol})
            union(::Set{Symbol}, ::Set{Symbol})
 ```
-You use the up/down arrows to navigate this menu, enter to select a call to `descend` into,
-and your space bar to toggle branch-folding.
+You use the up/down arrows to navigate this menu, enter to select a call to
+`descend` into, and your space bar to toggle branch-folding. `ascend(mi; pagesize=20)`
+allows you to show up to 20 lines at once.
 
 It also works on stacktraces. If your version of Julia stores the most recent error in the global `err` variable, you can use
 
