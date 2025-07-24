@@ -690,10 +690,13 @@ descend_code_warntype_impl(b::Bookmark; kw...) =
 
 FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
 
-function ascend_impl(term, mi; interp::AbstractInterpreter=NativeInterpreter(), kwargs...)
+function ascend_impl(
+        term, mi; interp::AbstractInterpreter=NativeInterpreter(),
+        pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize, kwargs...
+    )
     root = treelist(mi)
     root === nothing && return
-    menu = TreeMenu(root)
+    menu = TreeMenu(root; pagesize, dynamic, maxsize)
     choice = menu.current
     while choice !== nothing
         menu.chosen = false
