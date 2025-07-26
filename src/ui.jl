@@ -98,8 +98,8 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
                debuginfo, remarks, with_effects, exception_type, inline_cost,
                type_annotations, highlight, inlay_types_vscode, diagnostics_vscode,
                jump_always, custom_toggles::Vector{CustomToggle})
-    colorize(use_color::Bool, c::Char) = stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = stringify() do io
+        active_option ? printstyled(io, c; bold=true, color=:green) : printstyled(io, c; color=:red)
     end
 
     io = IOBuffer()
