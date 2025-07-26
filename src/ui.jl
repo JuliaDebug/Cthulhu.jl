@@ -98,15 +98,21 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
                debuginfo, remarks, with_effects, exception_type, inline_cost,
                type_annotations, highlight, inlay_types_vscode, diagnostics_vscode,
                jump_always, custom_toggles::Vector{CustomToggle})
-    colorize(use_color::Bool, c::Char) = stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = stringify() do io
+        active_option ? printstyled(io, c; bold=true, color=:green) : printstyled(io, c; color=:red)
+    end
+
+    colorize(s::AbstractString; color::Symbol = :cyan) = stringify() do io
+        printstyled(io, s; color)
     end
 
     io = IOBuffer()
     ioctx = IOContext(io, :color=>true)
 
-    println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
-    print(ioctx, "Toggles: [",
+    println(ioctx,
+        colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color=:blue))
+    print(ioctx,
+        colorize("Toggles"), ": [",
         colorize(iswarn, 'w'), "]arn, [",
         colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
         colorize(type_annotations, 't'), "]ype annotations, [",
@@ -138,19 +144,21 @@ function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_
     end
     print(ioctx, '.')
     println(ioctx)
-    println(ioctx, "Show: [",
+    println(ioctx,
+        colorize("Show"), ": [",
         colorize(annotate_source, 'S'), "]ource code, [",
         colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
         colorize(!annotate_source && view_cmd === cthulhu_typed, 'T'), "]yped code, [",
         colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
         colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
     print(ioctx,
-    """
-    Actions: [E]dit source code, [R]evise and redisplay""")
+        colorize("Actions"),
+        ": [E]dit source code, [R]evise and redisplay")
     if !annotate_source
         print(ioctx,
-        """
-        \nAdvanced: dump [P]arams cache.""")
+        "\n",
+        colorize("Advanced"),
+        ": dump [P]arams cache.")
     end
     return String(take!(io))
 end
