@@ -183,7 +183,10 @@ end
     ascend(bt; kwargs...)
 
 Follow a chain of calls (either through a backtrace `bt` or the backedges of a `MethodInstance` `mi`),
-with the option to `descend` into intermediate calls. `kwargs` are passed to [`descend`](@ref).
+with the option to `descend` into intermediate calls.
+
+Keyword arguments `pagesize, dynamic, maxsize` are passed to `Cthulhu.FoldingTrees.TreeMenu`.
+Any remaining `kwargs` are passed to [`descend`](@ref).
 """
 function ascend(@nospecialize(args...); kwargs...)
     CTHULHU_MODULE[].ascend_impl(args...; kwargs...)
