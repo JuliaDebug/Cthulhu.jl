@@ -75,6 +75,9 @@ end
 - `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
 - `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
 - `jump_always::Bool` Initial state of "jump to source always" toggle. Defaults to `false`.
+
+Other keyword arguments are passed to [`Cthulhu.CthulhuMenu`](@ref) and/or
+[`REPL.TerminalMenus`](https://docs.julialang.org/en/v1/stdlib/REPL/#Customization-/-Configuration).
 """
 const CONFIG = CthulhuConfig()
 
@@ -302,6 +305,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
     inlay_types_vscode::Bool              = CONFIG.inlay_types_vscode,            # default is true
     diagnostics_vscode::Bool              = CONFIG.diagnostics_vscode,            # default is true
     jump_always::Bool                     = CONFIG.jump_always,                   # default is false
+    kwargs...,                                                                    # additional kwargs passed to `menu_options`
     )
 
     if isnothing(hide_type_stable)
@@ -312,7 +316,7 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
         debuginfo = getfield(DInfo, debuginfo)::DebugInfo
     end
 
-    menu_options = (; cursor = '•', scroll_wrap = true)
+    menu_options = (; cursor = '•', scroll_wrap = true, kwargs...)
     display_CI = true
     view_cmd = cthulhu_typed
     iostream = term.out_stream::IO
@@ -739,7 +743,7 @@ function ascend_impl(
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            browsecodetyped && _descend(term, mi; interp, annotate_source=true, iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, mi; interp, annotate_source=true, iswarn=true, optimize=false, interruptexc=false, pagesize, kwargs...)
         end
     end
 end
