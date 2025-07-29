@@ -342,8 +342,8 @@ function code_typed1_by_method_instance(mi::MethodInstance;
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection should not be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
-    code = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
-    rt = code.rettype
+    result = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    code, rt = result
     code isa CodeInfo || error("no code is available for ", mi)
     debuginfo === :none && Base.remove_linenums!(code)
     return Pair{CodeInfo,Any}(code, rt)
@@ -428,48 +428,28 @@ end
 
 ## utility function to extract the line number at a particular program counter (ignoring inlining).
 ## return <= 0 if there is no line number change caused by this statement
-function getline(lt::Core.DebugInfo, i::Int)
-    while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
-        line::Int = codeloc[1]
-        line < 0 && return 0 # broken or disabled debug info?
-        line == 0 && return 0 # no line number update (though maybe inlining changed)
-        ltnext = lt.linetable
-        if ltnext === nothing
-            return line
-        end
-        i = line
-        lt = ltnext
+function getline(src::CodeInfo, i::Int)
+    if i <= 0 || i > length(src.codelocs)
+        return 0
     end
+    codeloc_idx = src.codelocs[i]
+    if codeloc_idx <= 0 || codeloc_idx > length(src.linetable)
+        return 0
+    end
+    return src.linetable[codeloc_idx].line
 end
-function getnextline(lt::Core.DebugInfo, i::Int, Δline)
-    while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
-        line::Int = codeloc[1]
-        line < 0 && return typemax(Int) # broken or disabled debug info?
-        if line == 0
-            i += 1
-            continue
-        end
-        ltnext = lt.linetable
-        if ltnext === nothing
-            break
-        end
-        i = line
-        lt = ltnext
+
+function getnextline(src::CodeInfo, i::Int, Δline)
+    current_line = getline(src, i)
+    if current_line <= 0
+        return typemax(Int)
     end
-    # now that we have line i and a list of all lines with code on them lt
-    # find the next largest line number in this list greater than i, or return typemax(Int)
-    j = i+1
-    currline = Base.IRShow.getdebugidx(lt, i)[1]
-    while j ≤ typemax(Int)
-        codeloc = Base.IRShow.getdebugidx(lt, j)
-        line::Int = codeloc[1]
-        line < 0 && break
-        if line == 0 || currline == line
-            j += 1
-        else
-            return line + Δline
+    
+    # Find the next different line number
+    for j in (i+1):length(src.codelocs)
+        next_line = getline(src, j)
+        if next_line > 0 && next_line != current_line
+            return next_line + Δline
         end
     end
     return typemax(Int)
@@ -508,9 +488,8 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = i
-        lt = src.debuginfo
-        start = getline(lt, j) + Δline
-        stop = getnextline(lt, j, Δline) - 1
+        start = getline(src, j) + Δline
+        stop = getnextline(src, j, Δline) - 1
         linerange = start : stop
         for t in targets
             source_line(t) ∈ linerange && push!(mapped, t)
