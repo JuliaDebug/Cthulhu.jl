@@ -99,8 +99,8 @@ function CC.update_exc_bestguess!(interp::CthulhuInterpreter, @nospecialize(exct
                                             frame::InferenceState)
 end
 
-function CC.abstract_call(interp::CthulhuInterpreter, arginfo::CC.ArgInfo, sstate::CC.StatementState, sv::InferenceState)
-    call = @invoke CC.abstract_call(interp::AbstractInterpreter, arginfo::CC.ArgInfo, sstate::CC.StatementState, sv::InferenceState)
+function CC.abstract_call(interp::CthulhuInterpreter, arginfo::CC.ArgInfo, sstate::CC.StmtInfo, sv::InferenceState)
+    call = @invoke CC.abstract_call(interp::AbstractInterpreter, arginfo::CC.ArgInfo, sstate::CC.StmtInfo, sv::InferenceState)
     if isa(sv, InferenceState)
         key = get_inference_key(sv)
         if key !== nothing
@@ -204,8 +204,9 @@ function set_cthulhu_source!(result::InferenceResult)
     result.src = create_cthulhu_source(result, result.ipo_effects)
 end
 
-@static if VERSION ≥ v"1.13-"
-CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int, opt_cache::IdDict{MethodInstance, CodeInstance}) = cthulhu_finish(_finishinfer!(state, interp, cycleid, opt_cache), state, interp)
+@static if VERSION ≥ v"1.11-"
+# finishinfer! was replaced by finish! in Julia 1.11+
+CC.finish!(state::InferenceState, interp::CthulhuInterpreter) = cthulhu_finish(@invoke(CC.finish!(interp::AbstractInterpreter, state::InferenceState)), state, interp)
 else
 CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int) = cthulhu_finish(_finishinfer!(state, interp, cycleid), state, interp)
 end
@@ -215,7 +216,7 @@ function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validati
     return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
 end
 
-function CC.src_inlining_policy(interp::CthulhuInterpreter,
+function CC.inlining_policy(interp::CthulhuInterpreter,
     @nospecialize(src), @nospecialize(info::CCCallInfo), stmt_flag::UInt32)
     if isa(src, OptimizedSource)
         if CC.is_stmt_inline(stmt_flag) || src.isinlineable
@@ -225,7 +226,7 @@ function CC.src_inlining_policy(interp::CthulhuInterpreter,
     else
         @assert src isa CC.IRCode || src === nothing "invalid Cthulhu code cache"
         # the default inlining policy may try additional effort to find the source in a local cache
-        return @invoke CC.src_inlining_policy(interp::AbstractInterpreter,
+        return @invoke CC.inlining_policy(interp::AbstractInterpreter,
             src::Any, info::CCCallInfo, stmt_flag::UInt32)
     end
 end
