@@ -3,7 +3,7 @@ module Cthulhu
 export @descend, @descend_code_typed, @descend_code_warntype,
     descend, descend_code_typed, descend_code_warntype, ascend
 
-const CC = Base.Compiler
+const CC = Core.Compiler
 const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
