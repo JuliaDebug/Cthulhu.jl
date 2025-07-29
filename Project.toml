@@ -4,7 +4,7 @@ uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 version = "2.17.5"
 
 [compat]
-CodeTracking = "0.5, 1"
+CodeTracking = "0.5, 1, 2"
 Compiler = "0.1"
 FoldingTrees = "1"
 InteractiveUtils = "1.9"
