@@ -86,10 +86,10 @@ end
 
 # Recursive construction of the TypedSyntaxNode tree from the SyntaxNodeTree
 function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mappings)
-    if haschildren(parent) && tparent.children === nothing
+    if !is_leaf(parent) && tparent.children === nothing
         tparent.children = TypedSyntaxNode[]
     end
-    for child in children(parent)
+    for child in getchildren(parent)
         tnode = TypedSyntaxNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, gettyp(node2ssa, child, src)))
         if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
             tnode.typ = get(symtyps, child, nothing)
@@ -98,7 +98,7 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
         addchildren!(tnode, child, src, node2ssa, symtyps, mappings)
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
-    if kind(tparent) == K"return" && haschildren(tparent)
+    if kind(tparent) == K"return" && !is_leaf(tparent)
         childs = children(tparent)
         tparent.typ = isempty(childs) ? Nothing : only(childs).typ
     end
@@ -121,25 +121,25 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
             nchildren = length(children(arg))
             nchildren == 1 && return nothing, defaultval
             @assert nchildren == 2
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         if kind(arg) == K"$"
             return nothing, defaultval
         end
         if kind(arg) == K"."
             arg = last(children(arg))
-            if kind(arg) == K"inert"
-                @assert kind(only(children(arg))) == K"$"
-                return nothing, defaultval
-            end
-            @assert kind(arg) == K"quote"
+            # if kind(arg) == K"inert"
+            #     @assert kind(only(children(arg))) == K"$"
+            #     return nothing, defaultval
+            # end
+            @assert kind(arg) in KSet"quote $"
             arg = only(children(arg))
         end
         if kind(arg) == K"curly"
             arg = first(children(arg))
         end
         if kind(arg) == K"var"
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         kind(arg) == K"tuple" && return nothing, defaultval     # FIXME? see extrema2 test
         @assert kind(arg) == K"Identifier" || is_operator(arg)
@@ -147,7 +147,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
     end
 
     while kind(sig) ∈ KSet"where ::"   # handle MyType{T}(args...) and return-type annotations
-        sig = child(sig, 1)
+        sig = sig[1]
     end
     @assert kind(sig) == K"call"
     # First, match named args, since those have to be unique
@@ -241,14 +241,14 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         end
         idx == 0 && continue
         if kind(arg) == K"::" && length(children(arg)) == 2
-            arg = child(arg, 1)
+            arg = arg[1]
         end
         arg.typ = slottypes[idx]
     end
 
     # It's annoying to print the signature as `foo::typeof(foo)(a::Int)`
     # Strip the type annotation from the function name
-    arg, _ = argidentifier(child(sig, 1))
+    arg, _ = argidentifier(sig[1])
     if arg !== nothing
         arg.typ = nothing
     end
@@ -264,8 +264,8 @@ function striparg(arg)
             arg = only(children(arg))
         end
         if kind(arg) == K"="
-            defaultval = child(arg, 2)
-            arg = child(arg, 1)
+            defaultval = arg[2]
+            arg = arg[1]
         end
         if kind(arg) == K"macrocall"
             arg = last(children(arg))    # FIXME: is the variable always the final argument?
@@ -342,8 +342,8 @@ function code_typed1_by_method_instance(mi::MethodInstance;
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection should not be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
-    code = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
-    rt = code.rettype
+    result = Core.Compiler.typeinf_code(interp, mi.def::Method, mi.specTypes, mi.sparam_vals, optimize)
+    code, rt = result
     code isa CodeInfo || error("no code is available for ", mi)
     debuginfo === :none && Base.remove_linenums!(code)
     return Pair{CodeInfo,Any}(code, rt)
@@ -352,9 +352,9 @@ end
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
     if kind(node) == K"=" && length(children(node)) >= 1
-        sig = child(node, 1)
+        sig = node[1]
         while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
-            sig = child(sig, 1)
+            sig = sig[1]
         end
         kind(sig) == K"call" && return true
     end
@@ -366,7 +366,7 @@ function get_function_def(rootnode)
     while kind(rootnode) ∈ KSet"macrocall global local const"
         idx = findlast(node -> is_function_def(node) || kind(node) == K"macrocall", children(rootnode))
         idx === nothing && break
-        rootnode = child(rootnode, idx)
+        rootnode = rootnode[idx]
     end
     return rootnode
 end
@@ -375,7 +375,7 @@ function num_positional_args(tsn::AbstractSyntaxNode)
     TypedSyntax.is_function_def(tsn) || return 0
     sig, _ = children(tsn)
     while kind(sig) ∈ KSet"where ::"
-        sig = child(sig, 1)
+        sig = sig[1]
     end
     @assert kind(sig) == K"call"
     for (i, node) in enumerate(children(sig))
@@ -392,7 +392,7 @@ function collect_symbol_nodes(rootnode)
     rootnode = get_function_def(rootnode)
     is_function_def(rootnode) || error("expected function definition, got ", sourcetext(rootnode))
     symlocs = Dict{Any,Vector{typeof(rootnode)}}()
-    return collect_symbol_nodes!(symlocs, child(rootnode, 2))
+    return collect_symbol_nodes!(symlocs, rootnode[2])
 end
 
 function collect_symbol_nodes!(symlocs::AbstractDict, node)
@@ -409,10 +409,10 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
         locs = get!(Vector{typeof(node)}, symlocs, node.val)
         push!(locs, node)
     end
-    if haschildren(node)
+    if !is_leaf(node)
         if kind(node) == K"do"
             # process only `g(args...)` in `g(args...) do ... end`
-            collect_symbol_nodes!(symlocs, child(node, 1))
+            collect_symbol_nodes!(symlocs, node[1])
         elseif kind(node) == K"generator"
             for c in Iterators.drop(children(node), 1)
                 collect_symbol_nodes!(symlocs, c)
@@ -428,48 +428,28 @@ end
 
 ## utility function to extract the line number at a particular program counter (ignoring inlining).
 ## return <= 0 if there is no line number change caused by this statement
-function getline(lt::Core.DebugInfo, i::Int)
-    while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
-        line::Int = codeloc[1]
-        line < 0 && return 0 # broken or disabled debug info?
-        line == 0 && return 0 # no line number update (though maybe inlining changed)
-        ltnext = lt.linetable
-        if ltnext === nothing
-            return line
-        end
-        i = line
-        lt = ltnext
+function getline(src::CodeInfo, i::Int)
+    if i <= 0 || i > length(src.codelocs)
+        return 0
     end
+    codeloc_idx = src.codelocs[i]
+    if codeloc_idx <= 0 || codeloc_idx > length(src.linetable)
+        return 0
+    end
+    return src.linetable[codeloc_idx].line
 end
-function getnextline(lt::Core.DebugInfo, i::Int, Δline)
-    while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
-        line::Int = codeloc[1]
-        line < 0 && return typemax(Int) # broken or disabled debug info?
-        if line == 0
-            i += 1
-            continue
-        end
-        ltnext = lt.linetable
-        if ltnext === nothing
-            break
-        end
-        i = line
-        lt = ltnext
+
+function getnextline(src::CodeInfo, i::Int, Δline)
+    current_line = getline(src, i)
+    if current_line <= 0
+        return typemax(Int)
     end
-    # now that we have line i and a list of all lines with code on them lt
-    # find the next largest line number in this list greater than i, or return typemax(Int)
-    j = i+1
-    currline = Base.IRShow.getdebugidx(lt, i)[1]
-    while j ≤ typemax(Int)
-        codeloc = Base.IRShow.getdebugidx(lt, j)
-        line::Int = codeloc[1]
-        line < 0 && break
-        if line == 0 || currline == line
-            j += 1
-        else
-            return line + Δline
+    
+    # Find the next different line number
+    for j in (i+1):length(src.codelocs)
+        next_line = getline(src, j)
+        if next_line > 0 && next_line != current_line
+            return next_line + Δline
         end
     end
     return typemax(Int)
@@ -508,9 +488,8 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     # (Essentially `copy!(mapped, filter(predicate, targets))`)
     function append_targets_for_line!(mapped#=::Vector{nodes}=#, i::Int, targets#=::Vector{nodes}=#)
         j = i
-        lt = src.debuginfo
-        start = getline(lt, j) + Δline
-        stop = getnextline(lt, j, Δline) - 1
+        start = getline(src, j) + Δline
+        stop = getnextline(src, j, Δline) - 1
         linerange = start : stop
         for t in targets
             source_line(t) ∈ linerange && push!(mapped, t)
@@ -560,7 +539,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                 argnode = p
                 p = argnode.parent::MaybeTypedSyntaxNode
             end
-            is_prec_assignment(p) && argnode == child(p, 1 + is_rhs)  # is it the correct side of an assignment?
+            is_prec_assignment(p) && argnode == p[1 + is_rhs]  # is it the correct side of an assignment?
         end
         return targets
     end
@@ -719,7 +698,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                         while !is_prec_assignment(lhsnode) && (lhsparent = lhsnode.parent; lhsparent !== nothing)
                             lhsnode = lhsparent
                         end
-                        lhsnode, found = find_identifier_or_tuplechild(child(lhsnode, 1), sym)
+                        lhsnode, found = find_identifier_or_tuplechild(lhsnode[1], sym)
                         if found
                             symtyps[lhsnode] = ssavaluetypes[i]
                         end
@@ -750,7 +729,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
                                 for t in itr
                                     haskey(symtyps, t) && continue
                                     if skipped_parent(t) == node
-                                        is_prec_assignment(node) && t == child(node, 1) && continue
+                                        is_prec_assignment(node) && t == node[1] && continue
                                         symtyps[t] = if j > 0
                                             ssavaluetypes[j]
                                         elseif have_slottypes
