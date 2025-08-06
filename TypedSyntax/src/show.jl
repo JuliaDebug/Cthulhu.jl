@@ -12,14 +12,14 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     end
     val = node.val
-    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
+    nodestr = !is_leaf(node) ? "[$(untokenize(head(node)))]" :
     isa(val, Symbol) ? string(val) : repr(val)
     treestr = string(indent, nodestr)
     if node.typ !== nothing
         treestr = string(rpad(treestr, 40), "│$(node.typ)")
     end
     println(io, posstr, treestr)
-    if haschildren(node)
+    if !is_leaf(node)
         new_indent = indent*"  "
         for n in children(node)
             JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
@@ -66,11 +66,8 @@ end
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
-    if haschildren(node)
-        cs = children(node)
-        if !isempty(cs)   # `haschildren(node)` returns `true` as long as the node has the *capacity* to store children
-            position = catchup(io, first(children(node)), position, nd)
-        end
+    if !is_leaf(node)
+        position = catchup(io, first(children(node)), position, nd)
     end
     _print(io, pre, node.source, position)
     for (i, child) in enumerate(children(node))
