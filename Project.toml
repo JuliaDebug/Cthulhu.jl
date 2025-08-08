@@ -1,6 +1,6 @@
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-version = "3.0"
+version = "3.0.0"
 authors = ["Valentin Churavy <v.churavy@gmail.com> and contributors"]
 
 [deps]
@@ -25,7 +25,7 @@ Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 
 [compat]
 Accessors = "0.1.42"
-CodeTracking = "0.5, 1"
+CodeTracking = "0.5, 1, 2"
 Compiler = "0.1"
 FoldingTrees = "1"
 InteractiveUtils = "1.9"

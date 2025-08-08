@@ -54,8 +54,12 @@ end
 
 @testset "Terminal" begin
     @test _Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
-    colorize(use_color::Bool, c::Char) = _Cthulhu.stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
+    colorize(active_option::Bool, c::Char) = _Cthulhu.stringify() do io
+        active_option ? printstyled(io, c; bold=true, color=:green) : printstyled(io, c; color=:red)
+    end
+
+    colorize(s::AbstractString; color::Symbol = :cyan) = _Cthulhu.stringify() do io
+        printstyled(io, s; color)
     end
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
     # different content
@@ -87,7 +91,7 @@ end
         @test occursin(r"Base\.mul_float\(.*, .*\)::Float32", text)
         @test occursin('[' * colorize(true, 'o') * "]ptimize", displayed)
         @test occursin('[' * colorize(true, 'T') * "]yped", displayed)
-        @test occursin("\nSelect a call to descend into", text) # beginning of the line
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed) # beginning of the line
         @test occursin('•', text)
         write(terminal, 'o') # switch to unoptimized
         displayed, text = read_from(terminal)
@@ -95,7 +99,7 @@ end
         @test occursin("::Const(*)", text)
         @test occursin("(z = (%1)(a, a))", text)
         @test occursin('[' * colorize(false, 'o') * "]ptimize", displayed)
-        @test occursin("\nSelect a call to descend into", text) # beginning of the line
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed) # beginning of the line
         @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
         # Call selection
@@ -128,7 +132,7 @@ end
         @test occursin(r"z.*::Float32", text)
         @test occursin("Body", text)
         @test occursin('[' * colorize(true, 'w') * "]arn", displayed)
-        @test occursin("\nSelect a call to descend into", text)
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed)
         @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
         # Source view
@@ -169,7 +173,7 @@ end
         write(terminal, 'd'); cread(terminal)
         write(terminal, 'L')
         displayed, text = read_from(terminal)
-        @test occursin('[' * colorize(false, 'd') * "]ebuginfo", displayed)
+        @test occursin("[d]ebuginfo", displayed)
         @test !occursin("┌ @ promotion.jl", text)
 
         # Native code view
@@ -292,7 +296,7 @@ end
         mi = _Cthulhu.get_specialization(inner3, Tuple{UInt16})
         terminal = FakeTerminal()
         task = @async @with_try_stderr output redirect_stderr(terminal.error) do
-            ascend(terminal, mi)
+            ascend(terminal, mi; pagesize=11)
         end
 
         write(terminal, keys[:down])

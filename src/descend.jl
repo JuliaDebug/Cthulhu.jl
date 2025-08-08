@@ -35,10 +35,10 @@ descend_impl(@nospecialize(args...); kwargs...) =
 # src/ui.jl provides the user facing interface to which `descend!` responds.
 ##
 function descend!(state::CthulhuState)
-    menu_options = (; cursor = '•', scroll_wrap = true)
     while true
         (; config, mi, ci, provider) = state
         iostream = state.terminal.out_stream::IO
+        menu_options = (; cursor = '•', scroll_wrap = true, config.menu_options...)
         commands = (@__MODULE__).commands(provider)
         if !isa(commands, Vector{Command})
             error(lazy"""

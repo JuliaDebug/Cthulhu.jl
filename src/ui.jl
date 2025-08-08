@@ -29,6 +29,15 @@ function show_as_line(callsite::Callsite, with_effects::Bool, exception_type::Bo
     end
 end
 
+"""
+    CthulhuMenu(args...; pagesize::Int=10, sub_menu = false, kwargs...)
+Set up the callsite menu with the given arguments. This is largely internal,
+but the main keywords to control the menu are:
+- `pagesize::Int` (default 10) Number of callsites to show at a time (without scrolling).
+- `sub_menu::Bool` (default false) if true, user can only pick a callsite, not change options.
+Others are passed to
+[`REPL.TerminalMenus.Config`](https://docs.julialang.org/en/v1/stdlib/REPL/#REPL.TerminalMenus.Config).
+"""
 function CthulhuMenu(state::CthulhuState, callsites, with_effects::Bool, exception_type::Bool,
                      optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
                      commands::Vector{Command}; pagesize::Int=10, sub_menu = false, kwargs...)

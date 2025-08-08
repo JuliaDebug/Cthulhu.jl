@@ -17,12 +17,13 @@ Base.@kwdef struct CthulhuConfig
     diagnostics_vscode::Bool = true
     jump_always::Bool = false
     view::Symbol = :source
-    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view)
+    menu_options::NamedTuple = ()
+    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
         diagnostics_vscode &= iswarn # if warnings are off, then no diagnostics are shown
         diagnostics_vscode &= TypedSyntax.diagnostics_available_vscode()
         inlay_types_vscode &= TypedSyntax.inlay_hints_available_vscode()
         optimize &= view !== :source
-        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view)
+        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
     end
 end
 
@@ -52,5 +53,8 @@ end
 - `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
 - `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
 - `jump_always::Bool` Initial state of "jump to source always" toggle. Defaults to `false`.
+
+Other keyword arguments are passed to [`Cthulhu.CthulhuMenu`](@ref) and/or
+[`REPL.TerminalMenus`](https://docs.julialang.org/en/v1/stdlib/REPL/#Customization-/-Configuration).
 """
 global CONFIG::CthulhuConfig = CthulhuConfig()
