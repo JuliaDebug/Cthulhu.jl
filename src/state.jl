@@ -32,15 +32,14 @@ mutable struct Command
     category::Symbol
     callback_on::Any
     callback_off::Any
-    function Command(active::Union{Nothing, Bool}, key, description, category, @nospecialize(callback_on), @nospecialize(callback_off))
+    function Command(active::Union{Nothing, Bool}, key, name, description, category, @nospecialize(callback_on), @nospecialize(callback_off))
         key = convert(UInt32, key)
         description = convert(String, description)
-        name = Symbol(description)
         return new(active, key, name, description, category, callback_on, callback_off)
     end
 end
 
-function default_commands()
+function default_menu_commands()
     commands = Command[
         set_option('w', :iswarn, :toggles, "warn"),
         set_option('h', :hide_type_stable, :toggles, "hide type-stable statements"),
@@ -70,15 +69,15 @@ function default_commands()
 end
 
 function perform_action(f, key::Char, name::Symbol, category, description = string(name))
-    return Command(nothing, key, description, category, f, nothing)
+    return Command(nothing, key, name, description, category, f, nothing)
 end
 
 function set_option(key::Char, option::Symbol, category, description = string(option); redisplay = true)
-    return Command(false, key, description, category, state -> set_option!(state, option, true; redisplay), state -> set_option!(state, option, false; redisplay))
+    return Command(false, key, option, description, category, state -> set_option!(state, option, true; redisplay), state -> set_option!(state, option, false; redisplay))
 end
 
 function set_view(key::Char, option::Symbol, category, description = string(option))
-    return Command(false, key, description, category, state -> set_option!(state, :view, option; redisplay = state.config.view !== option), nothing)
+    return Command(false, key, option, description, category, state -> set_option!(state, :view, option; redisplay = state.config.view !== option), nothing)
 end
 
 function set_option!(state::CthulhuState, option::Symbol, value; redisplay = false)
@@ -149,21 +148,17 @@ function update_default_commands!(commands::Vector{Command}, state::CthulhuState
     (; config) = state
     for command in commands
         (; name) = command
-        name === :inlay_types_vscode && set_active!(command, state, TypedSyntax.inlay_hints_available_vscode()) && continue
-        name === :diagnostics_vscode && set_active!(command, state, TypedSyntax.diagnostics_available_vscode()) && continue
+        name === :inlay_types_vscode && set_active!(command, state, config.inlay_types_vscode)
+        name === :diagnostics_vscode && set_active!(command, state, config.diagnostics_vscode)
         name === :optimize && set_active!(command, state, config.optimize)
-        name === :source && set_active!(command, state, config.view === :source)
-        name === :ast && set_active!(command, state, config.view === :ast)
-        name === :typed && set_active!(command, state, config.view === :typed)
-        name === :llvm && set_active!(command, state, config.view === :llvm)
-        name === :native && set_active!(command, state, config.view === :native)
+        command.category === :show && set_active!(command, state, config.view === name)
     end
 end
 
 function set_active!(command::Command, state::CthulhuState, value::Bool)
     something(command.active, false) === value && return
-    callback = ifelse(command.active === true, command.callback_off, command.callback_on)
-    command.active !== nothing && (command.active = !command.active)
+    callback = ifelse(value, command.callback_on, command.callback_off)
+    command.active !== nothing && (command.active = value)
     callback !== nothing && callback(state)
 end
 

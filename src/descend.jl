@@ -35,17 +35,18 @@ descend_impl(@nospecialize(args...); kwargs...) =
 # src/ui.jl provides the user facing interface to which `descend!` responds.
 ##
 function descend!(state::CthulhuState)
+    (; provider) = state
+    commands = menu_commands(provider)
+    if !isa(commands, Vector{Command})
+        error(lazy"""
+        invalid `$AbstractProvider` API:
+        `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to return a `Vector{Command}` object.
+        """)
+    end
     while true
-        (; config, mi, ci, provider) = state
+        (; config, mi, ci) = state
         iostream = state.terminal.out_stream::IO
         menu_options = (; cursor = '•', scroll_wrap = true, config.menu_options...)
-        commands = (@__MODULE__).commands(provider)
-        if !isa(commands, Vector{Command})
-            error(lazy"""
-            invalid `$AbstractProvider` API:
-            `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to return a `Vector{Command}` object.
-            """)
-        end
 
         mi::MethodInstance, ci::CodeInstance
 
@@ -151,6 +152,7 @@ function descend!(state::CthulhuState)
             # Recurse into the callsite.
 
             prev = save_descend_state(state)
+            state.mi = get_mi(ci)
             state.ci = ci
             state.override = get_override(provider, info)
             state.display_code = true

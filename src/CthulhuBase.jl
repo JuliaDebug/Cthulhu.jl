@@ -34,9 +34,9 @@ include("config.jl")
 include("preferences.jl")
 
 include("interface.jl")
+include("callsite.jl")
 include("compiler.jl")
 include("state.jl")
-include("callsite.jl")
 include("interpreter.jl")
 include("provider.jl")
 include("reflection.jl")
@@ -94,12 +94,9 @@ function _descend(term::AbstractTerminal, provider::AbstractProvider, @nospecial
     _descend(term, provider, mi; kwargs...)
 end
 
-function _descend(term::AbstractTerminal, interp::AbstractInterpreter, @nospecialize(args...); kwargs...)
-    provider = DefaultProvider(interp)
-    _descend(term, provider, args...; kwargs...)
+function _descend(term::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
+    _descend(term, provider, args...)
 end
 
-_descend(term::AbstractTerminal, @nospecialize(args...); kwargs...) =
-    _descend(term, NativeInterpreter(), args...)
 _descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =
     _descend(terminal, args...; kwargs...)

@@ -1,28 +1,3 @@
-struct InferredSource
-    src::CodeInfo
-    stmt_info::Vector{CCCallInfo}
-    effects::Effects
-    rt::Any
-    exct::Any
-    InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt),
-                   @nospecialize(exct)) =
-        new(src, stmt_info, effects, rt, exct)
-end
-
-struct OptimizedSource
-    ir::IRCode
-    src::CodeInfo
-    isinlineable::Bool
-    effects::Effects
-end
-
-const InferenceKey = Union{CodeInstance,InferenceResult} # TODO make this `CodeInstance` fully
-const InferenceDict{InferenceValue} = IdDict{InferenceKey, InferenceValue}
-const PC2Remarks = Vector{Pair{Int, String}}
-const PC2CallMeta = Dict{Int, CallMeta}
-const PC2Effects = Dict{Int, Effects}
-const PC2Excts = Dict{Int, Any}
-
 mutable struct CthulhuCacheToken end
 
 struct CthulhuInterpreter <: AbstractInterpreter
@@ -46,7 +21,7 @@ function CthulhuInterpreter(interp::AbstractInterpreter=NativeInterpreter())
         InferenceDict{PC2Excts}())
 end
 
-Base.show(io::IO, interp::CthulhuInterpreter) = print(io, typeof(interp), "(...)")
+Base.show(io::IO, interp::CthulhuInterpreter) = print(io, typeof(interp), '(', interp.native, ')')
 
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 CC.OptimizationParams(interp::CthulhuInterpreter) =
@@ -64,6 +39,26 @@ CC.method_table(interp::CthulhuInterpreter) = CC.method_table(interp.native)
 # identifier for the internal code cache. However, the definition of `cache_owner` is
 # necessary for utilizing the default `CodeInstance` constructor, define the overload here.
 CC.cache_owner(interp::CthulhuInterpreter) = interp.cache_token
+
+function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter, override::InferenceResult)
+    isa(override.src, OptimizedSource) || error("couldn't find the source")
+    return override.src
+end
+
+function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter, ci::CodeInstance)
+    opt = ci.inferred
+    isa(opt, OptimizedSource) && return opt
+    @eval Main begin
+        interp = $interp
+        ci = $ci
+    end
+    error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
+end
+
+function InferredSource(provider::AbstractProvider, interp::CthulhuInterpreter, src::Union{CodeInstance,InferenceResult})
+    unopt = interp.unopt[src]
+    return unopt
+end
 
 function get_inference_key(state::InferenceState)
     result = state.result

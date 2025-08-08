@@ -112,7 +112,7 @@ function usage(config, commands::Vector{Command})
     buffer = IOBuffer()
     io = IOContext(buffer, :color => true)
 
-    println(io, "\rSelect a call to descend into or ↩ to ascend.")
+    println(io, "Select a call to descend into or ↩ to ascend.")
     # XXX: Add multi-color `debuginfo` printing (see `debugcolors`)
     categories = split_by_category(commands)
     for (category, list) in categories
@@ -134,7 +134,7 @@ function usage(config, commands::Vector{Command})
                 i = 1
                 description = "$key: $description"
             end
-            print(description[1:prevind(description, i)])
+            print(io, description[1:prevind(description, i)])
             print(io, '[', colorize(something(command.active, false), key), ']')
             print(io, description[nextind(description, i):end])
         end
@@ -149,7 +149,8 @@ function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
     i = findfirst(x -> x.key == key, menu.commands)
     i === nothing && return false
     command = menu.commands[i]
-    set_active!(command, menu.state, !something(command.active, false))
+    value = command.category === :show ? true : !something(command.active, false)
+    set_active!(command, menu.state, value)
     menu.toggle = command.name
     return true
 end
