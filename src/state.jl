@@ -90,7 +90,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
         option === :inline_cost && !optimize && @warn "Enable optimization to see the inlining costs."
     end
 
-    if option === :highlighter
+    if option === :enable_highlighter
         value === true && @info "Using syntax highlighter $(CONFIG.highlighter)."
         value === false && @info "Turned off syntax highlighter for Julia, LLVM and native code."
     end
