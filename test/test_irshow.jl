@@ -12,12 +12,12 @@ include("IRShowSandbox.jl")
     @testset "optimize: $optimize" for optimize in tf
         (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(IRShowSandbox.foo, (Int, Int); optimize);
 
-        @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+        @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
             @testset "iswarn: $iswarn" for iswarn in tf
                 @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                     @testset "inline_cost: $inline_cost" for inline_cost in tf
                         @testset "type_annotations: $type_annotations" for type_annotations in tf
-                            !optimize && debuginfo === Cthulhu.DInfo.compact && continue
+                            !optimize && debuginfo === :compact && continue
                             !optimize && inline_cost && continue
 
                             s = sprint(; context=:color=>true) do io

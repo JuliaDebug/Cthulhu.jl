@@ -1,4 +1,4 @@
-module test_terminal
+# module test_terminal
 
 using Core: Const
 using Test, REPL, Cthulhu, Revise
@@ -364,4 +364,4 @@ end
     end
 end
 
-end # module test_terminal
+# end # module test_terminal

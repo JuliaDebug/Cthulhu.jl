@@ -18,7 +18,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
             codeview == Cthulhu.cthulhu_ast && continue
         end
         @testset "optimize: $optimize" for optimize in tf
-            @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+            @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
                 config = Cthulhu.CONFIG
 
                 io = IOBuffer()
@@ -29,7 +29,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
         end
     end
 
-    @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+    @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
         @testset "iswarn: $iswarn" for iswarn in tf
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                 @testset "inline_cost: $inline_cost" for inline_cost in tf

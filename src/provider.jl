@@ -4,27 +4,11 @@ end
 DefaultProvider(interp::CC.AbstractInterpreter = NativeInterpreter()) = DefaultProvider(CthulhuInterpreter(interp))
 
 get_abstract_interpreter(provider::DefaultProvider) = provider.interp
-
-struct LookupResult
-    src::Union{CodeInfo,IRCode,Nothing}
-    rt
-    exct
-    infos::Vector{CCCallInfo} # needed? -> Callsite?
-    slottypes::Vector{Any}
-    effects::Effects
-    codeinf::Union{Nothing,CodeInfo}
-    optimized::Bool
-    function LookupResult(src::Union{CodeInfo,IRCode,Nothing}, @nospecialize(rt), @nospecialize(exct),
-        infos::Vector{CCCallInfo}, slottypes::Vector{Any},
-        effects::Effects, codeinf::Union{Nothing,CodeInfo},
-        optimized::Bool)
-        return new(src, rt, exct, infos, slottypes, effects, codeinf, optimized)
-    end
-end
+AbstractProvider(interp::CthulhuInterpreter) = DefaultProvider(interp)
 
 # Interface.
 
-function lookup(provider::DefaultProvider, ci::CodeInstance, optimize::Bool)
+function LookupResult(provider::DefaultProvider, ci::CodeInstance, optimize::Bool)
     if optimize
         result = lookup_optimized(provider.interp, ci)
         if result === nothing
@@ -39,16 +23,16 @@ function lookup(provider::DefaultProvider, ci::CodeInstance, optimize::Bool)
     return lookup_unoptimized(provider.interp, ci)
 end
 
-function lookup(provider::DefaultProvider, result::InferenceResult, optimize::Bool)
-    optimize && return lookup_constproped_optimized(provider.interp, result)
+function LookupResult(provider::DefaultProvider, result::InferenceResult, optimize::Bool)
+    optimize && return lookup_constproped_optimized(result)
     return lookup_constproped_unoptimized(provider.interp, result)
 end
 
-function lookup(provider::DefaultProvider, call::SemiConcreteCallInfo, optimize::Bool)
+function LookupResult(provider::DefaultProvider, call::SemiConcreteCallInfo, optimize::Bool)
     return lookup_semiconcrete(provider.interp, call)
 end
 
-function get_override(provider::DefaultProvider, @nospecialize(info))
+function get_override(provider::AbstractProvider, @nospecialize(info))
     isa(info, ConstPropCallInfo) && return info.result
     isa(info, SemiConcreteCallInfo) && return info
     isa(info, OCCallInfo) && return get_override(info.ci)
@@ -108,10 +92,10 @@ function lookup_unoptimized(interp::CthulhuInterpreter, ci::CodeInstance)
     return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, false)
 end
 
-function lookup_constproped_optimized(interp::CthulhuInterpreter, override::InferenceResult)
+function lookup_constproped_optimized(override::InferenceResult)
     opt = override.src
     isa(opt, OptimizedSource) || error("couldn't find the source")
-    # `(override::InferenceResult).src` might has been transformed to OptimizedSource already,
+    # `override.src` might has been transformed to OptimizedSource already,
     # e.g. when we switch from constant-prop' unoptimized source
     src = CC.copy(opt.ir)
     rt = override.result

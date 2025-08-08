@@ -2,28 +2,6 @@ using REPL.TerminalMenus
 import REPL.TerminalMenus: request
 using FoldingTrees
 
-mutable struct CustomToggle
-    onoff::Bool
-    key::UInt32
-    toggle::Symbol
-    description::String
-    callback_on
-    callback_off
-    function CustomToggle(onoff::Bool, key, description,
-        @nospecialize(callback_on), @nospecialize(callback_off))
-        key = convert(UInt32, key)
-        desc = convert(String, description)
-        toggle = Symbol(desc)
-        if haskey(TOGGLES, key)
-            error(lazy"invalid Cthulhu API: key `$key` is already used.")
-        elseif toggle in values(TOGGLES)
-            error(lazy"invalid Cthulhu API: toggle `$toggle` is already used.")
-        end
-        return new(onoff, key, toggle, desc, callback_on, callback_off)
-    end
-end
-custom_toggles(provider::AbstractProvider) = CustomToggle[]
-
 mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     options::Vector{String}
     pagesize::Int
@@ -32,7 +10,8 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     toggle::Union{Nothing, Symbol}
     sub_menu::Bool
     config::TerminalMenus.Config
-    custom_toggles::Vector{CustomToggle}
+    commands::Vector{Command}
+    state::CthulhuState
 end
 
 function show_as_line(callsite::Callsite, with_effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool)
@@ -50,9 +29,9 @@ function show_as_line(callsite::Callsite, with_effects::Bool, exception_type::Bo
     end
 end
 
-function CthulhuMenu(callsites, with_effects::Bool, exception_type::Bool,
+function CthulhuMenu(state::CthulhuState, callsites, with_effects::Bool, exception_type::Bool,
                      optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
-                     custom_toggles::Vector{CustomToggle}; pagesize::Int=10, sub_menu = false, kwargs...)
+                     commands::Vector{Command}; pagesize::Int=10, sub_menu = false, kwargs...)
     options = build_options(callsites, with_effects, exception_type, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
@@ -68,7 +47,7 @@ function CthulhuMenu(callsites, with_effects::Bool, exception_type::Bool,
 
     config = TerminalMenus.Config(; kwargs...)
 
-    return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, custom_toggles)
+    return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, commands, state)
 end
 
 build_options(callsites::Vector{Callsite}, with_effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
@@ -116,111 +95,62 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(@nospecialize(view_cmd), annotate_source, optimize, iswarn, hide_type_stable,
-               debuginfo, remarks, with_effects, exception_type, inline_cost,
-               type_annotations, highlight, inlay_types_vscode, diagnostics_vscode,
-               jump_always, custom_toggles::Vector{CustomToggle})
+function usage(config, commands::Vector{Command})
     colorize(use_color::Bool, c::Char) = stringify() do io
         use_color ? printstyled(io, c; color=:cyan) : print(io, c)
     end
 
-    io = IOBuffer()
-    ioctx = IOContext(io, :color=>true)
+    buffer = IOBuffer()
+    io = IOContext(buffer, :color => true)
 
-    println(ioctx, "Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark.")
-    print(ioctx, "Toggles: [",
-        colorize(iswarn, 'w'), "]arn, [",
-        colorize(hide_type_stable, 'h'), "]ide type-stable statements, [",
-        colorize(type_annotations, 't'), "]ype annotations, [",
-        colorize(highlight, 's'), "]yntax highlight for Source/LLVM/Native, [",
-        colorize(jump_always, 'j'), "]ump to source always"),
-    if TypedSyntax.inlay_hints_available_vscode()
-        print(ioctx, ", [",
-        colorize(inlay_types_vscode, 'v'), "]scode: inlay types")
+    println(io, "\rSelect a call to descend into or ↩ to ascend.")
+    # XXX: Add multi-color `debuginfo` printing (see `debugcolors`)
+    categories = split_by_category(commands)
+    for (category, list) in categories
+        print(io, '\n', uppercasefirst(string(category)), ": ")
+        is_first = true
+        for command in list
+            (; description) = command
+
+            description == "vscode: inlay types" && !TypedSyntax.inlay_hints_available_vscode() && continue
+            description == "vscode: diagnostics" && !TypedSyntax.diagnostics_available_vscode() && continue
+            config.view === :source && in(description, ("optimize", "debuginfo", "remarks", "effects", "exception types", "inlining costs")) && continue
+
+            !is_first && print(io, ", ")
+            is_first = false
+
+            key = Char(command.key)
+            i = findfirst(x -> lowercase(x) == lowercase(key), description)
+            if i === nothing
+                i = 1
+                description = "$key: $description"
+            end
+            print(description[1:prevind(description, i)])
+            print(io, '[', colorize(something(command.active, false), key), ']')
+            print(io, description[nextind(description, i):end])
+        end
+        print(io, '.')
     end
-    if TypedSyntax.diagnostics_available_vscode()
-        print(ioctx, ", [",
-        colorize(diagnostics_vscode, 'V'), "]scode: diagnostics")
-    end
-    if !annotate_source
-        print(ioctx, ", [",
-            colorize(optimize, 'o'), "]ptimize, [",
-            stringify() do io
-                printstyled(io, 'd'; color=debugcolors[Int(debuginfo)+1])
-            end, "]ebuginfo, [",
-            colorize(remarks, 'r'), "]emarks, [",
-            colorize(with_effects, 'e'), "]ffects, ",
-            "e[", colorize(exception_type, 'x'), "]ception types, [",
-            colorize(inline_cost, 'i'), "]nlining costs")
-    end
-    for i = 1:length(custom_toggles)
-        ct = custom_toggles[i]
-        print(ioctx, ", [", colorize(ct.onoff, Char(ct.key)), ']', ct.description)
-        i ≠ length(custom_toggles) && print(ioctx, ", ")
-    end
-    print(ioctx, '.')
-    println(ioctx)
-    println(ioctx, "Show: [",
-        colorize(annotate_source, 'S'), "]ource code, [",
-        colorize(view_cmd === cthulhu_ast, 'A'), "]ST, [",
-        colorize(!annotate_source && view_cmd === cthulhu_typed, 'T'), "]yped code, [",
-        colorize(view_cmd === cthulhu_llvm, 'L'), "]LVM IR, [",
-        colorize(view_cmd === cthulhu_native, 'N'), "]ative code")
-    print(ioctx,
-    """
-    Actions: [E]dit source code, [R]evise and redisplay""")
-    if !annotate_source
-        print(ioctx,
-        """
-        \nAdvanced: dump [P]arams cache.""")
-    end
-    return String(take!(io))
+    println(io)
+    return String(take!(buffer))
 end
 
-const TOGGLES = Dict(
-    UInt32('w') => :warn,
-    UInt32('h') => :hide_type_stable,
-    UInt32('o') => :optimize,
-    UInt32('d') => :debuginfo,
-    UInt32('r') => :remarks,
-    UInt32('e') => :with_effects,
-    UInt32('x') => :exception_type,
-    UInt32('i') => :inline_cost,
-    UInt32('t') => :type_annotations,
-    UInt32('s') => :highlighter,
-    UInt32('S') => :source,
-    UInt32('A') => :ast,
-    UInt32('T') => :typed,
-    UInt32('L') => :llvm,
-    UInt32('N') => :native,
-    UInt32('P') => :dump_params,
-    UInt32('b') => :bookmark,
-    UInt32('R') => :revise,
-    UInt32('E') => :edit,
-    UInt32('v') => :inlay_types_vscode,
-    UInt32('V') => :diagnostics_vscode,
-    UInt32('j') => :jump_always
-)
-
-function TerminalMenus.keypress(m::CthulhuMenu, key::UInt32)
-    m.sub_menu && return false
-    toggle = get(TOGGLES, key, nothing)
-    if !isnothing(toggle)
-        m.toggle = toggle
-        return true
-    end
-    local i = findfirst(ct->ct.key == key, m.custom_toggles)
-    isnothing(i) && return false
-    m.toggle = m.custom_toggles[i].toggle
+function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
+    menu.sub_menu && return false
+    i = findfirst(x -> x.key == key, menu.commands)
+    i === nothing && return false
+    command = menu.commands[i]
+    set_active!(command, menu.state, !something(command.active, false))
+    menu.toggle = command.name
     return true
 end
 
 function TerminalMenus.pick(menu::CthulhuMenu, cursor::Int)
     menu.selected = cursor
-    return true #break out of the menu
+    return true # break out of the menu
 end
 
-function TerminalMenus.writeline(buf::IOBuffer, menu::CthulhuMenu, idx::Int, iscursor::Bool)
+function TerminalMenus.writeline(buffer::IOBuffer, menu::CthulhuMenu, idx::Int, iscursor::Bool)
     line = replace(menu.options[idx], "\n" => "\\n")
-    print(buf, line)
+    print(buffer, line)
 end

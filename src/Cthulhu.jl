@@ -1,14 +1,15 @@
 module Cthulhu
 
 export @descend, @descend_code_typed, @descend_code_warntype,
-    descend, descend_code_typed, descend_code_warntype, ascend
+    descend, descend_code_typed, descend_code_warntype, ascend,
+    AbstractProvider
 
 const CC = Base.Compiler
 const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 
-__init__() = read_config!(CONFIG)
+__init__() = read_config!()
 
 include("CthulhuBase.jl")
 include("testing.jl")
@@ -193,11 +194,11 @@ using PrecompileTools
 @setup_workload begin
     try
         @compile_workload begin
-            terminal = Testing.FakeTerminal()
-            task = @async @descend terminal=terminal.tty gcd(1, 2)
-            write(terminal, 'q')
-            wait(task)
-            finalize(terminal)
+            # terminal = Testing.FakeTerminal()
+            # task = @async @descend terminal=terminal.tty gcd(1, 2)
+            # write(terminal, 'q')
+            # wait(task)
+            # finalize(terminal)
         end
     catch err
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())

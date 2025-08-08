@@ -1,4 +1,4 @@
-module test_Cthulhu
+# module test_Cthulhu
 
 using Test, Cthulhu, StaticArrays, Random
 using Core: Const
@@ -886,8 +886,8 @@ end
 
 @testset "preferences" begin
     # Test that load and save are able to set state
-    Cthulhu.CONFIG.enable_highlighter = true
-    Cthulhu.CONFIG.debuginfo = :none
+    @reset Cthulhu.CONFIG.enable_highlighter = true
+    @reset Cthulhu.CONFIG.debuginfo = :none
     Cthulhu.save_config!(Cthulhu.CONFIG)
 
     Cthulhu.CONFIG.enable_highlighter = false
@@ -895,7 +895,7 @@ end
     @test Cthulhu.CONFIG.debuginfo === :compact
     @test !Cthulhu.CONFIG.enable_highlighter
 
-    Cthulhu.read_config!(Cthulhu.CONFIG)
+    Cthulhu.read_config!()
     @test Cthulhu.CONFIG.debuginfo === :none
     @test Cthulhu.CONFIG.enable_highlighter
 end
@@ -964,4 +964,4 @@ f515() = cglobal((:foo, bar))
     end
 end
 
-end # module test_Cthulhu
+# end # module test_Cthulhu

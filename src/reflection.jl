@@ -243,7 +243,7 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
             info = $info
             argtypes = $argtypes
             rt = $rt
-            optimized = $(lookup.optimize)
+            optimized = $(lookup.optimized)
         end
         error("inspect `Main.provider|info|argtypes|rt|optimized`")
     end

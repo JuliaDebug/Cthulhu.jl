@@ -44,7 +44,7 @@ function ascend_impl(term, mi; interp::AbstractInterpreter=NativeInterpreter(), 
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            browsecodetyped && _descend(term, mi; interp, annotate_source=true, iswarn=true, optimize=false, interruptexc=false, kwargs...)
+            browsecodetyped && _descend(term, mi; interp, view=:source, iswarn=true, optimize=false, interruptexc=false, kwargs...)
         end
     end
 end
