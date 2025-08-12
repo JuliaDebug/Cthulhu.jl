@@ -46,15 +46,6 @@ include("backedges.jl")
 include("descend.jl")
 include("ascend.jl")
 
-"""
-    @interp
-
-For debugging. Returns a CthulhuInterpreter from the appropriate entrypoint.
-"""
-macro interp(ex0...)
-    InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :mkinterp, ex0)
-end
-
 using .CC: cached_return_type
 
 cached_exception_type(code::CodeInstance) = code.exctype

@@ -82,15 +82,9 @@ function is_type_unstable(code::Union{IRCode, CodeInfo}, idx::Int, used::BitSet)
 end
 is_type_unstable(@nospecialize(type)) = type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
 
-cthulhu_warntype(args...; kwargs...) = cthulhu_warntype(stdout::IO, args...; kwargs...)
-function cthulhu_warntype(io::IO, provider::AbstractProvider, debuginfo::Symbol,
-    src::Union{CodeInfo,IRCode}, @nospecialize(rt), effects::Effects, codeinst::Union{Nothing,CodeInstance}=nothing;
-    hide_type_stable::Bool=false, inline_cost::Bool=false, optimize::Bool=false)
-    if inline_cost
-        isa(mi, MethodInstance) || error("Need a MethodInstance to show inlining costs. Call `cthulhu_typed` directly instead.")
-    end
-    cthulhu_typed(io, provider, debuginfo, src, rt, nothing, effects, codeinst; iswarn=true, optimize, hide_type_stable, inline_cost, interp)
-    return nothing
+function cthulhu_warntype(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult)
+    @reset state.config.iswarn = true
+    return cthulhu_typed(io, provider, state, result)
 end
 
 function cthulhu_source(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult)

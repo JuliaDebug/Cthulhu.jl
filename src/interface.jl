@@ -37,7 +37,7 @@ end
 
 function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=true)
     interp = get_abstract_interpreter(provider)
-    interp !== nothing && return find_caller_of(provider, interp, callee, caller, allow_unspecialized)
+    interp !== nothing && return find_caller_of(provider, interp, callee, mi, allow_unspecialized)
     error(lazy"Not implemented for $provider")
 end
 

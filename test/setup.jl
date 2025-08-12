@@ -1,4 +1,5 @@
 using Test, Cthulhu, InteractiveUtils
+using Cthulhu: AbstractProvider, CthulhuConfig, CthulhuState, find_method_instance, generate_code_instance, LookupResult
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
@@ -7,16 +8,17 @@ end
 
 function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
                       optimize=true, interp=Cthulhu.CC.NativeInterpreter())
-    (interp, codeinst) = Cthulhu.mkinterp(f, tt; interp)
-    (; src, rt, exct, infos, slottypes, effects) =
-        Cthulhu.LookupResult(interp, codeinst, optimize)
-    return (; interp, src, infos, codeinst, rt, exct, slottypes, effects)
+    provider = AbstractProvider(interp)
+    mi = find_method_instance(provider, f, tt)
+    ci = generate_code_instance(provider, mi)
+    result = LookupResult(provider, ci, optimize)
+    return provider, mi, ci, result
 end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
-    (; interp, src, infos, codeinst, slottypes) = cthulhu_info(f, TT; optimize)
-    src === nothing && return Cthulhu.Callsite[]
-    callsites, _ = Cthulhu.find_callsites(interp, src, infos, codeinst, slottypes)
+    provider, mi, ci, result = cthulhu_info(f, TT; optimize)
+    result.src === nothing && return Cthulhu.Callsite[]
+    callsites, _ = Cthulhu.find_callsites(provider, result, ci)
     @test all(c -> Cthulhu.get_effects(c) isa Cthulhu.Effects, callsites)
     return callsites
 end

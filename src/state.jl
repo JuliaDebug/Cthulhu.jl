@@ -220,6 +220,16 @@ function default_style_for_command_key(provider::AbstractProvider, state::Cthulh
     return default_style(value)
 end
 
+value_for_command(provider::AbstractProvider, state::CthulhuState, command::Command) =
+    value_for_default_command(provider, state, command)
+
+function value_for_default_command(provider::AbstractProvider, state::CthulhuState, command::Command)
+    command.category === :show && return state.config.view === command.name
+    command.category !== :toggles && return nothing
+    !hasproperty(state.config, command.name) && return nothing
+    return getproperty(state.config, command.name)
+end
+
 default_style(@nospecialize(value)) = NamedTuple()
 default_style(value::Nothing) = (; color=:cyan, bold=false)
 function default_style(value::Bool)
@@ -232,14 +242,4 @@ function debuginfo_style(value::Symbol)
     i === nothing && return NamedTuple()
     color = (:red, :light_black, :green)[i]
     return (; color, bold = color === :green)
-end
-
-value_for_command(provider::AbstractProvider, state::CthulhuState, command::Command) =
-    value_for_default_command(provider, state, command)
-
-function value_for_default_command(provider::AbstractProvider, state::CthulhuState, command::Command)
-    command.category === :show && return state.config.view === command.name
-    command.category !== :toggles && return nothing
-    !hasproperty(state.config, command.name) && return nothing
-    return getproperty(state.config, command.name)
 end

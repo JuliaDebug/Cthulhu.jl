@@ -19,16 +19,16 @@ function generate_code_instance(provider::AbstractProvider, interp::AbstractInte
     return ci
 end
 
-function find_caller_of(provider::AbstractProvider, interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, caller::MethodInstance, allow_unspecialized::Bool)
-    codeinst = generate_code_instance(provider, interp, caller)
-    @assert codeinst.def === caller
+function find_caller_of(provider::AbstractProvider, interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, mi::MethodInstance, allow_unspecialized::Bool)
+    ci = generate_code_instance(provider, interp, mi)
+    @assert get_mi(ci) === mi
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
-        (; src, rt, infos, slottypes) = LookupResult(interp, codeinst, optimize)
-        callsites, _ = find_callsites(interp, src, infos, codeinst, slottypes, optimize)
-        callsites = allow_unspecialized ? filter(cs->maybe_callsite(cs, callee), callsites) :
-        filter(cs->is_callsite(cs, callee), callsites)
-        foreach(cs -> add_sourceline!(locs, src, cs.id, caller), callsites)
+        result = LookupResult(provider, interp, ci, optimize)
+        callsites, _ = find_callsites(provider, result, ci)
+        callsites = allow_unspecialized ? filter(cs -> maybe_callsite(cs, callee), callsites) :
+        filter(cs -> is_callsite(cs, callee), callsites)
+        foreach(cs -> add_sourceline!(locs, result.src, cs.id, mi), callsites)
     end
     # Consolidate by method, but preserve the order
     prlookup = Dict{Tuple{Symbol,Symbol},Int}()
@@ -132,15 +132,17 @@ function lookup_optimized(provider::AbstractProvider, interp::AbstractInterprete
     effects = get_effects(ci)
     if CC.use_const_api(ci) && ci.inferred === nothing
         @assert isdefined(ci, :rettype_const)
-        const_ci = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
-        return lookup_optimized(provider, interp, const_ci)
+        src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
+        infos = CCCallInfo[]
+        slottypes = Any[]
+        return LookupResult(src, rt, exct, infos, slottypes, effects, src, true)
     end
     opt = OptimizedSource(provider, interp, ci)
-    src = CC.copy(opt.ir)
+    ir = CC.copy(opt.ir)
     codeinf = opt.src
-    infos = src.stmts.info
-    slottypes = src.argtypes
-    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, true)
+    infos = ir.stmts.info
+    slottypes = ir.argtypes
+    return LookupResult(ir, rt, exct, infos, slottypes, effects, codeinf, true)
 end
 
 function lookup_unoptimized(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)
