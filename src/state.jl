@@ -180,6 +180,19 @@ end
 
 menu_commands(provider::AbstractProvider) = default_menu_commands()
 
+is_command_enabled(provider::AbstractProvider, state::CthulhuState, command::Command) =
+    is_default_command_enabled(provider, state, command)
+
+function is_default_command_enabled(provider::AbstractProvider, state::CthulhuState, command::Command)
+    command.name === :inlay_types_vscode && return TypedSyntax.inlay_hints_available_vscode()
+    command.name === :diagnostics_vscode && return TypedSyntax.diagnostics_available_vscode()
+    if state.config.view === :source
+        disabled_commands = (:optimize, :debuginfo, :remarks, :with_effects, :exception_type, :inline_cost)
+        return !in(command.name, disabled_commands)
+    end
+    return true
+end
+
 function show_command(io::IO, provider::AbstractProvider, state::CthulhuState, command::Command)
     (; description) = command
     key = Char(command.key)

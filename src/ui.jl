@@ -115,16 +115,9 @@ function usage(provider::AbstractProvider, state::CthulhuState, commands::Vector
         print(io, ": ")
         is_first = true
         for command in list
-            (; description) = command
-
-            # XXX: Reuse this filter (and make it user-parametrized) when processing key presses.
-            description == "vscode: inlay types" && !TypedSyntax.inlay_hints_available_vscode() && continue
-            description == "vscode: diagnostics" && !TypedSyntax.diagnostics_available_vscode() && continue
-            state.config.view === :source && in(description, ("optimize", "debuginfo", "remarks", "effects", "exception types", "inlining costs")) && continue
-
+            is_default_command_enabled(provider, state, command) || continue
             !is_first && print(io, ", ")
             is_first = false
-
             show_command(io, provider, state, command)
         end
         print(io, '.')
@@ -135,9 +128,11 @@ end
 
 function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
     menu.sub_menu && return false
-    i = findfirst(x -> x.key == key, menu.commands)
+    (; state) = menu
+    (; provider) = state
+    i = findfirst(x -> x.key == key && is_command_enabled(provider, state, x), menu.commands)
     i === nothing && return false
-    println(menu.state.terminal.out_stream::IO)
+    println(state.terminal.out_stream::IO)
     command = menu.commands[i]
     command.f(menu.state)
     menu.toggle = command.name
