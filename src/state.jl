@@ -57,11 +57,11 @@ function default_menu_commands()
         set_view('T', :typed, :show),
         set_view('L', :llvm, :show),
         set_view('N', :native, :show),
+        perform_action(nothing, 'q', :quit, :actions),
+        perform_action(bookmark_method, 'b', :bookmark, :actions),
         perform_action(edit_source_code, 'E', :edit, :actions, "Edit source code"),
         perform_action(revise_and_redisplay!, 'R', :revise, :actions, "Revise and redisplay"),
-        perform_action(bookmark_method, 'b', :bookmark, :actions),
         perform_action(dump_parameters, 'P', :dump_params, :actions, "dump params cache"),
-        perform_action(nothing, 'q', :quit, :actions),
     ]
     return commands
 end
