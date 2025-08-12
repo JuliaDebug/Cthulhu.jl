@@ -95,7 +95,7 @@ function _descend(term::AbstractTerminal, provider::AbstractProvider, @nospecial
 end
 
 function _descend(term::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
-    _descend(term, provider, args...)
+    _descend(term, provider, args...; kwargs...)
 end
 
 _descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =

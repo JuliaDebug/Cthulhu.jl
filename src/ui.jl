@@ -104,39 +104,28 @@ function stringify(@nospecialize(f), context::IOContext)
 end
 
 const debugcolors = (:nothing, :light_black, :yellow)
-function usage(config, commands::Vector{Command})
-    colorize(use_color::Bool, c::Char) = stringify() do io
-        use_color ? printstyled(io, c; color=:cyan) : print(io, c)
-    end
-
+function usage(provider::AbstractProvider, state::CthulhuState, commands::Vector{Command})
     buffer = IOBuffer()
     io = IOContext(buffer, :color => true)
 
-    println(io, "Select a call to descend into or ↩ to ascend.")
-    # XXX: Add multi-color `debuginfo` printing (see `debugcolors`)
+    printstyled(io, "Select a call to descend into or ↩ to ascend."; color = :blue)
     categories = split_by_category(commands)
     for (category, list) in categories
-        print(io, '\n', uppercasefirst(string(category)), ": ")
+        printstyled(io, '\n', uppercasefirst(string(category)); color=:cyan)
+        print(io, ": ")
         is_first = true
         for command in list
             (; description) = command
 
+            # XXX: Reuse this filter (and make it user-parametrized) when processing key presses.
             description == "vscode: inlay types" && !TypedSyntax.inlay_hints_available_vscode() && continue
             description == "vscode: diagnostics" && !TypedSyntax.diagnostics_available_vscode() && continue
-            config.view === :source && in(description, ("optimize", "debuginfo", "remarks", "effects", "exception types", "inlining costs")) && continue
+            state.config.view === :source && in(description, ("optimize", "debuginfo", "remarks", "effects", "exception types", "inlining costs")) && continue
 
             !is_first && print(io, ", ")
             is_first = false
 
-            key = Char(command.key)
-            i = findfirst(x -> lowercase(x) == lowercase(key), description)
-            if i === nothing
-                i = 1
-                description = "$key: $description"
-            end
-            print(io, description[1:prevind(description, i)])
-            print(io, '[', colorize(something(command.active, false), key), ']')
-            print(io, description[nextind(description, i):end])
+            show_command(io, provider, state, command)
         end
         print(io, '.')
     end
@@ -148,9 +137,9 @@ function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
     menu.sub_menu && return false
     i = findfirst(x -> x.key == key, menu.commands)
     i === nothing && return false
+    println(menu.state.terminal.out_stream::IO)
     command = menu.commands[i]
-    value = command.category === :show ? true : !something(command.active, false)
-    set_active!(command, menu.state, value)
+    command.f(menu.state)
     menu.toggle = command.name
     return true
 end

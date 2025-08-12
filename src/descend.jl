@@ -117,8 +117,7 @@ function descend!(state::CthulhuState)
         menu = CthulhuMenu(state, shown_callsites, config.with_effects, config.exception_type, config.optimize,
                            config.iswarn & get(iostream, :color, false)::Bool,
                            config.hide_type_stable, commands; menu_options...)
-        update_commands!(provider, commands, state)
-        usg = usage(config, commands)
+        usg = usage(provider, state, commands)
         cid = request(state.terminal, usg, menu)
         toggle = menu.toggle
 
@@ -159,9 +158,10 @@ function descend!(state::CthulhuState)
             descend!(state)
             restore_descend_state!(state, prev)
             state.display_code = true
+
+            println(iostream)
         end
 
-        println(iostream)
     end
 
     TypedSyntax.clear_all_vscode()

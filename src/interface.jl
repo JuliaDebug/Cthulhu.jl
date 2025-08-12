@@ -118,5 +118,3 @@ end
 # AbstractCursor(provider::AbstractProvider, ci::CodeInstance) = CthulhuCursor(ci)
 # get_ci(curs::CthulhuCursor) = curs.ci
 # navigate(curs::CthulhuCursor, callsite::Callsite) = CthulhuCursor(get_ci(callsite))
-
-menu_commands(provider::AbstractProvider) = default_menu_commands()

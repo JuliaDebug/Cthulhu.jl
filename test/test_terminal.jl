@@ -77,21 +77,19 @@ end
 
     # Copy the user's current settings and set up the defaults
     CONFIG = deepcopy(_Cthulhu.CONFIG)
-    config = _Cthulhu.CthulhuConfig()
-    for fn in fieldnames(_Cthulhu.CthulhuConfig)
-        setfield!(_Cthulhu.CONFIG, fn, getfield(config, fn))
-    end
+    CONFIG = _Cthulhu.CONFIG
+    _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig()
 
     try
         terminal = FakeTerminal()
-        task = @async @with_try_stderr terminal.output descend(simplef, Tuple{Float32, Int32}; annotate_source=false, interruptexc=false, iswarn=false, terminal)
+        task = @async @with_try_stderr terminal.output descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, interruptexc=false, iswarn=false, terminal)
 
         displayed, text = read_from(terminal)
         @test occursin("simplef(a, b)", text)
         @test occursin(r"Base\.mul_float\(.*, .*\)::Float32", text)
         @test occursin('[' * colorize(true, 'o') * "]ptimize", displayed)
         @test occursin('[' * colorize(true, 'T') * "]yped", displayed)
-        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed) # beginning of the line
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend."; color = :blue), displayed) # beginning of the line
         @test occursin('•', text)
         write(terminal, 'o') # switch to unoptimized
         displayed, text = read_from(terminal)
@@ -99,7 +97,7 @@ end
         @test occursin("::Const(*)", text)
         @test occursin("(z = (%1)(a, a))", text)
         @test occursin('[' * colorize(false, 'o') * "]ptimize", displayed)
-        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed) # beginning of the line
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend."; color = :blue), displayed) # beginning of the line
         @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
         # Call selection
@@ -132,7 +130,7 @@ end
         @test occursin(r"z.*::Float32", text)
         @test occursin("Body", text)
         @test occursin('[' * colorize(true, 'w') * "]arn", displayed)
-        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend. [q]uit. [b]ookmark."; color = :blue), displayed)
+        @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend."; color = :blue), displayed)
         @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
         # Source view
@@ -242,7 +240,7 @@ end
         # Tasks (see the special handling in `_descend`)
         task_function() = @sync @async show(io, "Hello")
         terminal = FakeTerminal()
-        task = @async @with_try_stderr output @descend terminal=terminal annotate_source=false task_function()
+        task = @async @with_try_stderr output @descend terminal=terminal task_function()
 
         displayed, text = read_from(terminal)
         @test occursin(r"• %\d\d = task", text)

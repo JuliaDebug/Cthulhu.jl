@@ -60,6 +60,7 @@ function get_inline_costs(provider::AbstractProvider, interp::AbstractInterprete
     params = CC.OptimizationParams(interp)
     sparams = CC.VarState[CC.VarState(sparam, false) for sparam in mi.sparam_vals]
     CC.statement_costs!(costs, code, src, sparams, params)
+    return costs
 end
 
 show_parameters(io::IO, provider::AbstractProvider, interp::AbstractInterpreter) = show_inference_cache(io, interp)

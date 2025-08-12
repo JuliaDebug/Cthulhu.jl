@@ -25,17 +25,15 @@ end
 throw_view_is_not_supported(provider, view) = throw(ArgumentError("View `$view` is not supported for provider $(typeof(provider))"))
 
 mutable struct Command
-    active::Union{Nothing, Bool}
+    f::Any
     key::UInt32
     name::Symbol
     description::String
     category::Symbol
-    callback_on::Any
-    callback_off::Any
-    function Command(active::Union{Nothing, Bool}, key, name, description, category, @nospecialize(callback_on), @nospecialize(callback_off))
+    function Command(@nospecialize(f), key, name, description, category)
         key = convert(UInt32, key)
         description = convert(String, description)
-        return new(active, key, name, description, category, callback_on, callback_off)
+        return new(f, key, name, description, category)
     end
 end
 
@@ -44,7 +42,7 @@ function default_menu_commands()
         set_option('w', :iswarn, :toggles, "warn"),
         set_option('h', :hide_type_stable, :toggles, "hide type-stable statements"),
         set_option('o', :optimize, :toggles),
-        set_option('d', :debuginfo, :toggles),
+        set_debuginfo('d'),
         set_option('r', :remarks, :toggles),
         set_option('e', :with_effects, :toggles, "effects"),
         set_option('x', :exception_type, :toggles),
@@ -69,15 +67,37 @@ function default_menu_commands()
 end
 
 function perform_action(f, key::Char, name::Symbol, category, description = string(name))
-    return Command(nothing, key, name, description, category, f, nothing)
+    return Command(f, key, name, description, category)
+end
+
+function set_debuginfo(key::Char)
+    return Command(key, :debuginfo, "debuginfo", :toggles) do state
+        values = (:none, :compact, :source)
+        previous = state.config.debuginfo
+        i = findfirst(==(previous), values)
+        next = i === nothing ? :none : values[mod1(i + 1, 3)]
+        return set_option!(state, :debuginfo, next; redisplay = true)
+    end
 end
 
 function set_option(key::Char, option::Symbol, category, description = string(option); redisplay = true)
-    return Command(false, key, option, description, category, state -> set_option!(state, option, true; redisplay), state -> set_option!(state, option, false; redisplay))
+    return Command(state -> toggle_option!(state, option; redisplay), key, option, description, category)
 end
 
 function set_view(key::Char, option::Symbol, category, description = string(option))
-    return Command(false, key, option, description, category, state -> set_option!(state, :view, option; redisplay = state.config.view !== option), nothing)
+    return Command(state -> set_option!(state, :view, option; redisplay = state.config.view !== option), key, option, description, category)
+end
+
+function toggle_option(state::CthulhuState, option::Symbol)
+    (; config) = state
+    hasproperty(config, option) || throw(ArgumentError("Unknown configuration option `$option`"))
+    previous = getproperty(config, option)
+    return !previous
+end
+
+function toggle_option!(state::CthulhuState, option::Symbol; redisplay = false)
+    value = toggle_option(state, option)
+    set_option!(state, option, value; redisplay)
 end
 
 function set_option!(state::CthulhuState, option::Symbol, value; redisplay = false)
@@ -85,8 +105,10 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
     hasproperty(config, option) || throw(ArgumentError("Unknown configuration option `$option`"))
 
     if value === true
-        option === :remarks && config.optimize && @warn "Disable optimization to see the inference remarks."
-        option === :inline_cost && !optimize && @warn "Enable optimization to see the inlining costs."
+        if option === :remarks && config.optimize || option === :optimize && config.remarks
+            @warn "Disable optimization to see the inference remarks."
+        end
+        option === :inline_cost && !config.optimize && @warn "Enable optimization to see the inlining costs."
     end
 
     if option === :enable_highlighter
@@ -95,6 +117,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
     end
 
     if value === false
+        option === :optimize && config.inline_cost && @warn "Enable optimization to see the inlining costs."
         option === :inlay_types_vscode && TypedSyntax.clear_inlay_hints_vscode()
         option === :diagnostics_vscode && TypedSyntax.clear_diagnostics_vscode()
     end
@@ -144,24 +167,6 @@ function split_by_category(commands::Vector{Command})
     return categories
 end
 
-function update_default_commands!(commands::Vector{Command}, state::CthulhuState)
-    (; config) = state
-    for command in commands
-        (; name) = command
-        name === :inlay_types_vscode && set_active!(command, state, config.inlay_types_vscode)
-        name === :diagnostics_vscode && set_active!(command, state, config.diagnostics_vscode)
-        name === :optimize && set_active!(command, state, config.optimize)
-        command.category === :show && set_active!(command, state, config.view === name)
-    end
-end
-
-function set_active!(command::Command, state::CthulhuState, value::Bool)
-    something(command.active, false) === value && return
-    callback = ifelse(value, command.callback_on, command.callback_off)
-    command.active !== nothing && (command.active = value)
-    callback !== nothing && callback(state)
-end
-
 save_descend_state(state::CthulhuState) = (; state.mi, state.ci, state.override)
 
 function restore_descend_state!(state::CthulhuState, (; mi, ci, override)::NamedTuple)
@@ -169,4 +174,59 @@ function restore_descend_state!(state::CthulhuState, (; mi, ci, override)::Named
     state.ci = ci
     state.override = override
     return state
+end
+
+# AbstractProvider interface
+
+menu_commands(provider::AbstractProvider) = default_menu_commands()
+
+function show_command(io::IO, provider::AbstractProvider, state::CthulhuState, command::Command)
+    (; description) = command
+    key = Char(command.key)
+    style = style_for_command_key(provider, state, command)
+    i = findfirst(x -> lowercase(x) == lowercase(key), description)
+    if i === nothing
+        i = 1
+        printstyled(io, key; style...)
+        print(io, ": ", description)
+        return
+    end
+    print(io, description[1:prevind(description, i)])
+    print(io, '[')
+    printstyled(io, key; style...)
+    print(io, ']')
+    print(io, description[nextind(description, i):end])
+end
+
+style_for_command_key(provider::AbstractProvider, state::CthulhuState, command::Command) =
+    default_style_for_command_key(provider, state, command)
+
+function default_style_for_command_key(provider::AbstractProvider, state::CthulhuState, command::Command)
+    value = value_for_command(provider, state, command)
+    isa(value, Symbol) && command.name === :debuginfo && return debuginfo_style(value)
+    return default_style(value)
+end
+
+default_style(@nospecialize(value)) = NamedTuple()
+default_style(value::Nothing) = (; color=:cyan, bold=false)
+function default_style(value::Bool)
+    color = ifelse(value, :green, :red)
+    return (; color, bold = value)
+end
+
+function debuginfo_style(value::Symbol)
+    i = findfirst(==(value), (:none, :compact, :source))
+    i === nothing && return NamedTuple()
+    color = (:red, :light_black, :green)[i]
+    return (; color, bold = color === :green)
+end
+
+value_for_command(provider::AbstractProvider, state::CthulhuState, command::Command) =
+    value_for_default_command(provider, state, command)
+
+function value_for_default_command(provider::AbstractProvider, state::CthulhuState, command::Command)
+    command.category === :show && return state.config.view === command.name
+    command.category !== :toggles && return nothing
+    !hasproperty(state.config, command.name) && return nothing
+    return getproperty(state.config, command.name)
 end
