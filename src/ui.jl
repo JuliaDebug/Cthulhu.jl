@@ -111,16 +111,19 @@ function usage(provider::AbstractProvider, state::CthulhuState, commands::Vector
     printstyled(io, "Select a call to descend into or ↩ to ascend."; color = :blue)
     categories = split_by_category(commands)
     for (category, list) in categories
-        printstyled(io, '\n', uppercasefirst(string(category)); color=:cyan)
-        print(io, ": ")
-        is_first = true
+        did_print = false
         for command in list
-            is_default_command_enabled(provider, state, command) || continue
-            !is_first && print(io, ", ")
-            is_first = false
+            is_command_enabled(provider, state, command) || continue
+            if !did_print
+                printstyled(io, '\n', uppercasefirst(string(category)); color=:cyan)
+                print(io, ": ")
+                did_print = true
+            else
+                print(io, ", ")
+            end
             show_command(io, provider, state, command)
         end
-        print(io, '.')
+        did_print && print(io, '.')
     end
     println(io)
     return String(take!(buffer))
