@@ -58,25 +58,6 @@ function descend!(state::CthulhuState)
                 break
             end
         end
-        # if is_constant(result)
-        #     # This was inferred to a pure constant - we have no code to show,
-        #     # but make something up that looks plausible.
-        #     # TODO use `codeinfo_for_const`
-        #     constant = extract_constant(result, ci)
-        #     callsites = Callsite[]
-        #     if state.display_code
-        #         exct = cached_exception_type(codeinst)
-        #         callsite = Callsite(-1, EdgeCallInfo(codeinst, codeinst.rettype, get_effects(codeinst), exct), :invoke)
-        #         println(iostream)
-        #         println(iostream, "│ ─ $callsite")
-        #         println(iostream, "│  return ", Const(codeinst.rettype_const))
-        #         println(iostream)
-        #     end
-        #     mi = get_mi(codeinst)
-        #     @goto show_menu
-        # end
-
-        # infkey = override isa InferenceResult ? override : ci
 
         if config.jump_always
             def = state.mi.def
@@ -223,19 +204,7 @@ function menu_callsites_from_source_node(callsite::Callsite, source_node)
     return callsites
 end
 
-function is_constant(result::LookupResult)
-    return result.src === nothing
-end
-
-function extract_constant(result::LookupResult, ci::CodeInstance)
-    return result.src === nothing
-end
-
 function source_slotnames(result::LookupResult)
     result.codeinf === nothing && return false
     return Base.sourceinfo_slotnames(result.codeinf)
-end
-
-function update_commands!(provider::AbstractProvider, commands::Vector{Command}, state::CthulhuState)
-    return update_default_commands!(commands, state)
 end

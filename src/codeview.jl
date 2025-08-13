@@ -104,7 +104,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     rettype = ignorelimited(result.rt)
     lambda_io = IOContext(io, :limit=>true)
 
-    if config.view === :source && isa(src, CodeInfo) && false # XXX remove
+    if isa(src, CodeInfo)
         tsn, _ = get_typed_sourcetext(mi, src, result.rt)
         if tsn !== nothing
             sig, body = children(tsn)
@@ -116,28 +116,26 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
             end
 
             vscode_io = IOContext(
-                config.jump_always && config.inlay_types_vscode ? devnull : lambda_io,
+                config.view !== :source || config.jump_always && config.inlay_types_vscode ? devnull : lambda_io,
                 :inlay_hints => config.inlay_types_vscode ? Dict{String,Vector{TypedSyntax.InlayHint}}() : nothing ,
                 :diagnostics => config.diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
             )
 
             if istruncated
-                printstyled(lambda_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+                printstyled(lambda_io, tsn; config.type_annotations, config.iswarn, config.hide_type_stable, idxend)
             else
-                printstyled(vscode_io, tsn; type_annotations, iswarn, hide_type_stable, idxend)
+                printstyled(vscode_io, tsn; config.type_annotations, config.iswarn, config.hide_type_stable, idxend)
             end
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (config.diagnostics_vscode || config.inlay_types_vscode)
                 vscode_io = IOContext(devnull, :inlay_hints => vscode_io[:inlay_hints], :diagnostics => vscode_io[:diagnostics])
-                if haskey(provider.interp.unopt, codeinst) # don't process const-proped results
-                    callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
-                    visited_cis = Set{CodeInstance}((codeinst,))
-                    add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, provider, codeinst)
-                    for callsite in values(callsite_cis)
-                        if !isnothing(callsite)
-                            descend_into_callsite!(vscode_io, callsite.tsn; iswarn, hide_type_stable, type_annotations)
-                        end
+                callsite_cis = Dict() # type annotation is a bit long so I skipped it, doesn't seem to affect performance
+                visited_cis = Set{CodeInstance}((ci,))
+                add_callsites!(callsite_cis, visited_cis, callsite_diagnostics, provider, ci, result)
+                for callsite in values(callsite_cis)
+                    if !isnothing(callsite)
+                        descend_into_callsite!(vscode_io, callsite.tsn; config.type_annotations, config.iswarn, config.hide_type_stable)
                     end
                 end
             end
@@ -146,9 +144,8 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
             TypedSyntax.display_diagnostics_vscode(callsite_diagnostics)
             TypedSyntax.display_inlay_hints_vscode(vscode_io)
 
-            (config.jump_always && config.inlay_types_vscode) || println(lambda_io)
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
-            return nothing
+            config.view === :source && return
         end
     end
 
@@ -267,20 +264,11 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
 end
 
 function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::AbstractVector, provider::AbstractProvider,
-    ci::CodeInstance, source_ci::CodeInstance=ci;
-    optimized::Bool=true)
-    mi = ci.def
+    ci::CodeInstance, result::LookupResult, source_ci::CodeInstance=ci; optimized::Bool=true)
+    mi = get_mi(ci)
 
-    callsites, src, rt = try
-        (; src, rt, infos, slottypes, effects, codeinf, optimized) = LookupResult(provider, ci, optimized)
-
-        # We pass false as it doesn't affect callsites and skips fetching the method definition
-        # using CodeTracking which is slow
-        callsites, _ = find_callsites(provider, src, infos, ci, slottypes, optimized, false)
-        callsites, src, rt
-    catch
-        return nothing
-    end
+    (; src, rt, infos, slottypes, effects, codeinf, optimized) = LookupResult(provider, ci, optimized)
+    callsites, _ = find_callsites(provider, result, ci)
 
     for callsite in callsites
         info = callsite.info
@@ -293,7 +281,8 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
         in(callsite_ci, visited_cis) && continue
 
         push!(visited_cis, callsite_ci)
-        add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, source_ci; optimized)
+        result = LookupResult(provider, ci, optimized)
+        add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, result, source_ci; optimized)
     end
 
     # Check if callsite is not just filling in default arguments and defined in same file as source_ci
