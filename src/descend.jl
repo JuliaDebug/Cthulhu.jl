@@ -101,6 +101,7 @@ function descend!(state::CthulhuState)
         usg = usage(provider, state, commands)
         cid = request(state.terminal, usg, menu)
         toggle = menu.toggle
+        toggle === :ascend && break
 
         if toggle === nothing
             callsite = select_callsite(state, callsites, source_nodes, cid)::Union{Symbol, Callsite}
