@@ -44,7 +44,7 @@ function default_menu_commands()
         set_option('o', :optimize, :toggles),
         set_debuginfo('d'),
         set_option('r', :remarks, :toggles),
-        set_option('e', :with_effects, :toggles, "effects"),
+        set_option('e', :effects, :toggles, "effects"),
         set_option('x', :exception_type, :toggles),
         set_option('i', :inline_cost, :toggles, "inlining costs"),
         set_option('t', :type_annotations, :toggles),
@@ -187,7 +187,7 @@ function is_default_command_enabled(provider::AbstractProvider, state::CthulhuSt
     command.name === :inlay_types_vscode && return TypedSyntax.inlay_hints_available_vscode()
     command.name === :diagnostics_vscode && return TypedSyntax.diagnostics_available_vscode()
     if state.config.view === :source
-        disabled_commands = (:optimize, :debuginfo, :remarks, :with_effects, :exception_type, :inline_cost)
+        disabled_commands = (:optimize, :debuginfo, :remarks, :effects, :exception_type, :inline_cost)
         return !in(command.name, disabled_commands)
     end
     return true

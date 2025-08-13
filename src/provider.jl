@@ -10,6 +10,6 @@ function should_regenerate_code_instance(provider::DefaultProvider, ci::CodeInst
     return !haskey(provider.interp.unopt, ci)
 end
 
-get_pc_remarks(provider::DefaultProvider, key::InferenceKey) = get(provider.interp.remarks, key, nothing)
-get_pc_effects(provider::DefaultProvider, key::InferenceKey) = get(provider.interp.effects, key, nothing)
-get_pc_exct(provider::DefaultProvider, key::InferenceKey) = get(provider.interp.exception_types, key, nothing)
+get_pc_remarks(provider::DefaultProvider, ci::CodeInstance) = get(provider.interp.remarks, ci, nothing)
+get_pc_effects(provider::DefaultProvider, ci::CodeInstance) = get(provider.interp.effects, ci, nothing)
+get_pc_excts(provider::DefaultProvider, ci::CodeInstance) = get(provider.interp.exception_types, ci, nothing)

@@ -122,9 +122,9 @@ const PC2CallMeta = Dict{Int, CallMeta}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
 
-get_pc_remarks(provider::AbstractProvider, key::InferenceKey) = nothing
-get_pc_effects(provider::AbstractProvider, key::InferenceKey) = nothing
-get_pc_exct(provider::AbstractProvider, key::InferenceKey) = nothing
+get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) = nothing
+get_pc_effects(provider::AbstractProvider, ci::CodeInstance) = nothing
+get_pc_excts(provider::AbstractProvider, ci::CodeInstance) = nothing
 
 function lookup_optimized(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)
     rt = cached_return_type(ci)

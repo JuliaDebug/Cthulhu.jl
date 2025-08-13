@@ -9,7 +9,7 @@ Base.@kwdef struct CthulhuConfig
     iswarn::Bool = false
     hide_type_stable::Bool = false
     remarks::Bool = false
-    with_effects::Bool = false
+    effects::Bool = false
     exception_type::Bool = false
     inline_cost::Bool = false
     type_annotations::Bool = true
@@ -18,12 +18,12 @@ Base.@kwdef struct CthulhuConfig
     jump_always::Bool = false
     view::Symbol = :source
     menu_options::NamedTuple = ()
-    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
+    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
         diagnostics_vscode &= iswarn # if warnings are off, then no diagnostics are shown
         diagnostics_vscode &= TypedSyntax.diagnostics_available_vscode()
         inlay_types_vscode &= TypedSyntax.inlay_hints_available_vscode()
         optimize &= view !== :source
-        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, with_effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
+        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_type, inline_cost, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
     end
 end
 
@@ -45,7 +45,7 @@ end
 - `hide_type_stable::Bool`: Initial state of "hide_type_stable" toggle. Defaults to `false`.
 - `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
 - `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
-- `with_effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
+- `effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
 - `exception_type::Bool` `Intial state of "exception type" toggle. Defaults to `false`.
 - `inline_cost::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.

@@ -94,7 +94,7 @@ function descend!(state::CthulhuState)
                         :color => true,
                         :displaysize => displaysize(iostream), # displaysize doesn't propagate otherwise
                         :SOURCE_SLOTNAMES => source_slotnames(result),
-                        :with_effects => config.with_effects,
+                        :effects => config.effects,
                         :exception_type => config.exception_type)
             str = stringify(ioctx) do io
                 view_function(state)(io, provider, state, result)
@@ -114,7 +114,7 @@ function descend!(state::CthulhuState)
         shown_callsites = config.view === :source ? source_nodes : callsites
 
         state.display_code = false
-        menu = CthulhuMenu(state, shown_callsites, config.with_effects, config.exception_type, config.optimize,
+        menu = CthulhuMenu(state, shown_callsites, config.effects, config.exception_type, config.optimize,
                            config.iswarn & get(iostream, :color, false)::Bool,
                            config.hide_type_stable, commands; menu_options...)
         usg = usage(provider, state, commands)
@@ -191,7 +191,7 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
         return :failed
     end
     menu_callsites = source_node === nothing ? sub_callsites : menu_callsites_from_source_node(callsite, source_node)
-    menu = CthulhuMenu(state, menu_callsites, config.with_effects, config.exception_type, config.optimize,
+    menu = CthulhuMenu(state, menu_callsites, config.effects, config.exception_type, config.optimize,
                         false, false, commands;
                         sub_menu=true, menu_options...)
     i = request(term, "", menu)

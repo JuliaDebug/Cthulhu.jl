@@ -30,7 +30,7 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "optimize" => config.optimize,
         "iswarn" => config.iswarn,
         "remarks" => config.remarks,
-        "with_effects" => config.with_effects,
+        "effects" => config.effects,
         "inline_cost" => config.inline_cost,
         "type_annotations" => config.type_annotations,
         "view" => config.view,
@@ -49,7 +49,7 @@ function read_config!()
     @reset CONFIG.optimize = load_preference(Cthulhu, "optimize", CONFIG.optimize)
     @reset CONFIG.iswarn = load_preference(Cthulhu, "iswarn", CONFIG.iswarn)
     @reset CONFIG.remarks = load_preference(Cthulhu, "remarks", CONFIG.remarks)
-    @reset CONFIG.with_effects = load_preference(Cthulhu, "with_effects", CONFIG.with_effects)
+    @reset CONFIG.effects = load_preference(Cthulhu, "effects", CONFIG.effects)
     @reset CONFIG.inline_cost = load_preference(Cthulhu, "inline_cost", CONFIG.inline_cost)
     @reset CONFIG.type_annotations = load_preference(Cthulhu, "type_annotations", CONFIG.type_annotations)
     @reset CONFIG.view = load_preference(Cthulhu, "view", CONFIG.view)

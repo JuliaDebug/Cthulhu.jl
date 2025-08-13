@@ -92,10 +92,12 @@ function cthulhu_source(io::IO, provider::AbstractProvider, state::CthulhuState,
 end
 
 function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult)
-    pc2effects = pc2excts = pc2remarks = nothing # XXX
-
     (; mi, ci, config) = state
     (; src) = result
+
+    pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
+    pc2remarks = config.remarks ? get_pc_remarks(provider, ci) : nothing
+    pc2excts = config.exception_type ? get_pc_excts(provider, ci) : nothing
 
     debuginfo = IRShow.debuginfo(config.debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -237,7 +239,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     if !config.inline_cost && config.iswarn
         print(lambda_io, "Body")
         InteractiveUtils.warntype_type_printer(lambda_io; type=rettype, used=true)
-        if get(lambda_io, :with_effects, false)::Bool
+        if get(lambda_io, :effects, false)::Bool
             print(lambda_io, ' ', result.effects)
         end
         println(lambda_io)
