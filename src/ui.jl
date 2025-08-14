@@ -108,7 +108,7 @@ function usage(provider::AbstractProvider, state::CthulhuState, commands::Vector
     buffer = IOBuffer()
     io = IOContext(buffer, :color => true)
 
-    printstyled(io, "\nSelect a call to descend into or ↩ to ascend."; color = :blue)
+    printstyled(io, "\nSelect a call to descend into or ↩ to ascend.\n"; color = :blue)
     categories = split_by_category(commands)
     for (category, list) in categories
         did_print = false
@@ -133,7 +133,7 @@ function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
     menu.sub_menu && return false
     (; state) = menu
     (; provider) = state
-    key === UInt32('\x7f') && (key = UInt32('↩'))
+    key === UInt32('\x7f') && (key = UInt32('⟵'))
     i = findfirst(x -> x.key == key && is_command_enabled(provider, state, x), menu.commands)
     i === nothing && return false
     println(state.terminal.out_stream::IO)

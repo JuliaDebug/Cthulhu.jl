@@ -20,7 +20,7 @@ function highlight(io, x, lexer, config::CthulhuConfig)
     end
 end
 
-function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult, dump_module::Bool=false, raw::Bool=false)
+function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult; dump_module::Bool=false, raw::Bool=false)
     (; config) = state
     (; optimize, debuginfo) = config
     world = get_inference_world(provider)
@@ -32,7 +32,7 @@ function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, r
     highlight(io, dump, "llvm", config)
 end
 
-function cthulhu_native(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult, dump_module::Bool=false, raw::Bool=false)
+function cthulhu_native(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult; dump_module::Bool=false, raw::Bool=false)
     (; config) = state
     (; debuginfo, asm_syntax) = config
     world = get_inference_world(provider)
@@ -121,11 +121,9 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
                 :diagnostics => config.diagnostics_vscode ? TypedSyntax.Diagnostic[] : nothing
             )
 
-            if istruncated
-                printstyled(lambda_io, tsn; config.type_annotations, config.iswarn, config.hide_type_stable, idxend)
-            else
-                printstyled(vscode_io, tsn; config.type_annotations, config.iswarn, config.hide_type_stable, idxend)
-            end
+            source_io = ifelse(istruncated, lambda_io, vscode_io)
+            printstyled(source_io, tsn; config.type_annotations, config.iswarn, config.hide_type_stable, idxend)
+            println(source_io)
 
             callsite_diagnostics = TypedSyntax.Diagnostic[]
             if (config.diagnostics_vscode || config.inlay_types_vscode)
@@ -325,116 +323,4 @@ function show_variables(io, src, slotnames)
         println(io)
     end
     println(io)
-end
-
-"""
-    Cthulhu.Bookmark
-
-A `Cthulhu.Bookmark` remembers a method marked by `b` key during a descent.
-It can be used with the following functions:
-
-* `descend(::Bookmark)`, `descend_code_typed(::Bookmark)`,
-  `descend_code_warntype(::Bookmark)`: continue the descent.
-* `code_typed(::Bookmark)`, `code_warntype([::IO,] ::Bookmark)`: show typed IR
-* `code_llvm([::IO,] ::Bookmark)`: pretty-print LLVM IR
-* `code_native([::IO,] ::Bookmark)`: pretty-print native code
-"""
-struct Bookmark
-    ci::CodeInstance
-    provider::AbstractProvider
-end
-
-"""
-    Cthulhu.BOOKMARKS :: Vector{Bookmark}
-
-During a descent, methods can be "bookmarked" by pressing `b` key.  It
-pushes a [`Cthulhu.Bookmark`](@ref) into `Cthulhu.BOOKMARKS`.  This can be
-used to, e.g., continue descending by `descend(Cthulhu.BOOKMARKS[end])`.
-See [`Cthulhu.Bookmark`](@ref) for other usages.
-"""
-const BOOKMARKS = Bookmark[]
-
-# Turn off `optimize` and `debuginfo` for default `show` so that the
-# output is smaller.
-function Base.show(
-    io::IO, ::MIME"text/plain", b::Bookmark;
-    optimize::Bool=false, debuginfo::Symbol=:none, iswarn::Bool=false, hide_type_stable::Bool=false)
-    world = get_inference_world(b.provider)
-    CI, rt = InteractiveUtils.code_typed(b; optimize)
-    (; provider, ci) = b
-    (; effects) = LookupResult(provider, ci, optimize)
-    if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, EdgeCallInfo(b.ci, rt, Effects()), :invoke))
-        print(io, " (world: ", world, ")")
-        return
-    end
-    println(io, "Cthulhu.Bookmark (world: ", world, ")")
-    cthulhu_typed(io, provider, debuginfo, CI, rt, nothing, effects, b.ci; iswarn, optimize, hide_type_stable)
-end
-
-InteractiveUtils.code_warntype(b::Bookmark; kw...) =
-    InteractiveUtils.code_warntype(stdout::IO, b; kw...)
-function InteractiveUtils.code_warntype(
-    io::IO,
-    b::Bookmark;
-    optimize::Bool = false,
-    debuginfo::Symbol = :source,
-    hide_type_stable::Bool = true,
-    kw...,
-)
-    mi = get_mi(b.ci)
-    result = LookupResult(b.provider, mi, optimize)
-    cthulhu_warntype(io, b.provider, debuginfo, result.src, result.rt, result.effects, b.ci; optimize, hide_type_stable)
-end
-
-InteractiveUtils.code_llvm(b::Bookmark; kw...) = InteractiveUtils.code_llvm(stdout::IO, b; kw...)
-InteractiveUtils.code_native(b::Bookmark; kw...) =
-    InteractiveUtils.code_native(stdout::IO, b; kw...)
-
-function InteractiveUtils.code_llvm(
-    io::IO,
-    b::Bookmark;
-    optimize = true,
-    debuginfo = :source,
-    dump_module = false,
-    raw = false,
-    config = CONFIG,
-)
-    mi = get_mi(b.ci)
-    result = LookupResult(b.provider, mi, optimize)
-    return cthulhu_llvm(
-        io,
-        mi,
-        result.src,
-        result.optimized,
-        debuginfo === :source,
-        get_inference_world(provider),
-        config,
-        dump_module,
-        raw,
-    )
-end
-
-function InteractiveUtils.code_native(
-    io::IO,
-    b::Bookmark;
-    optimize = true,
-    debuginfo = :source,
-    dump_module = false,
-    raw = false,
-    config = CONFIG,
-)
-    mi = get_mi(b.ci)
-    result = LookupResult(b.provider, mi, optimize)
-    return cthulhu_native(
-        io,
-        mi,
-        result.src,
-        result.optimized,
-        debuginfo === :source,
-        get_inference_world(b.provider),
-        config,
-        dump_module,
-        raw,
-    )
 end

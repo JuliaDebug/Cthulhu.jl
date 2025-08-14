@@ -103,9 +103,9 @@ struct InferredSource
     effects::Effects
     rt::Any
     exct::Any
-    InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt),
-                   @nospecialize(exct)) =
+    function InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt), @nospecialize(exct))
         new(src, stmt_info, effects, rt, exct)
+    end
 end
 
 struct OptimizedSource

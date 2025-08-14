@@ -429,24 +429,25 @@ function Base.show(io::IO, c::Callsite)
     iswarn = get(io, :iswarn, false)::Bool
     info = c.info
     rt = get_rt(info)
-    if iswarn && is_type_unstable(rt)
-        color = if rt isa Union && is_expected_union(rt)
-            Base.warn_color()
-        else
-            Base.error_color()
-        end
-        printstyled(io, '%'; color)
-    else
-        print(io, '%')
-    end
     limiter = TextWidthLimiter(io, cols)
-    limiter.width += 1   # for the '%' character
-    print(limiter, string(c.id))
+    if c.id != -1
+        if iswarn && is_type_unstable(rt)
+            color = if rt isa Union && is_expected_union(rt)
+                Base.warn_color()
+            else
+                Base.error_color()
+            end
+            printstyled(io, '%'; color)
+        else
+            print(io, '%')
+        end
+        limiter.width += 1 # for the '%' character
+        c.id != -1 && print(limiter, c.id, " = ")
+    end
     if isa(info, EdgeCallInfo)
-        print(limiter, optimize ? string(" = ", c.head, ' ') : " = ")
+        optimize && print(limiter, c.head, ' ')
         show_callinfo(limiter, info)
     else
-        print(limiter, " = ")
         print_callsite_info(limiter, info)
     end
     return nothing

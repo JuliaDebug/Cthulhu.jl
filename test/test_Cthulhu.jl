@@ -2,11 +2,11 @@
 
 using Test, Cthulhu, StaticArrays, Random, Accessors
 using Core: Const
-const CC = Cthulhu.CTHULHU_MODULE[].CC
-global CONFIG::CthulhuConfig = Cthulhu.CONFIG
 
 global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
-using ._Cthulhu: DefaultProvider
+using ._Cthulhu: CC, DefaultProvider, CthulhuConfig
+global CONFIG::CthulhuConfig = _Cthulhu.CONFIG
+
 
 include("setup.jl")
 include("irutils.jl")
@@ -826,8 +826,9 @@ let callsites = find_callsites_by_ftt(issue152_another, (Tuple{Float64,Vararg{Fl
 end
 
 @testset "Bookmarks" begin
-    (interp, ci) = Cthulhu.mkinterp(sqrt, Tuple{Float64})
-    b = Cthulhu.Bookmark(ci, interp)
+    provider, mi, ci, result = cthulhu_info(sqrt, (Float64,))
+    config = setproperties(CONFIG, (; view = :typed, optimize = true))
+    b = Cthulhu.Bookmark(provider, config, ci)
 
     @testset "code_typed(bookmark)" begin
         ci, rt = code_typed(b)
@@ -849,7 +850,7 @@ end
     @testset "show(io, [bookmark])" begin
         # Test that it does not print the full IR:
         str = sprint(io -> show(io, "text/plain", [b]))
-        @test occursin("world:", str)
+        @test contains(str, "\n invoke sqrt(::Float64)::Float64 (world:")
         @test !occursin("Cthulhu.Bookmark (world: ", str)
     end
 

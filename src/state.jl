@@ -8,7 +8,7 @@ mutable struct CthulhuState
     display_code::Bool
 end
 function CthulhuState(provider::AbstractProvider; terminal = default_terminal(), config = CONFIG,
-                      mi = nothing, ci = nothing, override = nothing)
+                      ci = nothing, mi = ci === nothing ? nothing : get_mi(ci), override = nothing)
     return CthulhuState(terminal, provider, config, mi, ci, override, true)
 end
 
@@ -53,12 +53,12 @@ function default_menu_commands()
         set_option('V', :diagnostics_vscode, :toggles, "vscode: diagnostics"),
         set_option('j', :jump_always, :toggles, "jump to source always"; redisplay = false),
         set_view('S', :source, :show),
-        set_view('A', :ast, :show),
+        set_view('A', :ast, :show, "AST"),
         set_view('T', :typed, :show),
         set_view('L', :llvm, :show),
         set_view('N', :native, :show),
         perform_action(_ -> nothing, 'q', :quit, :actions),
-        perform_action(_ -> nothing, '↩', :ascend, :actions),
+        perform_action(_ -> nothing, '⟵', :ascend, :actions),
         perform_action(bookmark_method, 'b', :bookmark, :actions),
         perform_action(edit_source_code, 'E', :edit, :actions, "Edit source code"),
         perform_action(revise_and_redisplay!, 'R', :revise, :actions, "Revise and redisplay"),
@@ -145,7 +145,7 @@ function revise_and_redisplay!(state::CthulhuState)
 end
 
 function bookmark_method(state::CthulhuState)
-    push!(BOOKMARKS, Bookmark(state.mi, state.provider))
+    push!(BOOKMARKS, Bookmark(state.provider, state.ci; state.config))
     @info "The method is pushed at the end of `Cthulhu.BOOKMARKS`."
 end
 
