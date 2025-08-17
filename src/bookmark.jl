@@ -50,7 +50,8 @@ function Base.code_typed(b::Bookmark; kwargs...)
     config = setproperties(b.config, NamedTuple(kwargs))
     state = CthulhuState(provider; ci, config)
     result = LookupResult(provider, ci, config.optimize)
-    return result.codeinf => result.rt
+    src = something(result.src, result.ir)::Union{CodeInfo, IRCode}
+    return src => result.rt
 end
 
 InteractiveUtils.code_warntype(b::Bookmark; kwargs...) = InteractiveUtils.code_warntype(stdout::IO, b; kwargs...)

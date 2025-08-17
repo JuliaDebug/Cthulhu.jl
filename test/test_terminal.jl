@@ -60,12 +60,13 @@ end
 
 function end_terminal_session(terminal, task)
     readavailable(terminal.output)
-    if !wait_for(task)
+    if !wait_for(task, 0)
         write(terminal, 'q')
         readavailable(terminal.output)
         @assert wait_for(task)
     end
     finalize(terminal)
+    return istaskdone(task)
 end
 
 @testset "Terminal" begin
@@ -183,7 +184,7 @@ end
     write(terminal, 'd'); cread(terminal)
     write(terminal, 'L')
     displayed, text = read_from(terminal)
-    @test occursin("[d]ebuginfo", displayed)
+    @test occursin('[' * colorize(false, 'd') * "]ebuginfo", displayed)
     @test !occursin("┌ @ promotion.jl", text)
 
     # Native code view
@@ -220,11 +221,11 @@ end
     write(terminal, 'T'); cread(terminal)
     displayed, text = read_from(terminal)
     @test_broken occursin("z = a * b", displayed)
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # Multicall & iswarn=true
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; annotate_source=false, interruptexc=false, optimize=false, terminal)
+    task = @async @with_try_stderr output descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; view=:typed, interruptexc=false, optimize=false, terminal)
 
     displayed, text = read_from(terminal)
     @test occursin("\nBody", text)
@@ -242,8 +243,7 @@ end
     @test occursin("%3 = fmulti(::Int32)::Union{Float32, $Int}", displayed)
     @test occursin("%3 = fmulti(::Float32)::Union{Float32, $Int}", displayed)
     @test occursin("%3 = fmulti(::Char)::Union{Float32, $Int}", displayed)
-    end_terminal_session(terminal, task)
-
+    @test end_terminal_session(terminal, task)
 
     # Tasks (see the special handling in `_descend`)
     task_function() = @sync @async show(io, "Hello")
@@ -255,30 +255,30 @@ end
     write(terminal, keys[:enter])
     displayed, text = read_from(terminal)
     @test occursin("call show(::IO,::String)", text)
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # descend with MethodInstances
     mi = _Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend(mi; annotate_source=false, optimize=false, terminal)
+    task = @async @with_try_stderr output descend(mi; view=:typed, optimize=false, terminal)
 
     displayed, text = read_from(terminal)
     @test occursin("fmulti(::Any)", text)
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
 
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend_code_warntype(mi; annotate_source=false, interruptexc=false, optimize=false, terminal)
+    task = @async @with_try_stderr output descend_code_warntype(mi; view=:typed, interruptexc=false, optimize=false, terminal)
 
     displayed, text = read_from(terminal)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
 
     # Fallback to typed code
     terminal = FakeTerminal()
     task = @async @with_try_stderr output redirect_stderr(terminal.error) do
-        descend(x -> [x], (Int,); annotate_source=true, interruptexc=false, optimize=false, terminal)
+        descend(x -> [x], (Int,); view=:source, interruptexc=false, optimize=false, terminal)
     end
 
     displayed, text = read_from(terminal)
@@ -286,7 +286,7 @@ end
     @test occursin("couldn't retrieve source", warnings)
     @test occursin("dynamic Base.vect(x)", text)
     @test occursin("(::$Int)::Vector{$Int}", text)
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # `ascend`
     @noinline inner3(x) = 3x
@@ -311,7 +311,7 @@ end
     @test isa(from, Int)
     @test occursin("inner2", lines[from + 3])
     write(terminal, 'q')
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # With backtraces
     bt = try sum([]); catch; catch_backtrace(); end
@@ -324,7 +324,7 @@ end
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # With stacktraces
     st = try; sum([]); catch; stacktrace(catch_backtrace()); end
@@ -337,7 +337,7 @@ end
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 
     # With ExceptionStack (e.g., REPL's global `err` variable)
     exception_stack = try; sum([]); catch e; Base.ExceptionStack([(exception=e, backtrace=stacktrace(catch_backtrace()))]); end
@@ -350,7 +350,7 @@ end
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    end_terminal_session(terminal, task)
+    @test end_terminal_session(terminal, task)
 end
 
 # end # module test_terminal

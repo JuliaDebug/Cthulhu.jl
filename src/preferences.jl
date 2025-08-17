@@ -33,7 +33,7 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "effects" => config.effects,
         "inline_cost" => config.inline_cost,
         "type_annotations" => config.type_annotations,
-        "view" => config.view,
+        "view" => String(config.view),
         "inlay_types_vscode" => config.inlay_types_vscode,
         "diagnostics_vscode" => config.diagnostics_vscode,
         "jump_always" => config.jump_always)
@@ -52,7 +52,7 @@ function read_config!()
     @reset CONFIG.effects = load_preference(Cthulhu, "effects", CONFIG.effects)
     @reset CONFIG.inline_cost = load_preference(Cthulhu, "inline_cost", CONFIG.inline_cost)
     @reset CONFIG.type_annotations = load_preference(Cthulhu, "type_annotations", CONFIG.type_annotations)
-    @reset CONFIG.view = load_preference(Cthulhu, "view", CONFIG.view)
+    @reset CONFIG.view = Symbol(load_preference(Cthulhu, "view", CONFIG.view))
     @reset CONFIG.inlay_types_vscode = load_preference(Cthulhu, "inlay_types_vscode", CONFIG.inlay_types_vscode)
     @reset CONFIG.diagnostics_vscode = load_preference(Cthulhu, "diagnostics_vscode", CONFIG.diagnostics_vscode)
     @reset CONFIG.jump_always = load_preference(Cthulhu, "jump_always", CONFIG.jump_always)

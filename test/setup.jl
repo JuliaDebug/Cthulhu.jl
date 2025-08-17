@@ -17,7 +17,6 @@ end
 
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
     provider, mi, ci, result = cthulhu_info(f, TT; optimize)
-    result.src === nothing && return Cthulhu.Callsite[]
     callsites, _ = Cthulhu.find_callsites(provider, result, ci)
     @test all(c -> Cthulhu.get_effects(c) isa Cthulhu.Effects, callsites)
     return callsites

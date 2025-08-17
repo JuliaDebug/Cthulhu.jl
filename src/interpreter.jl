@@ -114,7 +114,7 @@ function InferredSource(state::InferenceState)
     exct = state.result.exc_result
     return InferredSource(
         unoptsrc,
-        copy(state.stmt_info),
+        collect(Any, state.stmt_info),
         state.ipo_effects,
         state.result.result,
         exct)
@@ -192,7 +192,8 @@ function create_cthulhu_source(result::InferenceResult, effects::Effects)
         # get the (theoretically) same effect as the jl_compress_ir -> jl_uncompress_ir -> inflate_ir round-trip
         ir = CC.compact!(CC.cfg_simplify!(CC.copy(opt.ir::IRCode)))
     end
-    return OptimizedSource(ir, opt.src, opt.src.inlineable, effects)
+    src = CC.ir_to_codeinf!(opt)
+    return OptimizedSource(ir, src, src.inlineable, effects)
 end
 
 function set_cthulhu_source!(result::InferenceResult)

@@ -35,7 +35,7 @@ function get_effects(provider::AbstractProvider, ci::CodeInstance, optimized::Bo
     error(lazy"Not implemented for $provider")
 end
 
-function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=true)
+function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)
     interp = get_abstract_interpreter(provider)
     interp !== nothing && return find_caller_of(provider, interp, callee, mi, allow_unspecialized)
     error(lazy"Not implemented for $provider")
@@ -61,19 +61,32 @@ function get_override(provider::AbstractProvider, @nospecialize(info))
 end
 
 struct LookupResult
-    src::Union{CodeInfo,IRCode,Nothing}
+    ir::Union{IRCode, Nothing} # used over `src` for callsite detection and printing
+    src::Union{CodeInfo, Nothing} # may be required (e.g. for LLVM and native module dumps)
     rt
     exct
-    infos::Vector{CCCallInfo} # needed? -> Callsite?
+    infos::Vector{Any}
     slottypes::Vector{Any}
     effects::Effects
-    codeinf::Union{Nothing,CodeInfo}
     optimized::Bool
-    function LookupResult(src::Union{CodeInfo,IRCode,Nothing}, @nospecialize(rt), @nospecialize(exct),
-        infos::Vector{CCCallInfo}, slottypes::Vector{Any},
-        effects::Effects, codeinf::Union{Nothing,CodeInfo},
-        optimized::Bool)
-        return new(src, rt, exct, infos, slottypes, effects, codeinf, optimized)
+    function LookupResult(ir, src, @nospecialize(rt), @nospecialize(exct),
+                          infos, slottypes, effects, optimized)
+        ninfos = length(infos)
+        if src === nothing && ir === nothing
+            throw(ArgumentError("At least one of `src` or `ir` must have a value"))
+        end
+        if isa(ir, IRCode) && ninfos ≠ length(ir.stmts)
+            throw(ArgumentError("`ir` and `infos` are inconsistent with $(length(ir.stmts)) IR statements and $ninfos call infos"))
+        end
+        if isa(src, CodeInfo)
+            if !isa(src.ssavaluetypes, Vector{Any})
+                throw(ArgumentError("`src.ssavaluetypes::$(typeof(src.ssavaluetypes))` must be a Vector{Any}"))
+            end
+            if !isa(ir, IRCode) && ninfos ≠ length(src.code)
+                throw(ArgumentError("`src` and `infos` are inconsistent with $(length(src.code)) code statements and $ninfos call infos"))
+            end
+        end
+        return new(ir, src, rt, exct, infos, slottypes, effects, optimized)
     end
 end
 

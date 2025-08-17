@@ -157,8 +157,8 @@ function show_annotation(io, @nospecialize(T), post, node, position; iswarn::Boo
     end
     T_str = string(T)
     if iswarn && is_type_unstable(T)
-        color = is_small_union_or_tunion(T) ? :yellow : :red
-        printstyled(io, "::", T_str; color)
+        color = is_small_union_or_tunion(T) ? :yellow : :light_red
+        printstyled(io, "::", T_str; color, bold=true)
         add_diagnostic!(diagnostics, node, position+1, is_small_union_or_tunion(T) ? DiagnosticKinds.Information : DiagnosticKinds.Warning)
         add_hint!(inlay_hints, string(post, "::", T_str), node, position+1; kind=InlayHintKinds.Nothing)
     else

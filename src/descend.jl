@@ -61,11 +61,14 @@ function descend!(state::CthulhuState)
 
         if config.jump_always
             def = state.mi.def
-            isa(def, Method) || return @warn "Can't jump to source location because the definition is not a method."
-            if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
-                Main.VSCodeServer.openfile(whereis(def)...; preserve_focus=true)
+            if isa(def, Method)
+                @warn "Can't jump to source location because the definition is not a method."
             else
-                edit(whereis(def)...)
+                if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
+                    Main.VSCodeServer.openfile(whereis(def)...; preserve_focus=true)
+                else
+                    edit(whereis(def)...)
+                end
             end
         end
 
@@ -104,7 +107,7 @@ function descend!(state::CthulhuState)
         toggle === :ascend && break
 
         if toggle === nothing
-            callsite = select_callsite(state, callsites, source_nodes, cid)::Union{Symbol, Callsite}
+            callsite = select_callsite(state, callsites, source_nodes, cid, menu_options, commands)::Union{Symbol, Callsite}
             callsite === :ascend && break
             callsite === :interrupted && break
             callsite === :failed && continue
@@ -143,13 +146,12 @@ function descend!(state::CthulhuState)
 
             println(iostream)
         end
-
     end
 
     TypedSyntax.clear_all_vscode()
 end
 
-function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, source_nodes, i::Int)
+function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, source_nodes, i::Int, menu_options::NamedTuple, commands::Vector{Command})
     (; config) = state
     i === length(callsites) + 1 && return :ascend
     if i === -1
@@ -173,11 +175,13 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
         return :failed
     end
     menu_callsites = source_node === nothing ? sub_callsites : menu_callsites_from_source_node(callsite, source_node)
+    io = state.terminal.out_stream::IO
+    printstyled(io, "\nChoose which of the possible calls to descend into:"; color=:blue)
     menu = CthulhuMenu(state, menu_callsites, config.effects, config.exception_type, config.optimize,
                         false, false, commands;
                         sub_menu=true, menu_options...)
-    i = request(term, "", menu)
-    i === length(callsites) + 1 && return :continue
+    i = request(state.terminal, "", menu)
+    i === length(sub_callsites) + 1 && return :continue
     if i === -1
         config.interruptexc && throw(InterruptException())
         return :interrupted
@@ -206,6 +210,6 @@ function menu_callsites_from_source_node(callsite::Callsite, source_node)
 end
 
 function source_slotnames(result::LookupResult)
-    result.codeinf === nothing && return false
-    return Base.sourceinfo_slotnames(result.codeinf)
+    result.src === nothing && return false
+    return Base.sourceinfo_slotnames(result.src)
 end

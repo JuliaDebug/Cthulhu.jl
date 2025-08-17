@@ -19,7 +19,7 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
     mi = get_mi(ci)
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
-    src = lookup.src::Union{IRCode, CodeInfo}
+    src = something(lookup.ir, lookup.src)::Union{IRCode, CodeInfo}
     stmts = isa(src, IRCode) ? src.stmts.stmt : src.code
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, src, nothing; warn=false) : (nothing, nothing)

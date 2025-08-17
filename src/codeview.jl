@@ -21,6 +21,7 @@ function highlight(io, x, lexer, config::CthulhuConfig)
 end
 
 function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult; dump_module::Bool=false, raw::Bool=false)
+    result.src === nothing && error("`result.src` must be a `CodeInfo` to use this function")
     (; config) = state
     (; optimize, debuginfo) = config
     world = get_inference_world(provider)
@@ -33,6 +34,7 @@ function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, r
 end
 
 function cthulhu_native(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult; dump_module::Bool=false, raw::Bool=false)
+    result.src === nothing && error("`result.src` must be a `CodeInfo` to use this function")
     (; config) = state
     (; debuginfo, asm_syntax) = config
     world = get_inference_world(provider)
@@ -93,7 +95,7 @@ end
 
 function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult)
     (; mi, ci, config) = state
-    (; src) = result
+    src = something(result.ir, result.src)::Union{IRCode, CodeInfo}
 
     pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
     pc2remarks = config.remarks ? get_pc_remarks(provider, ci) : nothing
@@ -104,14 +106,15 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     rettype = ignorelimited(result.rt)
     lambda_io = IOContext(io, :limit=>true)
 
-    if isa(src, CodeInfo)
-        tsn, _ = get_typed_sourcetext(mi, src, result.rt)
+    if isa(result.src, CodeInfo)
+        tsn, _ = get_typed_sourcetext(mi, result.src, result.rt)
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
             istruncated = isempty(children(body))
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
-            if src.slottypes === nothing
+            # XXX: Remove if unused (slottypes can't be `nothing` anymore)
+            if result.src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
             end
 
@@ -265,7 +268,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     ci::CodeInstance, result::LookupResult, source_ci::CodeInstance=ci; optimized::Bool=true)
     mi = get_mi(ci)
 
-    (; src, rt, infos, slottypes, effects, codeinf, optimized) = LookupResult(provider, ci, optimized)
+    (; ir, src, rt, infos, slottypes, effects, optimized) = LookupResult(provider, ci, optimized)
     callsites, _ = find_callsites(provider, result, ci)
 
     for callsite in callsites
@@ -287,7 +290,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     if ci == source_ci || ci.def.def.file != source_ci.def.def.file
         return nothing
     end
-    tsn, _ = get_typed_sourcetext(mi, src, rt; warn=false)
+    tsn, _ = get_typed_sourcetext(mi, something(src, ir)::Union{CodeInfo, IRCode}, rt; warn=false)
     isnothing(tsn) && return nothing
     sig, body = children(tsn)
     # We empty the body when filling kwargs

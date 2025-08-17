@@ -167,7 +167,7 @@ boundscheck_dce(x) = _boundscheck_dce(x)
     # no boundscheck elimination on Julia-level compilation
     for f in (boundscheck_dce_inbounds, boundscheck_dce)
         (_, _, _, result) = cthulhu_info(f, Tuple{Vector{Float64}})
-        @test count(stmt -> isexpr(stmt, :boundscheck), result.src.stmts.stmt) == 1
+        @test count(stmt -> isexpr(stmt, :boundscheck), result.ir.stmts.stmt) == 1
     end
 end
 
@@ -623,14 +623,14 @@ end
     end
     function doprint(f)
         provider, mi, ci, result = cthulhu_info(f; optimize = false)
-        config = @set CONFIG.iswarn = false
+        config = @set CONFIG.view = :typed
         state = CthulhuState(provider; mi, ci, config)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, provider, state, result)
         return String(take!(io))
     end
-    @test occursin("invoke f1()::…\n", doprint(getfield(m, :f1)))
-    str = doprint(getfield(m, :f2))
+    @test occursin("invoke f1()::…\n", doprint(m.f1))
+    str = doprint(m.f2)
     @test occursin("y::Const([1, 2, 3", str)
     @test !occursin("500,", str)
 end
@@ -865,18 +865,15 @@ end
 
 @testset "preferences" begin
     # Test that load and save are able to set state
-    @reset Cthulhu.CONFIG.enable_highlighter = true
-    @reset Cthulhu.CONFIG.debuginfo = :none
-    Cthulhu.save_config!(Cthulhu.CONFIG)
+    _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = true, debuginfo = :none))
+    _Cthulhu.save_config!(config)
+    _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = false, debuginfo = :compact))
+    @test _Cthulhu.CONFIG.enable_highlighter === false
+    @test _Cthulhu.CONFIG.debuginfo === :compact
 
-    Cthulhu.CONFIG.enable_highlighter = false
-    Cthulhu.CONFIG.debuginfo = :compact
-    @test Cthulhu.CONFIG.debuginfo === :compact
-    @test !Cthulhu.CONFIG.enable_highlighter
-
-    Cthulhu.read_config!()
-    @test Cthulhu.CONFIG.debuginfo === :none
-    @test Cthulhu.CONFIG.enable_highlighter
+    _Cthulhu.read_config!()
+    @test _Cthulhu.CONFIG.enable_highlighter === true
+    @test _Cthulhu.CONFIG.debuginfo === :none
 end
 
 Base.@constprop :none sin_noconstprop(x) = sin(x)
@@ -889,12 +886,12 @@ function remarks_dced(x)
     return v
 end
 @testset "per-statement remarks" begin
-    interp, mi = Cthulhu.mkinterp(remarks_dced, (Float64,));
-    src = interp.unopt[mi].src
+    provider, mi, ci, result = cthulhu_info(remarks_dced, (Float64,))
+    src = provider.interp.unopt[ci].src
     i = only(findall(iscall((src, sin)), src.code))
     j = only(findall(iscall((src, sin_noconstprop)), src.code))
     @test i < j
-    pc2remarks = interp.remarks[mi]
+    pc2remarks = provider.interp.remarks[ci]
     @test any(pc2remarks) do (pc, msg)
         pc == j && occursin("Disabled by method parameter", msg)
     end
@@ -911,14 +908,14 @@ function effects_dced(x)
     return a, n
 end
 @testset "per-statement effects" begin
-    interp, mi = Cthulhu.mkinterp(effects_dced, (Int,));
-    src = interp.unopt[mi].src
+    provider, mi, ci, result = cthulhu_info(effects_dced, (Int,))
+    src = provider.interp.unopt[ci].src
     i1 = only(findall(iscall((src, isa)), src.code))
     i2 = only(findall(iscall((src, getindex)), src.code))
     i3 = only(findall(iscall((src, push!)), src.code))
     i4 = only(findall(iscall((src, Core.arraysize)), src.code))
     @test i1 < i2 < i3 < i4
-    pc2effects = interp.effects[mi]
+    pc2effects = provider.interp.effects[ci]
     @test haskey(pc2effects, i1)
     @test haskey(pc2effects, i2)
     @test haskey(pc2effects, i3)
@@ -926,18 +923,18 @@ end
 end
 
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
-let (interp, codeinst) = Cthulhu.mkinterp((Int,)) do var::Int
+let (_, _, ci, _) = cthulhu_info((Int,)) do var::Int
         # Make sure that code is cached by ensuring a non-const return type.
         x = Base.inferencebarrier(1)::Int
         countvars50037(x, var)
     end
-    inferred = @atomic :monotonic codeinst.inferred
+    inferred = @atomic :monotonic ci.inferred
     @test length(inferred.ir.cfg.blocks) == 1
 end
 
 f515() = cglobal((:foo, bar))
 @testset "issue #515" begin
-    callsites = find_callsite_by_ftt(f515)
+    callsites = find_callsites_by_ftt(f515)
     @test isempty(callsites)
 end
 

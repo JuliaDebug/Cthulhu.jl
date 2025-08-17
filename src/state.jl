@@ -55,7 +55,7 @@ function default_menu_commands()
         set_view('S', :source, :show),
         set_view('A', :ast, :show, "AST"),
         set_view('T', :typed, :show),
-        set_view('L', :llvm, :show),
+        set_view('L', :llvm, :show, "LLVM"),
         set_view('N', :native, :show),
         perform_action(_ -> nothing, 'q', :quit, :actions),
         perform_action(_ -> nothing, '⟵', :ascend, :actions),
@@ -150,8 +150,8 @@ function bookmark_method(state::CthulhuState)
 end
 
 function dump_parameters(state::CthulhuState)
-    iostream = term.out_stream::IO
-    show_parameters(iostream, state.provider)
+    io = state.terminal.out_stream::IO
+    show_parameters(io, state.provider)
 end
 
 function split_by_category(commands::Vector{Command})

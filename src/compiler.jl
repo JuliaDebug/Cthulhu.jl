@@ -99,12 +99,12 @@ end
 
 struct InferredSource
     src::CodeInfo
-    stmt_info::Vector{CCCallInfo}
+    stmt_info::Vector{Any}
     effects::Effects
     rt::Any
     exct::Any
-    function InferredSource(src::CodeInfo, stmt_info::Vector{CCCallInfo}, effects, @nospecialize(rt), @nospecialize(exct))
-        new(src, stmt_info, effects, rt, exct)
+    function InferredSource(src, stmt_info, effects, @nospecialize(rt), @nospecialize(exct))
+        return new(src, stmt_info, effects, rt, exct)
     end
 end
 
@@ -127,73 +127,79 @@ get_pc_effects(provider::AbstractProvider, ci::CodeInstance) = nothing
 get_pc_excts(provider::AbstractProvider, ci::CodeInstance) = nothing
 
 function lookup_optimized(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)
+    mi = get_mi(ci)
     rt = cached_return_type(ci)
     exct = cached_exception_type(ci)
     effects = get_effects(ci)
     if CC.use_const_api(ci) && ci.inferred === nothing
         @assert isdefined(ci, :rettype_const)
         src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
-        infos = CCCallInfo[]
+        src.ssavaluetypes = Any[Any]
+        infos = Any[CC.NoCallInfo()]
         slottypes = Any[]
-        return LookupResult(src, rt, exct, infos, slottypes, effects, src, true)
+        return LookupResult(nothing, src, rt, exct, infos, slottypes, effects, true)
     end
     opt = OptimizedSource(provider, interp, ci)
-    ir = CC.copy(opt.ir)
-    codeinf = opt.src
-    infos = ir.stmts.info
+    ir = copy(opt.ir)
+    infos = collect(Any, ir.stmts.info)
     slottypes = ir.argtypes
-    return LookupResult(ir, rt, exct, infos, slottypes, effects, codeinf, true)
+    return LookupResult(ir, opt.src, rt, exct, infos, slottypes, effects, true)
 end
 
 function lookup_unoptimized(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)
     unopt = InferredSource(provider, interp, ci)
-    codeinf = src = copy(unopt.src)
+    src = copy(unopt.src)
     (; rt, exct) = unopt
     infos = unopt.stmt_info
-    effects = unopt.effects
-    slottypes = src.slottypes
-    if isnothing(slottypes)
-        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-    end
-    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, false)
+    slottypes = @something(src.slottypes, Any[Any for _ in 1:length(src.slotflags)])
+    return LookupResult(nothing, src, rt, exct, infos, slottypes, unopt.effects, false)
 end
 
 function lookup_constproped_optimized(provider::AbstractProvider, interp::AbstractInterpreter, override::InferenceResult)
     opt = OptimizedSource(provider, interp, override)
-    # `override.src` might has been transformed to OptimizedSource already,
-    # e.g. when we switch from constant-prop' unoptimized source
-    src = CC.copy(opt.ir)
+    ir = copy(opt.ir)
+    src = ir_to_src(ir)
     rt = override.result
     exct = override.exc_result
-    infos = src.stmts.info
-    slottypes = src.argtypes
-    codeinf = opt.src
-    effects = opt.effects
-    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, true)
+    infos = ir.stmts.info
+    slottypes = ir.argtypes
+    return LookupResult(ir, src, rt, exct, infos, slottypes, opt.effects, true)
 end
 
 function lookup_constproped_unoptimized(provider::AbstractProvider, interp::AbstractInterpreter, override::InferenceResult)
     unopt = InferredSource(provider, interp, override)
-    codeinf = src = copy(unopt.src)
+    src = copy(unopt.src)
     (; rt, exct) = unopt
     infos = unopt.stmt_info
     effects = get_effects(unopt)
-    slottypes = src.slottypes
-    if isnothing(slottypes)
-        slottypes = Any[ Any for i = 1:length(src.slotflags) ]
-    end
-    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, false)
+    slottypes = @something(src.slottypes, Any[Any for _ in 1:length(src.slotflags)])
+    return LookupResult(nothing, src, rt, exct, infos, slottypes, effects, false)
 end
 
 function lookup_semiconcrete(provider::AbstractProvider, interp::AbstractInterpreter, override::SemiConcreteCallInfo)
-    src = CC.copy(override.ir)
+    ir = copy(override.ir)
+    src = ir_to_src(ir)
     rt = get_rt(override)
     exct = Any # TODO
-    infos = src.stmts.info
-    slottypes = src.argtypes
+    infos = ir.stmts.info
     effects = get_effects(override)
-    codeinf = nothing # TODO try to find `CodeInfo` for the regular inference?
-    return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf, true)
+    return LookupResult(ir, src, rt, exct, infos, src.slottypes, effects, true)
+end
+
+function ir_to_src(ir::IRCode; slotnames = nothing)
+    nargs = length(ir.argtypes)
+    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    slotnames = @something(slotnames, [Symbol(:_, i) for i in 1:nargs])
+    length(slotnames) == length(ir.argtypes) || error("mismatched `argtypes` and `slotnames`")
+
+    src.nargs = nargs
+    src.isva = false
+    src.slotnames = slotnames
+    src.slotflags = fill(zero(UInt8), nargs)
+    src.slottypes = copy(ir.argtypes)
+    CC.replace_code_newstyle!(src, ir)
+    CC.widen_all_consts!(src)
+    return src
 end
 
 function run_type_inference(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance)

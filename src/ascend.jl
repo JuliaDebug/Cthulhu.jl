@@ -46,7 +46,7 @@ function ascend_impl(
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            browsecodetyped && _descend(term, mi; interp, view=:source, iswarn=true, optimize=false, interruptexc=false, pagesize, kwargs...)
+            browsecodetyped && _descend(term, mi; interp, view=:source, iswarn=true, optimize=false, interruptexc=false, menu_options=(; pagesize), kwargs...)
         end
     end
 end
