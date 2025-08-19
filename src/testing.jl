@@ -13,7 +13,7 @@ mutable struct FakeTerminal <: UnixTerminal
     in_stream::IO
     out_stream::IO
     err_stream::IO
-    function FakeTerminal()
+    function FakeTerminal(; context = [:color => get(stdout, :color, false)])
         input = Pipe()
         output = Pipe()
         error = Pipe()
@@ -21,7 +21,10 @@ mutable struct FakeTerminal <: UnixTerminal
         Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
         Base.link_pipe!(error, reader_supports_async=true, writer_supports_async=true)
         term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-        tty = TTYTerminal(term_env, input.out, IOContext(output.in, :color => get(stdout, :color, false)), error.in)
+        input_io = input.out
+        output_io = IOContext(output.in, context...)
+        error_io = error.in
+        tty = TTYTerminal(term_env, input_io, output_io, error_io)
         terminal = new(input, output, error, tty, tty.in_stream, tty.out_stream, tty.err_stream)
         return finalizer(terminal) do x
             @async begin
