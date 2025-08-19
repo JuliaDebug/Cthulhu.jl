@@ -54,7 +54,7 @@ function find_caller_of(provider::AbstractProvider, interp::AbstractInterpreter,
     return ulocs
 end
 
-function get_inline_costs(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance, src::Union{CodeInfo, IRCode})
+function get_inlining_costs(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance, src::Union{CodeInfo, IRCode})
     code = isa(src, IRCode) ? src.stmts.stmt : src.code
     costs = zeros(Int, length(code))
     params = CC.OptimizationParams(interp)
@@ -121,10 +121,6 @@ const PC2Remarks = Vector{Pair{Int, String}}
 const PC2CallMeta = Dict{Int, CallMeta}
 const PC2Effects = Dict{Int, Effects}
 const PC2Excts = Dict{Int, Any}
-
-get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) = nothing
-get_pc_effects(provider::AbstractProvider, ci::CodeInstance) = nothing
-get_pc_excts(provider::AbstractProvider, ci::CodeInstance) = nothing
 
 function lookup_optimized(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)
     mi = get_mi(ci)

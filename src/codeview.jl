@@ -165,7 +165,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     # preprinter configuration
     preprinter = if config.inline_cost & config.optimize
         isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        costs = get_inline_costs(provider, mi, src)
+        costs = get_inlining_costs(provider, mi, src)
         total_cost = sum(costs)
         nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)

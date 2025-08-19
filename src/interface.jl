@@ -31,9 +31,9 @@ end
 
 should_regenerate_code_instance(provider::AbstractProvider, ci::CodeInstance) = false
 
-function get_effects(provider::AbstractProvider, ci::CodeInstance, optimized::Bool)
-    error(lazy"Not implemented for $provider")
-end
+get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) = nothing
+get_pc_effects(provider::AbstractProvider, ci::CodeInstance) = nothing
+get_pc_excts(provider::AbstractProvider, ci::CodeInstance) = nothing
 
 function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)
     interp = get_abstract_interpreter(provider)
@@ -41,9 +41,9 @@ function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance
     error(lazy"Not implemented for $provider")
 end
 
-function get_inline_costs(provider::AbstractProvider, mi::MethodInstance, src::Union{CodeInfo, IRCode})
+function get_inlining_costs(provider::AbstractProvider, mi::MethodInstance, src::Union{CodeInfo, IRCode})
     interp = get_abstract_interpreter(provider)
-    interp !== nothing && return get_inline_costs(provider, interp, mi, src)
+    interp !== nothing && return get_inlining_costs(provider, interp, mi, src)
     error(lazy"Not implemented for $provider")
 end
 
