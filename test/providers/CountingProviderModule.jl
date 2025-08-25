@@ -19,7 +19,7 @@ function Cthulhu.generate_code_instance(provider::CountingProvider, mi::MethodIn
 end
 
 function Cthulhu.menu_commands(provider::CountingProvider)
-    commands = default_menu_commands()
+    commands = default_menu_commands(provider)
     append!(commands, [
         modify_count('+', :increment,  1),
         modify_count('-', :decrement, -1),

@@ -37,7 +37,7 @@ mutable struct Command
     end
 end
 
-function default_menu_commands()
+function default_menu_commands(provider::AbstractProvider)
     commands = Command[
         set_option('w', :iswarn, :toggles, "warn"),
         set_option('h', :hide_type_stable, :toggles, "hide type-stable statements"),
@@ -179,7 +179,7 @@ end
 
 # AbstractProvider interface
 
-menu_commands(provider::AbstractProvider) = default_menu_commands()
+menu_commands(provider::AbstractProvider) = default_menu_commands(provider)
 
 is_command_enabled(provider::AbstractProvider, state::CthulhuState, command::Command) =
     is_default_command_enabled(provider, state, command)

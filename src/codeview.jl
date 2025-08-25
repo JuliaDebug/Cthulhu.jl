@@ -97,9 +97,10 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     (; mi, ci, config) = state
     src = something(result.ir, result.src)::Union{IRCode, CodeInfo}
 
+    pc2remarks = !result.optimized & config.remarks ? get_pc_remarks(provider, ci) : nothing
     pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
-    pc2remarks = config.remarks ? get_pc_remarks(provider, ci) : nothing
     pc2excts = config.exception_type ? get_pc_excts(provider, ci) : nothing
+    costs = result.optimized & config.inline_cost ? get_inlining_costs(provider, mi, src) : nothing
 
     debuginfo = IRShow.debuginfo(config.debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -163,9 +164,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     end
 
     # preprinter configuration
-    preprinter = if config.inline_cost & config.optimize
-        isa(mi, MethodInstance) || throw("`mi::MethodInstance` is required")
-        costs = get_inlining_costs(provider, mi, src)
+    preprinter = if costs !== nothing
         total_cost = sum(costs)
         nd = ndigits(total_cost)
         _lineprinter = lineprinter(src)
@@ -191,32 +190,24 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
         end
     end
     # postprinter configuration
-    ___postprinter = if config.type_annotations
-        config.iswarn ? InteractiveUtils.warntype_type_printer : IRShow.default_expr_type_printer
-    else
-        Returns(nothing)
-    end
-    __postprinter = if isa(src, CodeInfo) && !isnothing(pc2effects)
+    ___postprinter = !config.type_annotations ? Returns(nothing) :
+                     config.iswarn ? InteractiveUtils.warntype_type_printer :
+                     IRShow.default_expr_type_printer
+    __postprinter = pc2effects === nothing ? ___postprinter :
         function (io::IO; idx::Int, @nospecialize(kws...))
             ___postprinter(io; idx, kws...)
             local effects = get(pc2effects, idx, nothing)
             effects === nothing && return
             print(io, ' ', effects)
         end
-    else
-        ___postprinter
-    end
-    _postprinter = if isa(src, CodeInfo) && !isnothing(pc2excts)
+    _postprinter = pc2excts === nothing ? __postprinter :
         function (io::IO; idx::Int, @nospecialize(kws...))
             __postprinter(io; idx, kws...)
             local exct = get(pc2excts, idx, nothing)
             exct === nothing && return
             print(io, ' ', ExctWrapper(exct))
         end
-    else
-        __postprinter
-    end
-    postprinter = if isa(src, CodeInfo) && !isnothing(pc2remarks)
+    postprinter = pc2remarks === nothing ? _postprinter : begin
         sort!(pc2remarks)
         unique!(pc2remarks) # abstract interpretation may have visited a same statement multiple times
         function (io::IO; idx::Int, @nospecialize(kws...))
@@ -225,8 +216,6 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
                 printstyled(io, ' ', pc2remarks[i].second; color=:light_black)
             end
         end
-    else
-        _postprinter
     end
 
     should_print_stmt = config.hide_type_stable ? is_type_unstable : Returns(true)
