@@ -47,6 +47,8 @@ include("backedges.jl")
 include("descend.jl")
 include("ascend.jl")
 
+resolve_module(::AbstractProvider) = @__MODULE__
+
 using .CC: cached_return_type
 
 cached_exception_type(code::CodeInstance) = code.exctype

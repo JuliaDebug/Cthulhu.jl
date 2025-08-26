@@ -1,8 +1,9 @@
 module CountingProviderModule
 
 using Core.IR
-using Base.Compiler: InferenceResult
-using Cthulhu: Cthulhu, AbstractProvider, DefaultProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
+import ..Cthulhu
+using ..Cthulhu: CC, AbstractProvider, DefaultProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
+using .CC: InferenceResult
 
 mutable struct CountingProvider <: AbstractProvider
     default::DefaultProvider

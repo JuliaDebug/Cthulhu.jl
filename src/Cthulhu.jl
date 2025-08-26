@@ -9,6 +9,18 @@ const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 
+function resolve_module(Compiler::Module)
+    Compiler === Base.Compiler && return @__MODULE__
+    Compiler === CTHULHU_MODULE[].Compiler && return CTHULHU_MODULE[]
+    return resolve_module()
+end
+resolve_module() = CTHULHU_MODULE[]
+function resolve_module(@nospecialize(::T)) where {T}
+    mod = parentmodule(T)
+    nameof(mod) === :Compiler && return resolve_module(mod)
+    return resolve_module()
+end
+
 __init__() = read_config!()
 
 include("CthulhuBase.jl")
@@ -109,8 +121,19 @@ julia> descend() do
 [...]
 ```
 """
-function descend(@nospecialize(args...); @nospecialize(kwargs...))
-    CTHULHU_MODULE[].descend_impl(args...; kwargs...)
+function descend(@nospecialize(args...); interp=nothing,
+                                         provider=nothing,
+                                         @nospecialize(kwargs...))
+    if provider !== nothing
+        mod = resolve_module(provider)
+        return mod.descend_impl(args...; provider, kwargs...)
+    elseif interp !== nothing
+        mod = resolve_module(interp)
+        return mod.descend_impl(args...; interp, kwargs...)
+    else
+        mod = resolve_module()
+        return mod.descend_impl(args...; kwargs...)
+    end
 end
 
 """

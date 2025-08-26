@@ -1,8 +1,9 @@
 module OverlayProviderModule # inspired by the Cthulhu integration at serenity4/SPIRV.jl/ext/SPIRVCthulhuExt.jl
 
 using Core.IR
-using Base.Compiler: OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams
-using Cthulhu: Cthulhu, CC, AbstractProvider, DefaultProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
+import ..Cthulhu
+using ..Cthulhu: CC, AbstractProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
+using .CC: OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams
 
 ### Interpreter
 

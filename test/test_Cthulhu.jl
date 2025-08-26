@@ -866,7 +866,7 @@ end
 @testset "preferences" begin
     # Test that load and save are able to set state
     _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = true, debuginfo = :none))
-    _Cthulhu.save_config!(config)
+    _Cthulhu.save_config!()
     _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = false, debuginfo = :compact))
     @test _Cthulhu.CONFIG.enable_highlighter === false
     @test _Cthulhu.CONFIG.debuginfo === :compact
