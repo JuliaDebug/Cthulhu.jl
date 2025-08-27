@@ -82,14 +82,14 @@ function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::Me
     state = CthulhuState(provider; terminal, config, mi, ci)
     descend!(state)
 end
-function _descend(term::AbstractTerminal, provider::AbstractProvider, @nospecialize(args...); world = Base.tls_world_age(), kwargs...)
+function _descend(terminal::AbstractTerminal, provider::AbstractProvider, @nospecialize(args...); world = Base.tls_world_age(), kwargs...)
     mi = find_method_instance(provider, args..., world)
     isa(mi, MethodInstance) || error("No method instance found for $(join(args, ", "))")
-    _descend(term, provider, mi; kwargs...)
+    _descend(terminal, provider, mi; kwargs...)
 end
 
-function _descend(term::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
-    _descend(term, provider, args...; kwargs...)
+function _descend(terminal::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
+    _descend(terminal, provider, args...; kwargs...)
 end
 
 _descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =

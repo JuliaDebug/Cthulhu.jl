@@ -114,10 +114,6 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
             # We empty the body when filling kwargs
             istruncated = isempty(children(body))
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
-            # XXX: Remove if unused (slottypes can't be `nothing` anymore)
-            if result.src.slottypes === nothing
-                @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
-            end
 
             vscode_io = IOContext(
                 config.view !== :source || config.jump_always && config.inlay_types_vscode ? devnull : lambda_io,

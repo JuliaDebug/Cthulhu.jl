@@ -21,16 +21,16 @@ mutable struct FakeTerminal <: UnixTerminal
         Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
         Base.link_pipe!(error, reader_supports_async=true, writer_supports_async=true)
         term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-        input_io = input.out
-        output_io = IOContext(output.in, context...)
-        error_io = error.in
-        tty = TTYTerminal(term_env, input_io, output_io, error_io)
-        terminal = new(input, output, error, tty, tty.in_stream, tty.out_stream, tty.err_stream)
+        in_stream = input.out
+        out_stream = IOContext(output.in, context...)
+        err_stream = error.in
+        tty = TTYTerminal(term_env, in_stream, out_stream, err_stream)
+        terminal = new(input, output, error, tty, in_stream, out_stream, err_stream)
         return finalizer(terminal) do x
             @async begin
-                close(x.input.in)
-                close(x.output.in)
-                close(x.error.in)
+                close(x.input)
+                close(x.output)
+                close(x.error)
             end
         end
     end

@@ -51,9 +51,11 @@ function test_provider_api(provider, args...)
     end
 end
 
-function test_descend_for_provider(provider, args...)
+function test_descend_for_provider(provider, args...; show = false)
     terminal = FakeTerminal()
-    task = @async @with_try_stderr terminal.output descend(provider, args...; terminal)
+    task = @async @with_try_stderr terminal.output descend(args...; terminal, provider)
+    io = AsyncIO(terminal)
+    displayed, text = read_next(io)
     write(terminal, 'T')
     write(terminal, 'o') # optimize: on
     write(terminal, 'L')
@@ -68,11 +70,15 @@ function test_descend_for_provider(provider, args...)
     write(terminal, 'o') # optimize: on
     write(terminal, 'i') # inlining costs: on
     write(terminal, 'o') # optimize: off
-    write(terminal, keys[:down])
     write(terminal, keys[:enter])
-    write(terminal, 'T')
+    write(terminal, 'S')
+    write(terminal, keys[:up])
+    write(terminal, keys[:enter])
     write(terminal, 'q')
-    println(terminal.out_stream, '⇜')
-    readuntil(terminal.output, '⇜')
-    @test end_terminal_session(terminal, task)
+    if show
+        wait_for(task)
+        displayed = String(readavailable(io))
+        println(displayed)
+    end
+    @test end_terminal_session(terminal, task, io)
 end
