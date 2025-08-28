@@ -220,7 +220,7 @@ using PrecompileTools
 @setup_workload begin
     try
         @compile_workload begin
-            # terminal = Testing.FakeTerminal()
+            # terminal = Testing.VirtualTerminal()
             # task = @async @descend terminal=terminal.tty gcd(1, 2)
             # write(terminal, 'q')
             # wait(task)

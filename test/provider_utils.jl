@@ -1,7 +1,7 @@
 using Core.IR
 using Test
 using .Cthulhu: CC, DefaultProvider, get_inference_world, find_method_instance, generate_code_instance, should_regenerate_code_instance, get_override, LookupResult, Command, menu_commands, is_command_enabled, show_command, CthulhuState, PC2Effects, get_pc_effects, PC2Remarks, get_pc_remarks, PC2Excts, get_pc_excts, get_inlining_costs, show_parameters
-using Cthulhu.Testing: FakeTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
+using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
 using Logging: with_logger, NullLogger
 
 function test_provider_api(provider, args...)
@@ -50,7 +50,7 @@ function test_provider_api(provider, args...)
 end
 
 function test_descend_for_provider(provider, args...; show = false)
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal descend(args...; terminal, provider)
     write(terminal, 'T')
     write(terminal, 'o') # optimize: on

@@ -7,8 +7,7 @@ using REPL: TerminalMenus
 Terminal implementation that connects virtual input/output/error pipes
 to be interacted with asynchronously with a program.
 """
-mutable struct FakeTerminal <: UnixTerminal
-    # Use pipes so we can easily do blocking reads.
+mutable struct VirtualTerminal <: UnixTerminal
     input::Pipe
     output::Pipe
     error::Pipe
@@ -16,7 +15,7 @@ mutable struct FakeTerminal <: UnixTerminal
     in_stream::IO
     out_stream::IO
     err_stream::IO
-    function FakeTerminal(; context = [:color => get(stdout, :color, false)])
+    function VirtualTerminal(; context = [:color => get(stdout, :color, false)])
         input = Pipe()
         output = Pipe()
         error = Pipe()
@@ -39,11 +38,11 @@ mutable struct FakeTerminal <: UnixTerminal
     end
 end
 
-Base.write(terminal::FakeTerminal, key::Symbol) = write(terminal, KEYS[key])
-Base.write(terminal::FakeTerminal, char::Char) = write(terminal.input, char)
-Base.write(terminal::FakeTerminal, input::String) = write(terminal.input, input)
-Base.read(terminal::FakeTerminal, args...; error = false) = read(ifelse(error, terminal.error, terminal.output), args...)
-TerminalMenus.request(terminal::FakeTerminal, args...; kwargs...) = TerminalMenus.request(terminal.tty, args...; kwargs...)
+Base.write(terminal::VirtualTerminal, key::Symbol) = write(terminal, KEYS[key])
+Base.write(terminal::VirtualTerminal, char::Char) = write(terminal.input, char)
+Base.write(terminal::VirtualTerminal, input::String) = write(terminal.input, input)
+Base.read(terminal::VirtualTerminal, args...; error = false) = read(ifelse(error, terminal.error, terminal.output), args...)
+TerminalMenus.request(terminal::VirtualTerminal, args...; kwargs...) = TerminalMenus.request(terminal.tty, args...; kwargs...)
 
 """
 IO subtype that continuously reads another `IO` object in a non-blocking way
@@ -71,7 +70,7 @@ function AsyncIO(io::IO)
     end
     return AsyncIO(io, buffer, lock, task)
 end
-AsyncIO(terminal::FakeTerminal) = AsyncIO(terminal.output)
+AsyncIO(terminal::VirtualTerminal) = AsyncIO(terminal.output)
 
 function Base.peek(io::AsyncIO, ::Type{UInt8})
     while bytesavailable(io) < 1 yield() end
@@ -127,7 +126,7 @@ function read_next(io::AsyncIO)
 end
 
 """
-A testing utility that correctly wraps a [`FakeTerminal`](@ref)
+A testing utility that correctly wraps a [`VirtualTerminal`](@ref)
 with an asynchronous IO reader to avoid blocking while asynchronously
 executing a task that interacts with the terminal.
 
@@ -142,10 +141,10 @@ emulated asynchronous terminal interactions are tricky especially when we rely o
 testing unstructured IO output to be semantically delimited into regions.
 """
 mutable struct TestHarness
-    terminal::FakeTerminal
+    terminal::VirtualTerminal
     io::AsyncIO
     task::Task
-    function TestHarness(terminal::FakeTerminal)
+    function TestHarness(terminal::VirtualTerminal)
         io = AsyncIO(terminal)
         harness = new(terminal, io)
     end
@@ -206,7 +205,7 @@ function navigate(harness::TestHarness, key::Symbol)
     return nothing
 end
 
-function end_terminal_session(terminal::FakeTerminal, task::Task, io::AsyncIO)
+function end_terminal_session(terminal::VirtualTerminal, task::Task, io::AsyncIO)
     wait_for(task, 0.0) && @goto finished
     write(terminal, 'q')
     wait_for(task, 1.0) && @goto finished
@@ -223,6 +222,6 @@ const KEYS = Dict(:up => "\e[A",
                   :down => "\e[B",
                   :enter => '\r')
 
-export FakeTerminal, TestHarness, @run, read_next, navigate, end_terminal_session
+export VirtualTerminal, TestHarness, @run, read_next, navigate, end_terminal_session
 
 end # module Testing

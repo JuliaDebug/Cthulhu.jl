@@ -42,7 +42,7 @@ end
 
     _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig()
 
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, interruptexc=false, iswarn=false, terminal)
 
     displayed, text = read_next(harness)
@@ -169,7 +169,7 @@ end
     @test end_terminal_session(harness)
 
     # Multicall & iswarn=true
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; view=:typed, interruptexc=false, optimize=false, terminal)
 
     displayed, text = read_next(harness)
@@ -192,7 +192,7 @@ end
 
     # Tasks (see the special handling in `_descend`)
     task_function() = @sync @async show(io, "Hello")
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal @descend terminal=terminal view=:typed optimize=true task_function()
 
     displayed, text = read_next(harness)
@@ -204,14 +204,14 @@ end
 
     # descend with MethodInstances
     mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal descend(mi; view=:typed, optimize=false, terminal)
 
     displayed, text = read_next(harness)
     @test occursin("fmulti(::Any)", text)
     @test end_terminal_session(harness)
 
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal descend_code_warntype(mi; view=:typed, interruptexc=false, optimize=false, terminal)
 
     displayed, text = read_next(harness)
@@ -221,7 +221,7 @@ end
 
     # Fallback to typed code
     @test_logs (:warn, r"couldn't retrieve source") match_mode=:any begin
-        terminal = FakeTerminal()
+        terminal = VirtualTerminal()
         harness = @run terminal descend(x -> [x], (Int,); view=:source, interruptexc=false, optimize=false, terminal)
 
         displayed, text = read_next(harness)
@@ -236,7 +236,7 @@ end
                 inner1(x) = -1*inner2(x)
     inner1(0x0123)
     mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, mi; pagesize=11)
 
     write(terminal, :down)
@@ -255,7 +255,7 @@ end
 
     # With backtraces
     bt = try sum([]); catch; catch_backtrace(); end
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, bt)
     write(terminal, :enter)
     displayed, text = read_next(harness)
@@ -268,7 +268,7 @@ end
 
     # With stacktraces
     st = try; sum([]); catch; stacktrace(catch_backtrace()); end
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, st)
     write(terminal, :enter)
     displayed, text = read_next(harness)
@@ -281,7 +281,7 @@ end
 
     # With ExceptionStack (e.g., REPL's global `err` variable)
     exception_stack = try; sum([]); catch e; Base.ExceptionStack([(exception=e, backtrace=stacktrace(catch_backtrace()))]); end
-    terminal = FakeTerminal()
+    terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, exception_stack)
     write(terminal, :enter)
     displayed, text = read_next(harness)
