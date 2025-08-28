@@ -608,7 +608,7 @@ end
     io = IOContext(buffer, :color => true)
     Cthulhu.cthulhu_warntype(io, provider, state, result)
     str = String(take!(buffer))
-    @test occursin("x\e[91m\e[1m::Any\e[22m\e[39m", str)
+    @test occursin("x\e[31m::Any\e[39m", str)
 end
 
 @testset "Limit printing (issue #94)" begin
