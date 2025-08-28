@@ -1,10 +1,8 @@
 using Core.IR
 using Test
 using .Cthulhu: CC, DefaultProvider, get_inference_world, find_method_instance, generate_code_instance, should_regenerate_code_instance, get_override, LookupResult, Command, menu_commands, is_command_enabled, show_command, CthulhuState, PC2Effects, get_pc_effects, PC2Remarks, get_pc_remarks, PC2Excts, get_pc_excts, get_inlining_costs, show_parameters
-using Cthulhu.Testing: FakeTerminal
+using Cthulhu.Testing: FakeTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
 using Logging: with_logger, NullLogger
-
-include("terminal_utils.jl")
 
 function test_provider_api(provider, args...)
     world = get_inference_world(provider)
@@ -53,9 +51,7 @@ end
 
 function test_descend_for_provider(provider, args...; show = false)
     terminal = FakeTerminal()
-    task = @async @with_try_stderr terminal.output descend(args...; terminal, provider)
-    io = AsyncIO(terminal)
-    displayed, text = read_next(io)
+    harness = @run terminal descend(args...; terminal, provider)
     write(terminal, 'T')
     write(terminal, 'o') # optimize: on
     write(terminal, 'L')
@@ -70,15 +66,15 @@ function test_descend_for_provider(provider, args...; show = false)
     write(terminal, 'o') # optimize: on
     write(terminal, 'i') # inlining costs: on
     write(terminal, 'o') # optimize: off
-    write(terminal, keys[:enter])
+    write(terminal, KEYS[:enter])
     write(terminal, 'S')
-    write(terminal, keys[:up])
-    write(terminal, keys[:enter])
+    write(terminal, KEYS[:up])
+    write(terminal, KEYS[:enter])
     write(terminal, 'q')
     if show
-        wait_for(task)
-        displayed = String(readavailable(io))
+        wait_for(harness.task)
+        displayed = String(readavailable(harness.io))
         println(displayed)
     end
-    @test end_terminal_session(terminal, task, io)
+    @test end_terminal_session(harness)
 end

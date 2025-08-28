@@ -2,14 +2,12 @@
 
 using Core: Const
 using Test, REPL, Cthulhu, Revise
-using Cthulhu.Testing: FakeTerminal
+using Cthulhu.Testing
 global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
 
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
-
-include("terminal_utils.jl")
 
 # For multi-call sites
 module MultiCall
@@ -20,12 +18,12 @@ callfmulti(c) = fmulti(c[])
 end
 
 @testset "Terminal" begin
-    @test _Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
-    colorize(active_option::Bool, c::Char) = _Cthulhu.stringify() do io
+    @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
+    colorize(active_option::Bool, c::Char) = Cthulhu.stringify() do io
         active_option ? printstyled(io, c; bold=true, color=:green) : printstyled(io, c; color=:red)
     end
 
-    colorize(s::AbstractString; color::Symbol = :cyan) = _Cthulhu.stringify() do io
+    colorize(s::AbstractString; color::Symbol = :cyan) = Cthulhu.stringify() do io
         printstyled(io, s; color)
     end
     # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
@@ -45,9 +43,9 @@ end
     _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig()
 
     terminal = FakeTerminal()
-    task = @async @with_try_stderr terminal.output descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, interruptexc=false, iswarn=false, terminal)
+    harness = @run terminal descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, interruptexc=false, iswarn=false, terminal)
 
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("simplef(a, b)", text)
     @test occursin(r"Base\.mul_float\(.*, .*\)::Float32", text)
     @test occursin('[' * colorize(true, 'o') * "]ptimize", displayed)
@@ -55,7 +53,7 @@ end
     @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend."; color = :blue), displayed) # beginning of the line
     @test occursin('•', text)
     write(terminal, 'o') # switch to unoptimized
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("simplef(a, b)", text)
     @test occursin("::Const(*)", text)
     @test occursin("(z = (%1)(a, a))", text)
@@ -64,31 +62,29 @@ end
     @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
     # Call selection
-    write(terminal, keys[:down])
-    write(terminal, keys[:enter])
-    cread1(terminal)
-    displayed, text = read_from(terminal)
+    navigate(harness, :down)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin(r"• %\d = promote\(::Float32,::Int32\)::Tuple{Float32, Float32}", text)
-    write(terminal, keys[:up])
-    write(terminal, keys[:enter])
-    cread1(terminal)
-    displayed, text = read_from(terminal)
+    navigate(harness, :up)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("• %2 = *(::Float32,::Float32)::Float32", text) # back to where we started
     write(terminal, 'o') # back to optimized
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test !occursin("Variables", text)
     @test occursin(r"Base\.mul_float\(.*, .*\)::Float32", text)
     write(terminal, 'i') # show inline costs
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin(r"\d %\d = intrinsic Base\.mul_float", text)
     @test occursin('[' * colorize(true, 'i') * "]nlining costs", displayed)
     write(terminal, 'i') # hide inline costs
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     write(terminal, 'o')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("Variables", text)
     write(terminal, 'w') # unoptimized + warntype
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("Variables", text)
     @test occursin(r"z.*::Float32", text)
     @test occursin("Body", text)
@@ -98,59 +94,58 @@ end
 
     # Source view
     write(terminal, 'S')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     # @test occursin("z\e[36m::Float32\e[39m = (a\e[36m::Float32\e[39m * a\e[36m::Float32\e[39m)\e[36m::Float32\e[39m", displayed)
     @test occursin('[' * colorize(true, 'S') * "]ource", displayed)
-    # write(terminal, 's'); cread(terminal) # turn on syntax highlighting
     write(terminal, 's') # turn on syntax highlighting
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("simplef", text)
     @test occursin("\u001B", first(split(displayed, '\n')))
     @test occursin('[' * colorize(true, 's') * "]yntax", displayed)
-    write(terminal, 's'); cread(terminal) # turn off syntax highlighting
+    write(terminal, 's'); read_next(harness) # turn off syntax highlighting
 
     # Back to typed code
-    write(terminal, 'T'); cread(terminal)
+    write(terminal, 'T'); read_next(harness)
     write(terminal, 'o')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin('[' * colorize(true, 'T') * "]yped", displayed)
 
     # AST view
     write(terminal, 'A')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("Symbol simplef", text)
     @test occursin("Symbol call", text)
     @test occursin('[' * colorize(true, 'A') * "]ST", displayed)
 
     # LLVM view
     write(terminal, 'L')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin(r"sitofp i(64|32)", text)
     @test occursin("fadd float", text)
     @test occursin("┌ @ promotion.jl", text) # debug info on by default
     @test occursin('[' * colorize(true, 'L') * "]LVM", displayed)
     # turn off debug info
-    write(terminal, 'd'); cread(terminal)
-    write(terminal, 'd'); cread(terminal)
+    write(terminal, 'd'); read_next(harness)
+    write(terminal, 'd'); read_next(harness)
     write(terminal, 'L')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin('[' * colorize(false, 'd') * "]ebuginfo", displayed)
     @test !occursin("┌ @ promotion.jl", text)
 
     # Native code view
     write(terminal, 'N')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("retq", text)
     @test occursin('[' * colorize(true, 'N') * "]ative", displayed)
     # Typed view (by selector)
     write(terminal, 'T')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("Base.mul_float(a, a)::Float32", text)
     @test occursin('[' * colorize(true, 'T') * "]yped", displayed)
 
     # Parameter dumping
     write(terminal, 'P')
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
 
     # Revise
     # Use delays to ensure unambiguous differences in time stamps
@@ -168,92 +163,87 @@ end
     sleep(0.1)
     write(terminal, 'R')
     sleep(0.1)
-    write(terminal, 'T'); cread(terminal)
-    displayed, text = read_from(terminal)
+    write(terminal, 'T'); read_next(harness)
+    displayed, text = read_next(harness)
     @test_broken occursin("z = a * b", displayed)
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # Multicall & iswarn=true
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; view=:typed, interruptexc=false, optimize=false, terminal)
+    harness = @run terminal descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; view=:typed, interruptexc=false, optimize=false, terminal)
 
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("\nBody", text)
     @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", displayed)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
-    warncolor = if _Cthulhu.is_expected_union(Union{Float32, Int64})
+    warncolor = if Cthulhu.is_expected_union(Union{Float32, Int64})
         Base.text_colors[Base.warn_color()]
     else
         Base.text_colors[Base.error_color()]
     end
     @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, Int64}", displayed)
-    write(terminal, keys[:down])
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    write(terminal, :down) # don't use `navigate`, it's the multi-call menu
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("%3 = fmulti(::Int32)::Union{Float32, $Int}", displayed)
     @test occursin("%3 = fmulti(::Float32)::Union{Float32, $Int}", displayed)
     @test occursin("%3 = fmulti(::Char)::Union{Float32, $Int}", displayed)
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # Tasks (see the special handling in `_descend`)
     task_function() = @sync @async show(io, "Hello")
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output @descend terminal=terminal task_function()
+    harness = @run terminal @descend terminal=terminal view=:typed optimize=true task_function()
 
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin(r"• %\d\d = task", text)
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("call show(::IO,::String)", text)
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # descend with MethodInstances
-    mi = _Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
+    mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend(mi; view=:typed, optimize=false, terminal)
+    harness = @run terminal descend(mi; view=:typed, optimize=false, terminal)
 
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("fmulti(::Any)", text)
-    @test end_terminal_session(terminal, task)
-
+    @test end_terminal_session(harness)
 
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output descend_code_warntype(mi; view=:typed, interruptexc=false, optimize=false, terminal)
+    harness = @run terminal descend_code_warntype(mi; view=:typed, interruptexc=false, optimize=false, terminal)
 
-    displayed, text = read_from(terminal)
+    displayed, text = read_next(harness)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
 
     # Fallback to typed code
-    terminal = FakeTerminal()
-    task = @async @with_try_stderr output redirect_stderr(terminal.error) do
-        descend(x -> [x], (Int,); view=:source, interruptexc=false, optimize=false, terminal)
-    end
+    @test_logs (:warn, r"couldn't retrieve source") match_mode=:any begin
+        terminal = FakeTerminal()
+        harness = @run terminal descend(x -> [x], (Int,); view=:source, interruptexc=false, optimize=false, terminal)
 
-    displayed, text = read_from(terminal)
-    warnings = String(readavailable(terminal.error))
-    @test occursin("couldn't retrieve source", warnings)
-    @test occursin("dynamic Base.vect(x)", text)
-    @test occursin("(::$Int)::Vector{$Int}", text)
-    @test end_terminal_session(terminal, task)
+        displayed, text = read_next(harness)
+        @test occursin("dynamic Base.vect(x)", text)
+        @test occursin("(::$Int)::Vector{$Int}", text)
+        @test end_terminal_session(harness)
+    end
 
     # `ascend`
     @noinline inner3(x) = 3x
     @inline   inner2(x) = 2*inner3(x)
                 inner1(x) = -1*inner2(x)
     inner1(0x0123)
-    mi = _Cthulhu.get_specialization(inner3, Tuple{UInt16})
+    mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output redirect_stderr(terminal.error) do
-        ascend(terminal, mi; pagesize=11)
-    end
+    harness = @run terminal ascend(terminal, mi; pagesize=11)
 
-    write(terminal, keys[:down])
-    write(terminal, keys[:enter])
-    write(terminal, keys[:down])
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    write(terminal, :down)
+    write(terminal, :enter)
+    write(terminal, :down)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     lines = split(text, '\n')
     i = first(findfirst("inner3", lines[2]))
     @test first(findfirst("inner2", lines[3])) == i + 2
@@ -261,46 +251,46 @@ end
     @test isa(from, Int)
     @test occursin("inner2", lines[from + 3])
     write(terminal, 'q')
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # With backtraces
     bt = try sum([]); catch; catch_backtrace(); end
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output ascend(terminal, bt)
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    harness = @run terminal ascend(terminal, bt)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # With stacktraces
     st = try; sum([]); catch; stacktrace(catch_backtrace()); end
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output ascend(terminal, st)
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    harness = @run terminal ascend(terminal, st)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    @test end_terminal_session(terminal, task)
+    @test end_terminal_session(harness)
 
     # With ExceptionStack (e.g., REPL's global `err` variable)
     exception_stack = try; sum([]); catch e; Base.ExceptionStack([(exception=e, backtrace=stacktrace(catch_backtrace()))]); end
     terminal = FakeTerminal()
-    task = @async @with_try_stderr output ascend(terminal, exception_stack)
-    write(terminal, keys[:enter])
-    displayed, text = read_from(terminal)
+    harness = @run terminal ascend(terminal, exception_stack)
+    write(terminal, :enter)
+    displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
     @test occursin("reduce_empty(op::Function, T::Type)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
-    @test end_terminal_session(terminal, task)
-end
+    @test end_terminal_session(harness)
+end;
 
 # end # module test_terminal
