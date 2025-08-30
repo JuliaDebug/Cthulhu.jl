@@ -66,7 +66,7 @@ function buildframes(bt::Vector{Union{Ptr{Nothing}, Base.InterpreterIP}})
         sf = sfs[end]
         sf.from_c && continue
         mi = sf.linfo
-        isa(mi, Core.MethodInstance) || continue
+        isa(mi, Core.MethodInstance) || isa(mi, CodeInstance) || continue
         push!(ipframes, IPFrames(sfs))
     end
     return ipframes
@@ -75,7 +75,7 @@ function buildframes(st::Vector{StackTraces.StackFrame})
     ipframes = IPFrames[]
     for sf in st
         mi = sf.linfo
-        isa(mi, Core.MethodInstance) || continue
+        isa(mi, Core.MethodInstance) || isa(mi, CodeInstance) || continue
         push!(ipframes, IPFrames([sf]))
     end
     return ipframes
@@ -135,16 +135,18 @@ function nextnode end
 
 
 backedges(mi::MethodInstance) = isdefined(mi, :backedges) ? mi.backedges : _emptybackedges
+backedges(ci::CodeInstance) = backedges(get_mi(ci))
 method(mi::MethodInstance) = mi.def
 method(edge::CodeInstance) = method(get_mi(edge))
 specTypes(mi::MethodInstance) = mi.specTypes
 specTypes(edge::CodeInstance) = specTypes(get_mi(edge))
 instance(mi::MethodInstance) = mi
+instance(ci::CodeInstance) = ci
 nextnode(mi, edge) = edge
 
 instance(@nospecialize(tt::Type)) = tt
 
-instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? CC.Timings.ROOTmi : sfs[end].linfo::MethodInstance # we checked this type condition within `buildframes`
+instance(sfs::Vector{StackTraces.StackFrame}) = isempty(sfs) ? CC.Timings.ROOTmi : get_mi(sfs[end].linfo) # we checked this type condition within `buildframes`
 method(sfs::Vector{StackTraces.StackFrame}) = method(instance(sfs))
 backedges(sframes::Vector{StackTraces.StackFrame}) = (ret = sframes[2:end]; isempty(ret) ? () : (ret,))
 
@@ -171,6 +173,7 @@ struct Data{T}
     callstr::String
     nd::T
 end
+Data{MethodInstance}(callstr, nd::CodeInstance) = Data{MethodInstance}(callstr, get_mi(nd))
 
 function treelist(mi)
     io = IOBuffer()
@@ -184,11 +187,9 @@ function treelist!(parent::Node, io::IO, mi, indent::AbstractString, visited::Ba
     push!(visited, imi)
     indent *= " "
     for edge in backedges(mi)
-        isa(edge, MethodInstance) || isa(edge, CodeInstance) || continue
         str = indent * callstring(io, edge)
-        edge_mi = get_mi(edge)
-        child = Node(typeof(parent.data)(str, instance(edge_mi)), parent)
-        treelist!(child, io, nextnode(mi, edge_mi), indent, visited)
+        child = Node(typeof(parent.data)(str, instance(edge)), parent)
+        treelist!(child, io, nextnode(mi, edge), indent, visited)
     end
     return parent
 end
