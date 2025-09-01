@@ -204,3 +204,5 @@ function treelist(exstk::Base.ExceptionStack)
     @error "exception stack contains $(length(exstk.stack)) exceptions, pick one with `ascend(err.stack[i].backtrace)`"
     return nothing
 end
+
+FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
