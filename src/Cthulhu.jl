@@ -11,6 +11,7 @@ const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 __init__() = read_config!(CONFIG)
 
 include("CthulhuBase.jl")
+include("backedges.jl")
 include("testing.jl")
 
 """
