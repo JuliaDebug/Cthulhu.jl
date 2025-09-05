@@ -1,4 +1,4 @@
-# module test_terminal
+module test_terminal
 
 using Core: Const
 using Test, REPL, Cthulhu, Revise
@@ -261,7 +261,7 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
@@ -274,7 +274,7 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
@@ -287,10 +287,10 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
 end;
 
-# end # module test_terminal
+end # module test_terminal

@@ -3,7 +3,7 @@ function ascend_impl(
         interp::AbstractInterpreter=NativeInterpreter(),
         provider::AbstractProvider=AbstractProvider(interp),
         pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize, kwargs...)
-    root = treelist(mi)
+    root = Cthulhu.treelist(mi)
     root === nothing && return
     menu = TreeMenu(root; pagesize, dynamic, maxsize)
     choice = menu.current
@@ -13,10 +13,10 @@ function ascend_impl(
         browsecodetyped = true
         if choice !== nothing
             node = menu.current
-            mi = instance(node.data.nd)
+            mi = Cthulhu.instance(node.data.nd)
             if !isroot(node)
                 # Help user find the sites calling the parent
-                parent = instance(node.parent.data.nd)
+                parent = Cthulhu.instance(node.parent.data.nd)
                 ulocs = find_caller_of(provider, parent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
                     ulocs = [(k[1], maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]

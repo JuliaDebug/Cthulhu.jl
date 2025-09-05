@@ -43,7 +43,6 @@ include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
 include("bookmark.jl")
-include("backedges.jl")
 include("descend.jl")
 include("ascend.jl")
 
