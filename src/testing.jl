@@ -156,7 +156,9 @@ macro display_errors(expr)
             $(esc(expr))
         catch err
             bt = catch_backtrace()
-            Base.display_error(stderr, err, bt)
+            # print all at once, to avoid interleaving output with other prints
+            output = sprint(Base.display_error, err, bt; context = :color => true)
+            println(output)
         end
     end
 end
@@ -176,7 +178,10 @@ macro run(terminal, ex)
     end
 end
 
-read_next(harness::TestHarness) = read_next(harness.io)
+function read_next(harness::TestHarness)
+    istaskdone(harness.task) && error("The task is not running")
+    read_next(harness.io)
+end
 
 function wait_for(task::Task, timeout = 10.0)
     t0 = time()

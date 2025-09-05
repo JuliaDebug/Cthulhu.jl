@@ -127,13 +127,18 @@ function lookup_optimized(provider::AbstractProvider, interp::AbstractInterprete
     rt = cached_return_type(ci)
     exct = cached_exception_type(ci)
     effects = get_effects(ci)
-    if CC.use_const_api(ci) && ci.inferred === nothing
-        @assert isdefined(ci, :rettype_const)
-        src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
-        src.ssavaluetypes = Any[Any]
-        infos = Any[CC.NoCallInfo()]
-        slottypes = Any[]
-        return LookupResult(nothing, src, rt, exct, infos, slottypes, effects, true)
+    if ci.inferred === nothing
+        if CC.use_const_api(ci)
+            @assert isdefined(ci, :rettype_const)
+            src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
+            src.ssavaluetypes = Any[Any]
+            infos = Any[CC.NoCallInfo()]
+            slottypes = Any[]
+            return LookupResult(nothing, src, rt, exct, infos, slottypes, effects, true)
+        else
+            @warn "Inference decided not to cache optimized code for $mi; unoptimized code will be returned instead."
+            return lookup_unoptimized(provider, interp, ci)
+        end
     end
     opt = OptimizedSource(provider, interp, ci)
     ir = copy(opt.ir)

@@ -249,11 +249,11 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     end
 end
 
-function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::AbstractVector, provider::AbstractProvider,
-    ci::CodeInstance, result::LookupResult, source_ci::CodeInstance=ci; optimized::Bool=true)
+function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::AbstractVector,
+                        provider::AbstractProvider, ci::CodeInstance, result::LookupResult,
+                        source_ci::CodeInstance=ci)
     mi = get_mi(ci)
-
-    (; ir, src, rt, infos, slottypes, effects, optimized) = LookupResult(provider, ci, optimized)
+    (; ir, src, rt, infos, slottypes, effects, optimized) = result
     callsites, _ = find_callsites(provider, result, ci)
 
     for callsite in callsites
@@ -268,7 +268,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
 
         push!(visited_cis, callsite_ci)
         result = LookupResult(provider, ci, optimized)
-        add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, result, source_ci; optimized)
+        add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, result, source_ci)
     end
 
     # Check if callsite is not just filling in default arguments and defined in same file as source_ci

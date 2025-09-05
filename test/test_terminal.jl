@@ -3,6 +3,7 @@ module test_terminal
 using Core: Const
 using Test, REPL, Cthulhu, Revise
 using Cthulhu.Testing
+using Cthulhu.Testing: @run
 global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
 
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
@@ -228,6 +229,30 @@ end
         @test occursin("dynamic Base.vect(x)", text)
         @test occursin("(::$Int)::Vector{$Int}", text)
         @test end_terminal_session(harness)
+    end
+
+    @testset "Source discarded because of LimitedAccuracy (#642)" begin
+        reduce_tuple(@nospecialize(ixs)) = ixs
+        function reduce_tuple(ixs::Tuple)
+            values = ntuple(length(ixs)) do i
+                @inline
+                reduce_tuple(ixs[i])
+            end
+            return prod(values)
+        end
+        @test_logs (:warn, r"Inference decided not to cache") begin
+            terminal = VirtualTerminal()
+            harness = @run terminal descend(reduce_tuple, (typeof(((1, (1, 1)), 1)),); interruptexc=false, terminal)
+            displayed, text = read_next(harness)
+            write(terminal, 'T')
+            displayed, text = read_next(harness)
+            write(terminal, :down)
+            write(terminal, :down)
+            write(terminal, :enter)
+            displayed, text = read_next(harness)
+            write(terminal, 'o')
+            @test end_terminal_session(harness)
+        end
     end
 
     # `ascend`

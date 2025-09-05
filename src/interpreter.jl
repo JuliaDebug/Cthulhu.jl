@@ -51,8 +51,9 @@ function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter,
     @eval Main begin
         interp = $interp
         ci = $ci
+        opt = $opt
     end
-    error("couldn't find the source; inspect `Main.interp` and `Main.mi`")
+    error("couldn't find the source; inspect `Main.interp|mi|opt`")
 end
 
 function InferredSource(provider::AbstractProvider, interp::CthulhuInterpreter, src::Union{CodeInstance,InferenceResult})
