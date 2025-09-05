@@ -57,7 +57,7 @@ function default_menu_commands(provider::AbstractProvider)
         set_view('T', :typed, :show),
         set_view('L', :llvm, :show, "LLVM"),
         set_view('N', :native, :show),
-        perform_action(_ -> nothing, 'q', :quit, :actions),
+        perform_action(_ -> nothing, 'q', :quit, :actions), # built-in from TerminalMenus
         perform_action(_ -> nothing, '⟵', :ascend, :actions),
         perform_action(bookmark_method, 'b', :bookmark, :actions),
         perform_action(edit_source_code, 'E', :edit, :actions, "Edit source code"),

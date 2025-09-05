@@ -133,7 +133,7 @@ function TerminalMenus.keypress(menu::CthulhuMenu, key::UInt32)
     menu.sub_menu && return false
     (; state) = menu
     (; provider) = state
-    key === UInt32('\x7f') && (key = UInt32('⟵'))
+    key === UInt32('\x7f' #= backspace =#) && (key = UInt32('⟵'))
     i = findfirst(x -> x.key == key && is_command_enabled(provider, state, x), menu.commands)
     i === nothing && return false
     println(state.terminal.out_stream::IO)

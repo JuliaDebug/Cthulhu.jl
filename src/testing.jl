@@ -116,8 +116,8 @@ end
 # specific to Cthulhu, the last character we emit is that one).
 # Because we print it twice with Cthulhu (once for menu options, once
 # at the end for callsite selection), we effectively use twice-'↩' as a delimiter.
-cread1(io) = readuntil(io, '↩'; keep=true)
-cread(io) = cread1(io) * cread1(io)
+cread1(io::AsyncIO) = readuntil(io, '↩'; keep=true)
+cread(io::AsyncIO) = cread1(io) * cread1(io)
 strip_ansi_escape_sequences(str) = replace(str, r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])" => "")
 function read_next(io::AsyncIO)
     displayed = cread(io)
@@ -132,8 +132,6 @@ executing a task that interacts with the terminal.
 
 This harness:
 - Protects the terminal's input from a blocking congestion (caused by waiting for a read on its output).
-- Provides a way to navigate `descend` menus while handling menu redraws that would
-  otherwise mess with the '↩' delimiter used to read "sections" of output.
 - Logs any task errors to `stderr` to avoid silent failures.
 
 In an ideal world, we wouldn't need a utility like that, but it so happens that
@@ -180,7 +178,12 @@ end
 
 function read_next(harness::TestHarness)
     istaskdone(harness.task) && error("The task is not running")
-    read_next(harness.io)
+    return read_next(harness.io)
+end
+
+function skip_delimiter(harness::TestHarness)
+    cread1(harness.io)
+    return nothing
 end
 
 function wait_for(task::Task, timeout = 10.0)
@@ -197,18 +200,6 @@ end
 
 end_terminal_session(harness::TestHarness) =
     end_terminal_session(harness.terminal, harness.task, harness.io)
-
-"""
-Navigate a `descend` menu while ignoring the redrawn '↩' delimiter.
-
-This should be called on a harness that no longer contains any '↩' character,
-as this removes the first '↩'-delimited region.
-"""
-function navigate(harness::TestHarness, key::Symbol)
-    write(harness.terminal, key)
-    cread1(harness.io) # ignore the next '↩', presumably obtained from the redrawn menu
-    return nothing
-end
 
 function end_terminal_session(terminal::VirtualTerminal, task::Task, io::AsyncIO)
     wait_for(task, 0.0) && @goto finished
@@ -227,6 +218,6 @@ const KEYS = Dict(:up => "\e[A",
                   :down => "\e[B",
                   :enter => '\r')
 
-export VirtualTerminal, TestHarness, @run, read_next, navigate, end_terminal_session
+export VirtualTerminal, TestHarness, @run, read_next, end_terminal_session, skip_delimiter
 
 end # module Testing

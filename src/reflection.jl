@@ -158,6 +158,11 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
                       @nospecialize(exct), effects::Union{Effects, Nothing})
     process_recursive(@nospecialize(newinfo)) = process_info(provider, lookup, newinfo, argtypes, rt, exct, effects)
 
+    if isa(info, CC.ModifyOpInfo)
+        # Just ignore it.
+        info = info.info
+    end
+
     if isa(info, MethodResultPure)
         if isa(info.info, CC.ReturnTypeCallInfo)
             # xref: https://github.com/JuliaLang/julia/pull/45299#discussion_r871939049

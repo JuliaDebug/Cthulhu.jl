@@ -1,7 +1,7 @@
 module test_terminal
 
 using Core: Const
-using Test, REPL, Cthulhu, Revise
+using Test, REPL, Cthulhu, Revise, LinearAlgebra
 using Cthulhu.Testing
 using Cthulhu.Testing: @run
 global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
@@ -11,11 +11,20 @@ if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
 end
 
 # For multi-call sites
-module MultiCall
+module Definitions
 fmulti(::Int32) = 1
 fmulti(::Float32) = rand(Float32)
 fmulti(::Char) = 3
 callfmulti(c) = fmulti(c[])
+
+reduce_tuple(@nospecialize(ixs)) = ixs
+function reduce_tuple(ixs::Tuple)
+    values = ntuple(length(ixs)) do i
+        @inline
+        reduce_tuple(ixs[i])
+    end
+    return prod(values)
+end
 end
 
 @testset "Terminal" begin
@@ -41,10 +50,10 @@ end
     end
     includet(@__MODULE__, revisedfile)
 
-    _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig()
+    _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig(; menu_options = (; pagesize = 10000))
 
     terminal = VirtualTerminal()
-    harness = @run terminal descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, interruptexc=false, iswarn=false, terminal)
+    harness = @run terminal descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, iswarn=false, terminal)
 
     displayed, text = read_next(harness)
     @test occursin("simplef(a, b)", text)
@@ -63,11 +72,13 @@ end
     @test occursin("• %2 = *(::Float32,::Float32)::Float32", text)
 
     # Call selection
-    navigate(harness, :down)
+    write(terminal, :down)
+    skip_delimiter(harness)
     write(terminal, :enter)
     displayed, text = read_next(harness)
     @test occursin(r"• %\d = promote\(::Float32,::Int32\)::Tuple{Float32, Float32}", text)
-    navigate(harness, :up)
+    write(terminal, :up)
+    skip_delimiter(harness)
     write(terminal, :enter)
     displayed, text = read_next(harness)
     @test occursin("• %2 = *(::Float32,::Float32)::Float32", text) # back to where we started
@@ -171,7 +182,7 @@ end
 
     # Multicall & iswarn=true
     terminal = VirtualTerminal()
-    harness = @run terminal descend_code_warntype(MultiCall.callfmulti, Tuple{Any}; view=:typed, interruptexc=false, optimize=false, terminal)
+    harness = @run terminal descend_code_warntype(Definitions.callfmulti, Tuple{Any}; view=:typed, optimize=false, terminal)
 
     displayed, text = read_next(harness)
     @test occursin("\nBody", text)
@@ -183,7 +194,7 @@ end
         Base.text_colors[Base.error_color()]
     end
     @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, Int64}", displayed)
-    write(terminal, :down) # don't use `navigate`, it's the multi-call menu
+    write(terminal, :down)
     write(terminal, :enter)
     displayed, text = read_next(harness)
     @test occursin("%3 = fmulti(::Int32)::Union{Float32, $Int}", displayed)
@@ -204,7 +215,7 @@ end
     @test end_terminal_session(harness)
 
     # descend with MethodInstances
-    mi = Cthulhu.get_specialization(MultiCall.callfmulti, Tuple{typeof(Ref{Any}(1))})
+    mi = Cthulhu.get_specialization(Definitions.callfmulti, Tuple{typeof(Ref{Any}(1))})
     terminal = VirtualTerminal()
     harness = @run terminal descend(mi; view=:typed, optimize=false, terminal)
 
@@ -213,7 +224,7 @@ end
     @test end_terminal_session(harness)
 
     terminal = VirtualTerminal()
-    harness = @run terminal descend_code_warntype(mi; view=:typed, interruptexc=false, optimize=false, terminal)
+    harness = @run terminal descend_code_warntype(mi; view=:typed, optimize=false, terminal)
 
     displayed, text = read_next(harness)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
@@ -223,7 +234,7 @@ end
     # Fallback to typed code
     @test_logs (:warn, r"couldn't retrieve source") match_mode=:any begin
         terminal = VirtualTerminal()
-        harness = @run terminal descend(x -> [x], (Int,); view=:source, interruptexc=false, optimize=false, terminal)
+        harness = @run terminal descend(x -> [x], (Int,); view=:source, optimize=false, terminal)
 
         displayed, text = read_next(harness)
         @test occursin("dynamic Base.vect(x)", text)
@@ -232,27 +243,43 @@ end
     end
 
     @testset "Source discarded because of LimitedAccuracy (#642)" begin
-        reduce_tuple(@nospecialize(ixs)) = ixs
-        function reduce_tuple(ixs::Tuple)
-            values = ntuple(length(ixs)) do i
-                @inline
-                reduce_tuple(ixs[i])
-            end
-            return prod(values)
-        end
-        @test_logs (:warn, r"Inference decided not to cache") begin
+        @test_logs (:warn, r"Inference decided not to cache") match_mode=:any begin
             terminal = VirtualTerminal()
-            harness = @run terminal descend(reduce_tuple, (typeof(((1, (1, 1)), 1)),); interruptexc=false, terminal)
+            harness = @run terminal descend(Definitions.reduce_tuple, (typeof(((1, (1, 1)), 1)),); terminal)
             displayed, text = read_next(harness)
             write(terminal, 'T')
             displayed, text = read_next(harness)
             write(terminal, :down)
+            skip_delimiter(harness)
             write(terminal, :down)
+            skip_delimiter(harness)
             write(terminal, :enter)
             displayed, text = read_next(harness)
             write(terminal, 'o')
             @test end_terminal_session(harness)
         end
+    end
+
+    @testset "Code instances from [semi-]concrete evaluation (#609, #610)" begin
+        U = UpperTriangular{Int64, Matrix{Int64}}
+        S = Symmetric{Int64, Matrix{Int64}}
+        terminal = VirtualTerminal()
+        harness = @run terminal descend(*, (U, S); terminal)
+        displayed, text = read_next(harness)
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        write(terminal, :up)
+        skip_delimiter(harness)
+        write(terminal, :up)
+        skip_delimiter(harness)
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        @test contains(text, "_trimul!")
+        @test end_terminal_session(harness)
     end
 
     # `ascend`
