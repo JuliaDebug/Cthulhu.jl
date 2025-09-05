@@ -59,7 +59,7 @@ function cthulhu_ast(io::IO, provider::AbstractProvider, state::CthulhuState, re
     def = state.mi.def
     !isa(def, Method) && @warn "Can't show the AST because the definition is not a method."
     ast = definition(Expr, def)
-    ast === nothing && return @warn "Could not retrieve AST of $method. AST display requires Revise.jl to be loaded."
+    ast === nothing && return @warn "Could not retrieve AST of $def. AST display requires Revise.jl to be loaded."
     if !state.config.pretty_ast
         dump(io, ast; maxdepth=typemax(Int))
     else
