@@ -1,6 +1,7 @@
 module test_AbstractInterpreter
 
 using Test, Cthulhu
+using Cthulhu: DefaultProvider, find_method_instance, generate_code_instance
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
@@ -79,11 +80,12 @@ CC.method_table(interp::MTOverlayInterp) =
 @overlay OverlayedMT sin(x::Float64) = 1
 
 @testset "OverlayMethodTable integration" begin
-    interp, mi = Cthulhu.mkinterp((Int,); interp=MTOverlayInterp()) do x
-        sin(x)
-    end
-    inferred = interp.unopt[mi]
-    @test inferred.rt === Core.Const(1)
+    f = x -> sin(x)
+    interp = MTOverlayInterp()
+    provider = DefaultProvider(interp)
+    mi = find_method_instance(provider, f, (Int,))
+    ci = generate_code_instance(provider, mi)
+    @test ci.rettype_const === 1
 end
 
 end # module test_AbstractInterpreter

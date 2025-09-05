@@ -1,5 +1,5 @@
-using Test, Cthulhu, InteractiveUtils
-using Cthulhu: AbstractProvider, CthulhuConfig, CthulhuState, find_method_instance, generate_code_instance, LookupResult
+using Test, InteractiveUtils
+using .Cthulhu: AbstractProvider, CthulhuConfig, CthulhuState, find_method_instance, generate_code_instance, LookupResult
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end

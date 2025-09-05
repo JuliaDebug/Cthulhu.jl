@@ -1,12 +1,11 @@
-# module test_Cthulhu
+module test_Cthulhu
 
-using Test, Cthulhu, StaticArrays, Random, Accessors
+using Test, StaticArrays, Random, Accessors
 using Core: Const
 
-global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
-using ._Cthulhu: CC, DefaultProvider, CthulhuConfig
-global CONFIG::CthulhuConfig = _Cthulhu.CONFIG
-
+import Cthulhu as _Cthulhu
+const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
+using .Cthulhu: CC, DefaultProvider, CthulhuConfig, CONFIG
 
 include("setup.jl")
 include("irutils.jl")
@@ -865,15 +864,15 @@ end
 
 @testset "preferences" begin
     # Test that load and save are able to set state
-    _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = true, debuginfo = :none))
-    _Cthulhu.save_config!()
-    _Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = false, debuginfo = :compact))
-    @test _Cthulhu.CONFIG.enable_highlighter === false
-    @test _Cthulhu.CONFIG.debuginfo === :compact
+    Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = true, debuginfo = :none))
+    Cthulhu.save_config!()
+    Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = false, debuginfo = :compact))
+    @test Cthulhu.CONFIG.enable_highlighter === false
+    @test Cthulhu.CONFIG.debuginfo === :compact
 
-    _Cthulhu.read_config!()
-    @test _Cthulhu.CONFIG.enable_highlighter === true
-    @test _Cthulhu.CONFIG.debuginfo === :none
+    Cthulhu.read_config!()
+    @test Cthulhu.CONFIG.enable_highlighter === true
+    @test Cthulhu.CONFIG.debuginfo === :none
 end
 
 Base.@constprop :none sin_noconstprop(x) = sin(x)
@@ -938,4 +937,4 @@ f515() = cglobal((:foo, bar))
     @test isempty(callsites)
 end
 
-# end # module test_Cthulhu
+end # module test_Cthulhu
