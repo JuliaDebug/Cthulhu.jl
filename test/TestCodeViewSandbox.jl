@@ -5,6 +5,4 @@ function testf_revise()
     sum(rand(T, 100))
 end
 
-export testf_revise
-
 end

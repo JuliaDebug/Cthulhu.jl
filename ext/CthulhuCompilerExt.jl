@@ -6,7 +6,7 @@ using Cthulhu: Cthulhu
 
 function __init__()
     Cthulhu.CTHULHU_MODULE[] = @__MODULE__
-    read_config!(CONFIG)
+    read_config!()
 end
 
 include("../src/CthulhuBase.jl")

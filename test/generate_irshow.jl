@@ -13,9 +13,9 @@ function generate_test_cases(f, tt, fname=string(nameof(f)))
     for optimize in tf
         (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(f, tt; optimize);
         for (debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations) in Iterators.product(
-            instances(Cthulhu.DInfo.DebugInfo), tf, tf, tf, tf,
+            (:none, :source, :compact), tf, tf, tf, tf,
         )
-            !optimize && debuginfo === Cthulhu.DInfo.compact && continue
+            !optimize && debuginfo === :compact && continue
             !optimize && inline_cost && continue
 
             s = sprint(; context=:color=>true) do io
