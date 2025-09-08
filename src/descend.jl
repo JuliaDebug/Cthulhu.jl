@@ -1,8 +1,5 @@
-descend_code_typed_impl(@nospecialize(args...); kwargs...) =
-    descend_with_error_handling(args...; view = :typed, iswarn=false, kwargs...)
-
-descend_code_warntype_impl(@nospecialize(args...); kwargs...) =
-    descend_with_error_handling(args...; view = :typed, iswarn=true, optimize=false, kwargs...)
+descend_impl(@nospecialize(args...); kwargs...) =
+    descend_with_error_handling(args...; iswarn=true, kwargs...)
 
 function descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
     @nospecialize
@@ -24,9 +21,6 @@ function default_terminal()
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
     return term
 end
-
-descend_impl(@nospecialize(args...); kwargs...) =
-    descend_with_error_handling(args...; iswarn=true, kwargs...)
 
 ##
 # descend! is the main driver function.

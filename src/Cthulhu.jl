@@ -166,9 +166,8 @@ julia> descend_code_typed() do
 [...]
 ```
 """
-function descend_code_typed(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].descend_code_typed(args...; kwargs...)
-end
+descend_code_typed(@nospecialize(args...); view = :typed, iswarn = false, kwargs...) =
+    descend(args...; view, iswarn, kwargs...)
 
 """
     descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
@@ -199,9 +198,8 @@ julia> descend_code_warntype() do
 [...]
 ```
 """
-function descend_code_warntype(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].descend_code_warntype_impl(args...; kwargs...)
-end
+descend_code_warntype(@nospecialize(args...); view = :typed, iswarn = true, optimize = false, kwargs...) =
+    descend(args...; view, iswarn, optimize, kwargs...)
 
 """
     ascend(mi::MethodInstance; kwargs...)
