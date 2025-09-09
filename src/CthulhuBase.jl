@@ -65,16 +65,6 @@ get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
 get_specialization(@nospecialize tt::Type{<:Tuple}) =
     specialize_method(Base._which(tt))
 
-# function mkinterp(interp::AbstractInterpreter, @nospecialize(args...))
-#     interp′ = CthulhuInterpreter(interp)
-#     mi = get_specialization(args...)
-#     ci = run_type_inference(interp′, mi)
-#     return interp′, ci
-# end
-# mkinterp(@nospecialize(args...); interp::AbstractInterpreter=NativeInterpreter()) = mkinterp(interp, args...)
-
-# _descend(term::AbstractTerminal, provider::AbstractProvider, ci::CodeInstance; kwargs...) =
-#     _descend(term, provider, AbstractCursor(provider, ci); kwargs...)
 function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::MethodInstance; kwargs...)
     ci = generate_code_instance(provider, mi)
     config = setproperties(CONFIG, NamedTuple(kwargs))
