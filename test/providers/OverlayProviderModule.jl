@@ -15,7 +15,7 @@ end
 
 @overlay exp(x::Float64) = 42.0
 
-struct OverlayToken end
+mutable struct OverlayToken end
 
 struct OverlayInterpreter <: AbstractInterpreter
     token::OverlayToken

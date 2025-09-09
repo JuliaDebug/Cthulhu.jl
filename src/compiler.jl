@@ -204,13 +204,6 @@ function ir_to_src(ir::IRCode; slotnames = nothing)
 end
 
 function run_type_inference(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance)
-    result = InferenceResult(mi)
-    ci = CC.engine_reserve(interp, mi)
-    result.ci = ci
-    # we may want to handle the case when `InferenceState(...)` returns `nothing`,
-    # which indicates code generation of a `@generated` has been failed,
-    # and show it in the UI in some way?
-    frame = InferenceState(result, #=cache_mode=#:global, interp)::InferenceState
-    CC.typeinf(interp, frame)
-    return ci
+    ci = CC.typeinf_ext(interp, mi, CC.SOURCE_MODE_GET_SOURCE)
+    return ci::CodeInstance
 end

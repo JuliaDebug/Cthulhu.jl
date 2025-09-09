@@ -3,7 +3,7 @@ module test_Cthulhu
 using Test, StaticArrays, Random, Accessors
 using Core: Const
 
-import Cthulhu as _Cthulhu
+using Cthulhu: Cthulhu as _Cthulhu, callstring
 const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
 using .Cthulhu: CC, DefaultProvider, CthulhuConfig, CONFIG
 
@@ -765,7 +765,7 @@ end
     end
 
     io = IOBuffer()
-    @test Cthulhu.callstring(io, m.FunnyMI()) == "funny(::Char)"
+    @test callstring(io, m.FunnyMI()) == "funny(::Char)"
 end
 
 ##
@@ -843,14 +843,14 @@ end
 
     @testset "show(io, bookmark)" begin
         str = sprint(io -> show(io, "text/plain", b))
-        @test occursin("Cthulhu.Bookmark (world: ", str)
+        @test occursin("$Cthulhu.Bookmark (world: ", str)
     end
 
     @testset "show(io, [bookmark])" begin
         # Test that it does not print the full IR:
         str = sprint(io -> show(io, "text/plain", [b]))
         @test contains(str, "\n invoke sqrt(::Float64)::Float64 (world:")
-        @test !occursin("Cthulhu.Bookmark (world: ", str)
+        @test !occursin("$Cthulhu.Bookmark (world: ", str)
     end
 
     @testset "Smoke tests" begin
