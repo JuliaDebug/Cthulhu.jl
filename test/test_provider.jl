@@ -64,8 +64,14 @@ impl_warnings = logs([
 
 impl_warnings_noopt = impl_warnings[[3, 7, 9, 11, 13, 15]]
 
+function test_function(x)
+    y = 1 + 1 # constant propgation (concrete evaluation)
+    z, state = iterate((2, x)) # semi-concrete evaluation
+    return exp(x + z) # a normal call
+end
+
 @testset "Example providers" begin
-    args = (gcd, (Int, Int))
+    args = (test_function, (Int,))
 
     @testset "Provider API" begin
         @test Standard.DefaultProvider !== Ext.DefaultProvider

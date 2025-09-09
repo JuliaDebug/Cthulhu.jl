@@ -1,6 +1,6 @@
 using Core.IR
 using Test
-using .Cthulhu: CC, DefaultProvider, get_inference_world, find_method_instance, generate_code_instance, should_regenerate_code_instance, get_override, LookupResult, Command, menu_commands, is_command_enabled, show_command, CthulhuState, PC2Effects, get_pc_effects, PC2Remarks, get_pc_remarks, PC2Excts, get_pc_excts, get_inlining_costs, show_parameters
+using .Cthulhu: CC, DefaultProvider, get_inference_world, find_method_instance, generate_code_instance, should_regenerate_code_instance, get_ci, get_override, LookupResult, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, PC2Effects, get_pc_effects, PC2Remarks, get_pc_remarks, PC2Excts, get_pc_excts, get_inlining_costs, show_parameters
 using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
 using Logging: with_logger, NullLogger
 
@@ -13,12 +13,9 @@ function test_provider_api(provider, args...)
     @test isa(ci, CodeInstance)
     ret = should_regenerate_code_instance(provider, ci)
     @test isa(ret, Bool)
-    override = get_override(provider, CC.NoCallInfo())
-    @test isa(override, Any)
-    src = something(override, ci)
-    result = LookupResult(provider, src, false)
+    result = LookupResult(provider, ci, false)
     @test isa(result, LookupResult)
-    result = LookupResult(provider, src, true)
+    result = LookupResult(provider, ci, true)
     @test isa(result, LookupResult)
 
     commands = menu_commands(provider)
@@ -46,6 +43,20 @@ function test_provider_api(provider, args...)
         @test excts === nothing || isa(excts, PC2Excts)
         inlining_costs = get_inlining_costs(provider, mi, something(result.src, result.ir))
         @test inlining_costs === nothing || isa(inlining_costs, Vector{Int})
+    end
+
+    result = LookupResult(provider, ci, false)
+    callsites, _ = find_callsites(provider, result, ci)
+    @test length(callsites) ≥ ifelse(result.optimized, 1, 5)
+    for callsite in callsites
+        ci = get_ci(callsite)
+        ci === nothing && continue
+        override = get_override(provider, callsite.info)
+        src = something(override, ci)
+        result = LookupResult(provider, src, false)
+        @test isa(result, LookupResult)
+        result = LookupResult(provider, src, true)
+        @test isa(result, LookupResult)
     end
 end
 
