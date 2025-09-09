@@ -218,11 +218,11 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecia
     # if there otherwise isn't space for them, since the effects are the
     # most important piece of information if turned on.
     show_effects = get(limiter, :effects, false)::Bool
-    exception_type = get(limiter, :exception_type, false)::Bool && exct !== nothing
+    exception_types = get(limiter, :exception_types, false)::Bool && exct !== nothing
 
     if isa(limiter, TextWidthLimiter)
         show_effects && (limiter.width += textwidth(repr(effects)) + 1)
-        exception_type && (limiter.width += textwidth(string(exct)) + 1)
+        exception_types && (limiter.width += textwidth(string(exct)) + 1)
         limiter.limit = max(limiter.width, limiter.limit)
     end
 
@@ -267,7 +267,7 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecia
         # Print effects unlimited
         print(limiter.io, " ", effects)
     end
-    if exception_type
+    if exception_types
         print(limiter.io, ' ', ExctWrapper(exct))
     end
 

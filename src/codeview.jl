@@ -99,7 +99,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
 
     pc2remarks = !result.optimized & config.remarks ? get_pc_remarks(provider, ci) : nothing
     pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
-    pc2excts = config.exception_type ? get_pc_excts(provider, ci) : nothing
+    pc2excts = config.exception_types ? get_pc_excts(provider, ci) : nothing
     costs = result.optimized & config.inline_cost ? get_inlining_costs(provider, mi, src) : nothing
 
     debuginfo = IRShow.debuginfo(config.debuginfo)

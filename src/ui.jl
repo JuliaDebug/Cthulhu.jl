@@ -14,7 +14,7 @@ mutable struct CthulhuMenu <: TerminalMenus.ConfiguredMenu{TerminalMenus.Config}
     state::CthulhuState
 end
 
-function show_as_line(callsite::Callsite, effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool)
+function show_as_line(callsite::Callsite, effects::Bool, exception_types::Bool, optimize::Bool, iswarn::Bool)
     reduced_displaysize = displaysize(stdout)::Tuple{Int,Int} .- (0, 3)
     sprint() do io
         show(IOContext(io,
@@ -22,9 +22,9 @@ function show_as_line(callsite::Callsite, effects::Bool, exception_type::Bool, o
             :displaysize  => reduced_displaysize,
             :optimize     => optimize,
             :iswarn       => iswarn,
-            :color        => iswarn | effects | exception_type,
+            :color        => iswarn | effects | exception_types,
             :effects => effects,
-            :exception_type => exception_type),
+            :exception_types => exception_types),
             callsite)
     end
 end
@@ -38,10 +38,10 @@ but the main keywords to control the menu are:
 Others are passed to
 [`REPL.TerminalMenus.Config`](https://docs.julialang.org/en/v1/stdlib/REPL/#REPL.TerminalMenus.Config).
 """
-function CthulhuMenu(state::CthulhuState, callsites, effects::Bool, exception_type::Bool,
+function CthulhuMenu(state::CthulhuState, callsites, effects::Bool, exception_types::Bool,
                      optimize::Bool, iswarn::Bool, hide_type_stable::Bool,
                      commands::Vector{Command}; pagesize::Int=10, sub_menu = false, kwargs...)
-    options = build_options(callsites, effects, exception_type, optimize, iswarn, hide_type_stable)
+    options = build_options(callsites, effects, exception_types, optimize, iswarn, hide_type_stable)
     length(options) < 1 && error("CthulhuMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -59,15 +59,15 @@ function CthulhuMenu(state::CthulhuState, callsites, effects::Bool, exception_ty
     return CthulhuMenu(options, pagesize, pageoffset, selected, nothing, sub_menu, config, commands, state)
 end
 
-build_options(callsites::Vector{Callsite}, effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
-    vcat(map(callsite->show_as_line(callsite, effects, exception_type, optimize, iswarn), callsites), ["↩"])
-function build_options(callsites, effects::Bool, exception_type::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
+build_options(callsites::Vector{Callsite}, effects::Bool, exception_types::Bool, optimize::Bool, iswarn::Bool, ::Bool) =
+    vcat(map(callsite->show_as_line(callsite, effects, exception_types, optimize, iswarn), callsites), ["↩"])
+function build_options(callsites, effects::Bool, exception_types::Bool, optimize::Bool, iswarn::Bool, hide_type_stable::Bool)
     reduced_displaysize::Int = (displaysize(stdout)::Tuple{Int,Int})[2] - 3
     nd::Int = -1
 
     shown_callsites = map(callsites) do node
         if isa(node, Callsite)
-            show_as_line(node, effects, exception_type, optimize, iswarn)
+            show_as_line(node, effects, exception_types, optimize, iswarn)
         else
             if nd == -1
                 nd = TypedSyntax.ndigits_linenumbers(node)
