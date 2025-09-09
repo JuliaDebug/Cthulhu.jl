@@ -36,10 +36,10 @@ pick the correct provider just by doing `@descend interp=MyInterp() f(x)`.
 The interface for `AbstractProvider` requires a few methods to be defined. If it supports
 `get_abstract_interpreter(provider::AbstractProvider)::Compiler.AbstractInterpreter`,
 then only the following is required:
-- `run_type_inference(provider::AbstractProvider, interp::OverlayInterpreter, mi::MethodInstance)`
-- `OptimizedSource(provider::AbstractProvider, interp::OverlayInterpreter, ci::CodeInstance)`
-- `OptimizedSource(provider::AbstractProvider, interp::OverlayInterpreter, result::InferenceResult)`
-- `InferredSource(provider::AbstractProvider, interp::OverlayInterpreter, ci::CodeInstance)`
+- `run_type_inference(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance)`
+- `OptimizedSource(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)`
+- `OptimizedSource(provider::AbstractProvider, interp::AbstractInterpreter, result::InferenceResult)`
+- `InferredSource(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance)`
 
 For an `AbstractProvider` that is not associated with any particular `Compiler.AbstractInterpreter`,
 the following methods are required:

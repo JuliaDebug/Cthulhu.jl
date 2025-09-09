@@ -16,6 +16,10 @@ include("providers/CountingProviderModule.jl")
 using .CountingProviderModule: CountingProvider
 include("providers/OverlayProviderModule.jl")
 using .OverlayProviderModule: OverlayProvider
+@static if VERSION > v"1.13-"
+    include("providers/ExternalProviderModule.jl")
+    using .ExternalProviderModule: ExternalProvider
+end
 end
 
 @eval module Ext
@@ -27,6 +31,10 @@ include("providers/CountingProviderModule.jl")
 using .CountingProviderModule: CountingProvider
 include("providers/OverlayProviderModule.jl")
 using .OverlayProviderModule: OverlayProvider
+@static if VERSION > v"1.13-"
+    include("providers/ExternalProviderModule.jl")
+    using .ExternalProviderModule: ExternalProvider
+end
 end
 
 logs(warnings) = tuple.(:warn, warnings)
@@ -54,6 +62,8 @@ impl_warnings = logs([
     r"Effects could not be retrieved",
 ])
 
+impl_warnings_noopt = impl_warnings[[3, 7, 9, 11, 13, 15]]
+
 @testset "Example providers" begin
     args = (gcd, (Int, Int))
 
@@ -62,18 +72,22 @@ impl_warnings = logs([
         Standard.test_provider_api(Standard.DefaultProvider(), args...)
         Standard.test_provider_api(Standard.CountingProvider(), args...)
         Standard.test_provider_api(Standard.OverlayProvider(), args...)
+        VERSION > v"1.13-" && Standard.test_provider_api(Standard.ExternalProvider(), args...)
         Ext.test_provider_api(Ext.DefaultProvider(), args...)
         Ext.test_provider_api(Ext.CountingProvider(), args...)
         Ext.test_provider_api(Ext.OverlayProvider(), args...)
+        VERSION > v"1.13-" && Ext.test_provider_api(Ext.ExternalProvider(), args...)
     end
 
     @testset "`descend`" begin
         @test_logs normal_warnings... Standard.test_descend_for_provider(Standard.DefaultProvider(), args...)
         @test_logs impl_warnings... Standard.test_descend_for_provider(Standard.CountingProvider(), args...)
         @test_logs impl_warnings... Standard.test_descend_for_provider(Standard.OverlayProvider(), args...)
+        VERSION > v"1.13-" && @test_logs impl_warnings_noopt... Standard.test_descend_for_provider(Standard.ExternalProvider(), args...)
         @test_logs normal_warnings... Ext.test_descend_for_provider(Ext.DefaultProvider(), args...)
         @test_logs impl_warnings... Ext.test_descend_for_provider(Ext.CountingProvider(), args...)
         @test_logs impl_warnings... Ext.test_descend_for_provider(Ext.OverlayProvider(), args...)
+        VERSION > v"1.13-" && @test_logs impl_warnings_noopt... Ext.test_descend_for_provider(Ext.ExternalProvider(), args...)
     end
 end;
 
