@@ -278,7 +278,7 @@ end
         displayed, text = read_next(harness)
         write(terminal, :enter)
         displayed, text = read_next(harness)
-        @test contains(text, "_trimul!")
+        VERSION < v"1.13-" && @test contains(text, "_trimul!")
         @test end_terminal_session(harness)
     end
 

@@ -93,7 +93,7 @@ function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, r
     return lookup_constproped_unoptimized(provider, interp, result)
 end
 
-function LookupResult(provider::AbstractProvider, call::SemiConcreteCallInfo, optimize::Bool)
+function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, call::SemiConcreteCallInfo, optimize::Bool)
     return lookup_semiconcrete(provider, interp, call)
 end
 
