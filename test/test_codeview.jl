@@ -34,9 +34,9 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
     @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
         @testset "iswarn: $iswarn" for iswarn in tf
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
-                @testset "inline_cost: $inline_cost" for inline_cost in tf
+                @testset "inlining_costs: $inlining_costs" for inlining_costs in tf
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
-                        config = setproperties(CONFIG, (; view = :typed, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations))
+                        config = setproperties(CONFIG, (; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations))
                         state = CthulhuState(provider; config, ci, mi)
                         io = IOBuffer()
                         view_function(state)(io, provider, state, result)

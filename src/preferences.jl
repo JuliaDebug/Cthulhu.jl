@@ -31,7 +31,7 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "iswarn" => config.iswarn,
         "remarks" => config.remarks,
         "effects" => config.effects,
-        "inline_cost" => config.inline_cost,
+        "inlining_costs" => config.inlining_costs,
         "type_annotations" => config.type_annotations,
         "view" => String(config.view),
         "inlay_types_vscode" => config.inlay_types_vscode,
@@ -50,7 +50,7 @@ function read_config!()
     @reset CONFIG.iswarn = load_preference(Cthulhu, "iswarn", CONFIG.iswarn)
     @reset CONFIG.remarks = load_preference(Cthulhu, "remarks", CONFIG.remarks)
     @reset CONFIG.effects = load_preference(Cthulhu, "effects", CONFIG.effects)
-    @reset CONFIG.inline_cost = load_preference(Cthulhu, "inline_cost", CONFIG.inline_cost)
+    @reset CONFIG.inlining_costs = load_preference(Cthulhu, "inlining_costs", CONFIG.inlining_costs)
     @reset CONFIG.type_annotations = load_preference(Cthulhu, "type_annotations", CONFIG.type_annotations)
     @reset CONFIG.view = Symbol(load_preference(Cthulhu, "view", CONFIG.view))
     @reset CONFIG.inlay_types_vscode = load_preference(Cthulhu, "inlay_types_vscode", CONFIG.inlay_types_vscode)

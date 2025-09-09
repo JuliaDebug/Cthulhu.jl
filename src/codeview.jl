@@ -100,7 +100,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
     pc2remarks = !result.optimized & config.remarks ? get_pc_remarks(provider, ci) : nothing
     pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
     pc2excts = config.exception_types ? get_pc_excts(provider, ci) : nothing
-    costs = result.optimized & config.inline_cost ? get_inlining_costs(provider, mi, src) : nothing
+    costs = result.optimized & config.inlining_costs ? get_inlining_costs(provider, mi, src) : nothing
 
     debuginfo = IRShow.debuginfo(config.debuginfo)
     lineprinter = __debuginfo[debuginfo]
@@ -219,7 +219,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
 
     irshow_config = IRShow.IRShowConfig(preprinter, postprinter; should_print_stmt, bb_color)
 
-    if !config.inline_cost && config.iswarn
+    if !config.inlining_costs && config.iswarn
         print(lambda_io, "Body")
         InteractiveUtils.warntype_type_printer(lambda_io; type=rettype, used=true)
         if get(lambda_io, :effects, false)::Bool

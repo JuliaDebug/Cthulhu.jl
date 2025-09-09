@@ -46,7 +46,7 @@ function default_menu_commands(provider::AbstractProvider)
         set_option('r', :remarks, :toggles),
         set_option('e', :effects, :toggles, "effects"),
         set_option('x', :exception_types, :toggles),
-        set_option('i', :inline_cost, :toggles, "inlining costs"),
+        set_option('i', :inlining_costs, :toggles, "inlining costs"),
         set_option('t', :type_annotations, :toggles),
         set_option('s', :enable_highlighter, :toggles, "syntax highlight for Source/LLVM/Native"),
         set_option('v', :inlay_types_vscode, :toggles, "vscode: inlay types"),
@@ -109,7 +109,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
         if option === :remarks && config.optimize || option === :optimize && config.remarks
             @warn "Disable optimization to see the inference remarks."
         end
-        option === :inline_cost && !config.optimize && @warn "Enable optimization to see the inlining costs."
+        option === :inlining_costs && !config.optimize && @warn "Enable optimization to see the inlining costs."
     end
 
     if option === :enable_highlighter
@@ -118,7 +118,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
     end
 
     if value === false
-        option === :optimize && config.inline_cost && @warn "Enable optimization to see the inlining costs."
+        option === :optimize && config.inlining_costs && @warn "Enable optimization to see the inlining costs."
         option === :inlay_types_vscode && TypedSyntax.clear_inlay_hints_vscode()
         option === :diagnostics_vscode && TypedSyntax.clear_diagnostics_vscode()
     end
@@ -188,7 +188,7 @@ function is_default_command_enabled(provider::AbstractProvider, state::CthulhuSt
     command.name === :inlay_types_vscode && return TypedSyntax.inlay_hints_available_vscode()
     command.name === :diagnostics_vscode && return TypedSyntax.diagnostics_available_vscode()
     if state.config.view === :source
-        disabled_commands = (:optimize, :debuginfo, :remarks, :effects, :exception_types, :inline_cost)
+        disabled_commands = (:optimize, :debuginfo, :remarks, :effects, :exception_types, :inlining_costs)
         return !in(command.name, disabled_commands)
     end
     return true

@@ -15,19 +15,19 @@ include("IRShowSandbox.jl")
         @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
             @testset "iswarn: $iswarn" for iswarn in tf
                 @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
-                    @testset "inline_cost: $inline_cost" for inline_cost in tf
+                    @testset "inlining_costs: $inlining_costs" for inlining_costs in tf
                         @testset "type_annotations: $type_annotations" for type_annotations in tf
                             !optimize && debuginfo === :compact && continue
-                            !optimize && inline_cost && continue
+                            !optimize && inlining_costs && continue
 
                             s = sprint(; context=:color=>true) do io
                                 Cthulhu.cthulhu_typed(io, debuginfo,
                                                       src, rt, exct, effects, codeinst;
-                                                      iswarn, hide_type_stable, inline_cost, type_annotations)
+                                                      iswarn, hide_type_stable, inlining_costs, type_annotations)
                             end
                             s = strip_base_linenums(s)
 
-                            bname = irshow_filename("foo", optimize, debuginfo, iswarn, hide_type_stable, inline_cost, type_annotations)
+                            bname = irshow_filename("foo", optimize, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations)
                             fpath = normpath(@__DIR__, bname)
 
                             ground_truth = read(fpath, String)
