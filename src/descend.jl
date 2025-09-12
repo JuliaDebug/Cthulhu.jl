@@ -1,25 +1,38 @@
-descend_impl(@nospecialize(args...); kwargs...) =
-    descend_with_error_handling(args...; iswarn=true, kwargs...)
-
-function descend_with_error_handling(args...; terminal=default_terminal(), kwargs...)
+function descend_with_error_handling(args...; kwargs...)
     @nospecialize
     try
-        _descend(terminal, args...; kwargs...)
+        return _descend(args...; kwargs...)
     catch x
         TypedSyntax.clear_all_vscode()
-        if x isa InterruptException
-            return nothing
-        else
-            rethrow(x)
-        end
+        isa(x, InterruptException) && return :interrupted
+        rethrow(x)
     end
     return nothing
 end
 
-function default_terminal()
-    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-    return term
+function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::MethodInstance; kwargs...)
+    ci = generate_code_instance(provider, mi)
+    config = setproperties(CONFIG, NamedTuple(kwargs))
+    state = CthulhuState(provider; terminal, config, mi, ci)
+    descend!(state)
+end
+
+function _descend(terminal::AbstractTerminal, provider::AbstractProvider, @nospecialize(args...); world = Base.tls_world_age(), kwargs...)
+    mi = find_method_instance(provider, args..., world)
+    isa(mi, MethodInstance) || error("No method instance found for $(join(args, ", "))")
+    _descend(terminal, provider, mi; kwargs...)
+end
+
+function _descend(terminal::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
+    _descend(terminal, provider, args...; kwargs...)
+end
+
+_descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =
+    _descend(terminal, args...; kwargs...)
+
+function _descend(bookmark::Bookmark; terminal=default_terminal(), kwargs...)
+    state = CthulhuState(bookmark; terminal, kwargs...)
+    descend!(state)
 end
 
 ##
@@ -31,6 +44,7 @@ end
 function descend!(state::CthulhuState)
     (; provider) = state
     commands = menu_commands(provider)
+    status = nothing
     if !isa(commands, Vector{Command})
         error(lazy"""
         invalid `$AbstractProvider` API:
@@ -102,9 +116,8 @@ function descend!(state::CthulhuState)
 
         if toggle === nothing
             callsite = select_callsite(state, callsites, source_nodes, cid, menu_options, commands)::Union{Symbol, Callsite}
-            callsite === :ascend && break
-            callsite === :interrupted && break
-            callsite === :failed && continue
+            callsite === :ascend && (status = :ascended; break)
+            callsite === :exit && (status = :exited; break)
             callsite === :continue && continue
             (; info) = callsite
 
@@ -134,7 +147,8 @@ function descend!(state::CthulhuState)
             state.ci = ci
             state.override = get_override(provider, info)
             state.display_code = true
-            descend!(state)
+            status = descend!(state)
+            status === :exited && break
             restore_descend_state!(state, prev)
             state.display_code = true
 
@@ -143,15 +157,13 @@ function descend!(state::CthulhuState)
     end
 
     TypedSyntax.clear_all_vscode()
+    return status
 end
 
 function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, source_nodes, i::Int, menu_options::NamedTuple, commands::Vector{Command})
     (; config) = state
     i === length(callsites) + 1 && return :ascend
-    if i === -1
-        config.interruptexc && throw(InterruptException())
-        return :interrupted
-    end
+    i === -1 && return :exit
 
     callsite = callsites[i]
     !isa(callsite.info, MultiCallInfo) && return callsite
@@ -165,8 +177,7 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
             mi = $mi
             info = $info
         end
-        @error "Expected multiple callsites, but found none. Please fill an issue with a reproducing example."
-        return :failed
+        error("Expected multiple callsites, but found none. Please fill an issue with a reproducing example.")
     end
     menu_callsites = source_node === nothing ? sub_callsites : menu_callsites_from_source_node(callsite, source_node)
     io = state.terminal.out_stream::IO
@@ -176,10 +187,7 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
                         sub_menu=true, menu_options...)
     i = request(state.terminal, "", menu)
     i === length(sub_callsites) + 1 && return :continue
-    if i === -1
-        config.interruptexc && throw(InterruptException())
-        return :interrupted
-    end
+    i === -1 && return :exit
 
     return sub_callsites[i]
 end

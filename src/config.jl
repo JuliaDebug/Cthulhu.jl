@@ -3,7 +3,6 @@ Base.@kwdef struct CthulhuConfig
     highlighter::Cmd = `pygmentize -l`
     asm_syntax::Symbol = :att
     pretty_ast::Bool = false
-    interruptexc::Bool = true
     debuginfo::Symbol = :compact
     optimize::Bool = true
     iswarn::Bool = false
@@ -18,12 +17,12 @@ Base.@kwdef struct CthulhuConfig
     jump_always::Bool = false
     view::Symbol = :source
     menu_options::NamedTuple = ()
-    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_types, inlining_costs, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
+    function CthulhuConfig(enable_highlighter, highlighter, asm_syntax, pretty_ast, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_types, inlining_costs, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
         diagnostics_vscode &= iswarn # if warnings are off, then no diagnostics are shown
         diagnostics_vscode &= TypedSyntax.diagnostics_available_vscode()
         inlay_types_vscode &= TypedSyntax.inlay_hints_available_vscode()
         optimize &= view !== :source
-        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, interruptexc, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_types, inlining_costs, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
+        return new(enable_highlighter, highlighter, asm_syntax, pretty_ast, debuginfo, optimize, iswarn, hide_type_stable, remarks, effects, exception_types, inlining_costs, type_annotations, inlay_types_vscode, diagnostics_vscode, jump_always, view, menu_options)
     end
 end
 
@@ -38,7 +37,6 @@ end
 - `asm_syntax::Symbol`: Set the syntax of assembly code being used.
   Defaults to `$(CthulhuConfig().asm_syntax)`.
 - `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
-- `interruptexc::Bool`: Use <q>-key to quit or ascend. Defaults to `false`.
 - `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
   Options:. `:none`, `:compact`, `:source`
 - `optimize::Bool`: Initial state of "optimize" toggle. Defaults to `true`.

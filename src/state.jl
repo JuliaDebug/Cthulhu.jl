@@ -12,6 +12,12 @@ function CthulhuState(provider::AbstractProvider; terminal = default_terminal(),
     return CthulhuState(terminal, provider, config, mi, ci, override, true)
 end
 
+function default_terminal()
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
+    return term
+end
+
 view_function(state::CthulhuState) = view_function(state.provider, state.config.view)
 function view_function(provider::AbstractProvider, view::Symbol)
     view === :source && return cthulhu_source
@@ -146,7 +152,7 @@ end
 
 function bookmark_method(state::CthulhuState)
     push!(BOOKMARKS, Bookmark(state.provider, state.ci; state.config))
-    @info "The method is pushed at the end of `Cthulhu.BOOKMARKS`."
+    @info "The current `descend` state was saved for later use. You may access it with `Cthulhu.BOOKMARKS[end]`."
 end
 
 function dump_parameters(state::CthulhuState)

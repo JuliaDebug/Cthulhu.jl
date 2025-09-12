@@ -334,3 +334,8 @@ true
 
 julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next time you `using Cthulhu`
 ```
+
+## Development
+
+If you intend to Revise changes made to Cthulhu, it is strongly advised to disable the Compiler extension by uncommenting it from the `Project.toml` while iterating.
+Otherwise, the Compiler extension will be unconditionally loaded, and Revise seems to fail to revise the changes into `CthulhuCompilerExt`.

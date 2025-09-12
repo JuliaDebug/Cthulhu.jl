@@ -39,7 +39,16 @@ See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
 julia> @descend sin(1)
 [...]
 
-julia> @descend iswarn=false foo()
+julia> @descend view=:typed iswarn=true optimize=false foo() # equivalent to `@descend_warntype`
+[...]
+
+julia> @descend view=:typed iswarn=false foo() # equivalent to `@descend_code_typed`
+[...]
+
+julia> @descend interp=SomeInterpreter() foo() # use a custom `Compiler.AbstractInterpreter`
+[...]
+
+julia> @descend provider=SomeProvider() foo() # use a custom `AbstractProvider`, see the docs for more details
 [...]
 ```
 """
@@ -53,6 +62,10 @@ end
 Evaluates the arguments to the function or macro call, determines their
 types, and calls [`descend_code_typed`](@ref) on the resulting expression.
 See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+This macro is equivalent to `@descend` with the following options set (unless provided):
+- `view = :typed`
+- `iswarn = false`
 
 # Examples
 ```julia
@@ -73,6 +86,11 @@ end
 Evaluates the arguments to the function or macro call, determines their
 types, and calls [`descend_code_warntype`](@ref) on the resulting expression.
 See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+This macro is equivalent to `@descend` with the following options set (unless provided):
+- `view = :typed`
+- `iswarn = true`
+- `optimize = false`
 
 # Examples
 ```julia
@@ -96,12 +114,12 @@ end
 """
     descend(f, argtypes=Tuple{...}; kwargs...)
     descend(tt::Type{<:Tuple}; kwargs...)
-    descend(Cthulhu.BOOKMARKS[i])
+    descend(Cthulhu.BOOKMARKS[i]; kwargs...)
     descend(mi::MethodInstance; kwargs...)
 
 Given a function and a tuple-type, interactively explore the source code of functions
-annotated with inferred types by descending into `invoke` statements. Type enter to select an
-`invoke` to descend into, select `↩` to ascend, and press `q` or `control-c` to quit.
+annotated with inferred types by descending into `invoke` statements. Type enter to select a callsite
+to descend into, select `↩` or press backspace to ascend, and press `q` or `ctrl-c` to quit.
 See [`Cthulhu.CONFIG`](@ref) for `kwargs` and their defaults.
 
 # Usage:
@@ -127,14 +145,15 @@ function descend(@nospecialize(args...); interp=nothing,
                                          @nospecialize(kwargs...))
     if provider !== nothing
         mod = resolve_module(provider)
-        return mod.descend_impl(args...; provider, kwargs...)
+        mod.descend_with_error_handling(args...; provider, kwargs...)
     elseif interp !== nothing
         mod = resolve_module(interp)
-        return mod.descend_impl(args...; interp, kwargs...)
+        mod.descend_with_error_handling(args...; interp, kwargs...)
     else
         mod = resolve_module()
-        return mod.descend_impl(args...; kwargs...)
+        mod.descend_with_error_handling(args...; kwargs...)
     end
+    return nothing
 end
 
 """
@@ -229,5 +248,10 @@ using PrecompileTools
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
 end
+
+get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
+    get_specialization(Base.signature_type(f, tt))
+get_specialization(@nospecialize tt::Type{<:Tuple}) =
+    specialize_method(Base._which(tt))
 
 end # module Cthulhu

@@ -2,7 +2,8 @@ function ascend_impl(
         term, mi;
         interp::AbstractInterpreter=NativeInterpreter(),
         provider::AbstractProvider=AbstractProvider(interp),
-        pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize, kwargs...)
+        pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize,
+        menu_options=(; pagesize), kwargs...)
     root = Cthulhu.treelist(mi)
     root === nothing && return
     menu = TreeMenu(root; pagesize, dynamic, maxsize)
@@ -48,7 +49,7 @@ function ascend_impl(
             end
             # The main application of `ascend` is finding cases of non-inferrability, so the
             # warn highlighting is useful.
-            browsecodetyped && _descend(term, mi; provider, view=:source, iswarn=true, optimize=false, interruptexc=false, menu_options=(; pagesize), kwargs...)
+            browsecodetyped && _descend(term, mi; provider, view=:source, iswarn=true, optimize=false, menu_options, kwargs...)
         end
     end
 end

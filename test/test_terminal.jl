@@ -343,6 +343,39 @@ end
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
+
+    @testset "Bookmarks" begin
+        bookmarks = _Cthulhu.BOOKMARKS
+        n = length(bookmarks)
+
+        @test_logs (:info, r"`descend` state was saved for later use") begin
+            terminal = VirtualTerminal()
+            harness = @run terminal descend(exp, (Int,); view=:typed, optimize=true, terminal)
+            write(terminal, :enter)
+            write(terminal, 'b') # should push a bookmark to `BOOKMARKS`
+            write(terminal, 'q')
+            @test end_terminal_session(harness)
+        end
+
+        @test length(bookmarks) == n + 1
+        bookmark = pop!(bookmarks)
+        mi = _Cthulhu.get_mi(bookmark.ci)
+        method = mi.def
+        @test method === which(exp, (Float64,))
+        @test bookmark.config.view === :typed
+        @test bookmark.config.optimize === true
+
+        terminal = VirtualTerminal()
+        @test_logs (:info, r"`descend` state was saved for later use") begin
+            harness = @run terminal _Cthulhu.descend_with_error_handling(bookmark; view=:llvm, terminal)
+            write(terminal, 'b') # should push a bookmark to `BOOKMARKS`
+            write(terminal, 'q')
+            @test end_terminal_session(harness)
+        end
+
+        bookmark = pop!(bookmarks)
+        @test bookmark.config.view === :llvm
+    end
 end;
 
 end # module test_terminal

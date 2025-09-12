@@ -59,27 +59,3 @@ get_effects(source::InferredSource) = source.effects
 get_effects(result::CC.ConstPropResult) = get_effects(result.result)
 get_effects(result::CC.ConcreteResult) = result.effects
 get_effects(result::CC.SemiConcreteResult) = result.effects
-
-get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
-    get_specialization(Base.signature_type(f, tt))
-get_specialization(@nospecialize tt::Type{<:Tuple}) =
-    specialize_method(Base._which(tt))
-
-function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::MethodInstance; kwargs...)
-    ci = generate_code_instance(provider, mi)
-    config = setproperties(CONFIG, NamedTuple(kwargs))
-    state = CthulhuState(provider; terminal, config, mi, ci)
-    descend!(state)
-end
-function _descend(terminal::AbstractTerminal, provider::AbstractProvider, @nospecialize(args...); world = Base.tls_world_age(), kwargs...)
-    mi = find_method_instance(provider, args..., world)
-    isa(mi, MethodInstance) || error("No method instance found for $(join(args, ", "))")
-    _descend(terminal, provider, mi; kwargs...)
-end
-
-function _descend(terminal::AbstractTerminal, @nospecialize(args...); interp=NativeInterpreter(), provider=AbstractProvider(interp), kwargs...)
-    _descend(terminal, provider, args...; kwargs...)
-end
-
-_descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =
-    _descend(terminal, args...; kwargs...)

@@ -18,66 +18,69 @@ end
 Bookmark(provider::AbstractProvider, ci::CodeInstance; config::CthulhuConfig = CONFIG) =
     Bookmark(provider, config, ci)
 
+function CthulhuState(bookmark::Bookmark; terminal=default_terminal(), kwargs...)
+    config = setproperties(bookmark.config, NamedTuple(kwargs))
+    state = CthulhuState(bookmark.provider; terminal, config, bookmark.ci)
+    return state
+end
+
 """
     Cthulhu.BOOKMARKS :: Vector{Bookmark}
 
-During a descent, methods can be "bookmarked" by pressing `b` key.  It
-pushes a [`Cthulhu.Bookmark`](@ref) into `Cthulhu.BOOKMARKS`.  This can be
-used to, e.g., continue descending by `descend(Cthulhu.BOOKMARKS[end])`.
+During a descent, state can be "bookmarked" by pressing `b`, which pushes a [`Cthulhu.Bookmark`](@ref) into `Cthulhu.BOOKMARKS`. This can be used to, e.g., continue descending with `descend(Cthulhu.BOOKMARKS[end])`.
+
 See [`Cthulhu.Bookmark`](@ref) for other usages.
 """
 const BOOKMARKS = Bookmark[]
 
-# Turn off `optimize` and `debuginfo` for default `show` so that the
-# output is smaller.
-function Base.show(io::IO, ::MIME"text/plain", b::Bookmark; kwargs...)
-    (; provider, config, ci) = b
-    world = get_inference_world(b.provider)
-    config = setproperties(b.config, NamedTuple(kwargs))
-    state = CthulhuState(provider; ci, config)
-    result = LookupResult(provider, ci, config.optimize)
+function Base.show(io::IO, ::MIME"text/plain", bookmark::Bookmark; kwargs...)
+    (; provider, ci) = bookmark
+    state = CthulhuState(bookmark; kwargs...)
+    result = LookupResult(provider, ci, state.config.optimize)
+    world = get_inference_world(provider)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
-        print(io, Callsite(-1, EdgeCallInfo(ci, result.rt, Effects()), :invoke))
+        info = EdgeCallInfo(ci, result.rt, Effects())
+        callsite = Callsite(-1, info, :invoke)
+        print(io, callsite)
         print(io, " (world: ", world, ")")
         return
     end
     println(io, Bookmark, " (world: $world):")
-    cthulhu_typed(io, provider, state, result)
+    view_function(state)(io, provider, state, result)
 end
 
-function Base.code_typed(b::Bookmark; kwargs...)
-    (; provider, config, ci) = b
-    config = setproperties(b.config, NamedTuple(kwargs))
-    state = CthulhuState(provider; ci, config)
-    result = LookupResult(provider, ci, config.optimize)
+function Base.code_typed(bookmark::Bookmark; kwargs...)
+    (; provider, ci) = bookmark
+    state = CthulhuState(bookmark; kwargs...)
+    result = LookupResult(provider, ci, state.config.optimize)
     src = something(result.src, result.ir)::Union{CodeInfo, IRCode}
     return src => result.rt
 end
 
-InteractiveUtils.code_warntype(b::Bookmark; kwargs...) = InteractiveUtils.code_warntype(stdout::IO, b; kwargs...)
-InteractiveUtils.code_llvm(b::Bookmark; kwargs...) = InteractiveUtils.code_llvm(stdout::IO, b; kwargs...)
-InteractiveUtils.code_native(b::Bookmark; kwargs...) = InteractiveUtils.code_native(stdout::IO, b; kwargs...)
+InteractiveUtils.code_warntype(bookmark::Bookmark; kwargs...) =
+    InteractiveUtils.code_warntype(stdout::IO, bookmark; kwargs...)
+InteractiveUtils.code_llvm(bookmark::Bookmark; kwargs...) =
+    InteractiveUtils.code_llvm(stdout::IO, bookmark; kwargs...)
+InteractiveUtils.code_native(bookmark::Bookmark; kwargs...) =
+    InteractiveUtils.code_native(stdout::IO, bookmark; kwargs...)
 
-function InteractiveUtils.code_warntype(io::IO, b::Bookmark; kwargs...)
-    (; provider, config, ci) = b
-    config = setproperties(b.config, NamedTuple(kwargs))
-    state = CthulhuState(provider; ci, config)
-    result = LookupResult(provider, ci, config.optimize)
-    cthulhu_warntype(io, b.provider, state, result)
+function InteractiveUtils.code_warntype(io::IO, bookmark::Bookmark; kwargs...)
+    (; provider, ci) = bookmark
+    state = CthulhuState(bookmark; kwargs...)
+    result = LookupResult(provider, ci, state.config.optimize)
+    cthulhu_warntype(io, provider, state, result)
 end
 
-function InteractiveUtils.code_llvm(io::IO, b::Bookmark; dump_module = false, raw = false, kwargs...)
-    (; provider, config, ci) = b
-    config = setproperties(b.config, NamedTuple(kwargs))
-    state = CthulhuState(provider; ci, config)
-    result = LookupResult(provider, ci, config.optimize)
+function InteractiveUtils.code_llvm(io::IO, bookmark::Bookmark; dump_module = false, raw = false, kwargs...)
+    (; provider, ci) = bookmark
+    state = CthulhuState(bookmark; kwargs...)
+    result = LookupResult(provider, ci, state.config.optimize)
     cthulhu_llvm(io, provider, state, result; dump_module, raw)
 end
 
-function InteractiveUtils.code_native(io::IO, b::Bookmark; dump_module = false, raw = false, kwargs...)
-    (; provider, config, ci) = b
-    config = setproperties(b.config, NamedTuple(kwargs))
-    state = CthulhuState(provider; ci, config)
-    result = LookupResult(provider, ci, config.optimize)
+function InteractiveUtils.code_native(io::IO, bookmark::Bookmark; dump_module = false, raw = false, kwargs...)
+    (; provider, ci) = bookmark
+    state = CthulhuState(bookmark; kwargs...)
+    result = LookupResult(provider, ci, state.config.optimize)
     cthulhu_native(io, provider, state, result; dump_module, raw)
 end
