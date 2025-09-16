@@ -1,9 +1,12 @@
 module ExternalProviderModule
 
 using Core.IR
-import ..Cthulhu
-using ..Cthulhu: CC, AbstractProvider, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference, LookupResult
+
+import ..CompilerIntegration as CompilerIntegration
+using ..CompilerIntegration: CC, ir_to_src, LookupResult, get_effects
 using .CC: InferenceResult, AbstractInterpreter, NativeInterpreter
+
+using Cthulhu: Cthulhu, AbstractProvider, generate_code_instance, Command, default_menu_commands, cached_return_type, cached_exception_type
 
 mutable struct ExternalOwner end
 
@@ -74,7 +77,10 @@ mutable struct ExternalProvider <: AbstractProvider
     ExternalProvider() = new(ExternalInterpreter())
 end
 
-CC.get_inference_world(provider::ExternalProvider) = CC.get_inference_world(provider.interp)
+# Technically, in that case we'd just extend `get_abstract_interpreter`,
+# but the point here is to satisfy the interface without it for testing.
+
+Cthulhu.get_inference_world(provider::ExternalProvider) = CC.get_inference_world(provider.interp)
 
 Cthulhu.find_method_instance(provider::ExternalProvider, @nospecialize(tt::Type{<:Tuple}), world::UInt) =
     Cthulhu.find_method_instance(provider, provider.interp, tt, world)
@@ -85,16 +91,16 @@ function Cthulhu.generate_code_instance(provider::ExternalProvider, mi::MethodIn
     return ci
 end
 
-function Cthulhu.LookupResult(provider::ExternalProvider, ci::CodeInstance, optimize::Bool #= ignored =#)
+function Cthulhu.lookup(provider::ExternalProvider, ci::CodeInstance, optimize::Bool #= ignored =#)
     @assert isa(ci.inferred, InferredIR)
     ir = copy(ci.inferred.ir)
-    src = Cthulhu.ir_to_src(ir)
+    src = ir_to_src(ir)
     src.ssavaluetypes = copy(ir.stmts.type)
     src.min_world = @atomic ci.min_world
     src.max_world = @atomic ci.max_world
-    rt = Cthulhu.cached_return_type(ci)
-    exct = Cthulhu.cached_exception_type(ci)
-    effects = Cthulhu.get_effects(ci)
+    rt = cached_return_type(ci)
+    exct = cached_exception_type(ci)
+    effects = get_effects(ci)
     infos = copy(ir.stmts.info)
     return LookupResult(ir, src, rt, exct, infos, src.slottypes, effects, true #= optimized =#)
 end

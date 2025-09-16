@@ -198,7 +198,7 @@ function is_small_union_or_tunion(@nospecialize(T))
         return isc & (n <= 3)
     end
     if T <: Tuple  # is it Tuple{U}
-        return all(is_small_union_or_tunion, (Base.unwrap_unionall(T)::DataType).parameters)
+        return all(is_small_union_or_tunion, (unwrap_unionall(T)::DataType).parameters)
     end
     return false
 end

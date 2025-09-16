@@ -1,9 +1,12 @@
 module OverlayProviderModule # inspired by the Cthulhu integration at serenity4/SPIRV.jl/ext/SPIRVCthulhuExt.jl
 
 using Core.IR
-import ..Cthulhu
-using ..Cthulhu: CC, AbstractProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
-using .CC: OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams
+
+import ..CompilerIntegration as CompilerIntegration
+using ..CompilerIntegration: CC, CthulhuInterpreter, run_type_inference, OptimizedSource, InferredSource
+using .CC: InferenceResult, OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams
+
+using Cthulhu: Cthulhu, AbstractProvider
 
 ### Interpreter
 
@@ -69,13 +72,13 @@ Cthulhu.get_abstract_interpreter(provider::OverlayProvider) = provider.interp
 # This only works so long as we don't rely on overriding compilation methods for `OverlayInterpreter`
 # (besides those from the `AbstractInterpreter` interface that are forwarded by `CthulhuInterpreter`).
 
-Cthulhu.run_type_inference(provider::OverlayProvider, interp::OverlayInterpreter, mi::MethodInstance) =
+CompilerIntegration.run_type_inference(provider::OverlayProvider, interp::OverlayInterpreter, mi::MethodInstance) =
     run_type_inference(provider, provider.cthulhu, mi)
-Cthulhu.OptimizedSource(provider::OverlayProvider, interp::OverlayInterpreter, ci::CodeInstance) =
+CompilerIntegration.OptimizedSource(provider::OverlayProvider, interp::OverlayInterpreter, ci::CodeInstance) =
     OptimizedSource(provider, provider.cthulhu, ci)
-Cthulhu.OptimizedSource(provider::OverlayProvider, interp::OverlayInterpreter, result::InferenceResult) =
+CompilerIntegration.OptimizedSource(provider::OverlayProvider, interp::OverlayInterpreter, result::InferenceResult) =
     OptimizedSource(provider, provider.cthulhu, result)
-Cthulhu.InferredSource(provider::OverlayProvider, interp::OverlayInterpreter, ci::CodeInstance) =
+CompilerIntegration.InferredSource(provider::OverlayProvider, interp::OverlayInterpreter, ci::CodeInstance) =
     InferredSource(provider, provider.cthulhu, ci)
 
 end

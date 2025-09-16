@@ -18,6 +18,12 @@ function default_terminal()
     return term
 end
 
+function cthulhu_source end
+function cthulhu_typed end
+function cthulhu_ast end
+function cthulhu_llvm end
+function cthulhu_native end
+
 view_function(state::CthulhuState) = view_function(state.provider, state.config.view)
 function view_function(provider::AbstractProvider, view::Symbol)
     view === :source && return cthulhu_source

@@ -18,7 +18,7 @@ function show_tuple_as_call(@nospecialize(highlighter), io::IO, name::Symbol, @n
     sig = (sig::DataType).parameters
 
     ft = sig[1]
-    uw = Base.unwrap_unionall(ft)
+    uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
             isdefined(uw.name.module, get_fname(uw)) &&
             ft == typeof(getfield(uw.name.module, get_fname(uw)))
@@ -44,7 +44,7 @@ end
 
 function stripType(@nospecialize(typ))
     if isa(typ, UnionAll)
-        typ = Base.unwrap_unionall(typ)
+        typ = unwrap_unionall(typ)
     elseif isa(typ, TypeVar) || isa(typ, Union)
         return typ
     end

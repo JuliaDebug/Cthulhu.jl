@@ -1,9 +1,12 @@
 module CountingProviderModule
 
 using Core.IR
-import ..Cthulhu
-using ..Cthulhu: CC, AbstractProvider, DefaultProvider, CthulhuInterpreter, generate_code_instance, Command, default_menu_commands, OptimizedSource, InferredSource, run_type_inference
+
+import ..CompilerIntegration as CompilerIntegration
+using ..CompilerIntegration: CC, DefaultProvider, CthulhuInterpreter, run_type_inference, OptimizedSource, InferredSource
 using .CC: InferenceResult
+
+using Cthulhu: Cthulhu, AbstractProvider, generate_code_instance, Command, default_menu_commands
 
 mutable struct CountingProvider <: AbstractProvider
     default::DefaultProvider
@@ -32,13 +35,13 @@ function modify_count(key, name, value)
     Command(state -> state.provider.count += value, key, name, string(name), :actions)
 end
 
-Cthulhu.run_type_inference(provider::CountingProvider, interp::CthulhuInterpreter, mi::MethodInstance) =
+CompilerIntegration.run_type_inference(provider::CountingProvider, interp::CthulhuInterpreter, mi::MethodInstance) =
     run_type_inference(provider.default, interp, mi)
-Cthulhu.OptimizedSource(provider::CountingProvider, interp::CthulhuInterpreter, ci::CodeInstance) =
+CompilerIntegration.OptimizedSource(provider::CountingProvider, interp::CthulhuInterpreter, ci::CodeInstance) =
     OptimizedSource(provider.default, interp, ci)
-Cthulhu.OptimizedSource(provider::CountingProvider, interp::CthulhuInterpreter, result::InferenceResult) =
+CompilerIntegration.OptimizedSource(provider::CountingProvider, interp::CthulhuInterpreter, result::InferenceResult) =
     OptimizedSource(provider.default, interp, result)
-Cthulhu.InferredSource(provider::CountingProvider, interp::CthulhuInterpreter, ci::CodeInstance) =
+CompilerIntegration.InferredSource(provider::CountingProvider, interp::CthulhuInterpreter, ci::CodeInstance) =
     InferredSource(provider.default, interp, ci)
 
 export CountingProvider

@@ -199,7 +199,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
                 # Match kwargs
                 argcontainer = children(last(children(sig)))
                 offset = length(children(sig)) - 1
-                names, typs = (Base.unwrap_unionall(nt)::DataType).parameters
+                names, typs = (unwrap_unionall(nt)::DataType).parameters
                 if names isa Tuple{Vararg{Symbol}} && typs isa DataType && typs.name === Tuple.name
                     for j = 1 : length(argcontainer)
                         if iszero(slotarg[j + offset]) || slottypes[slotarg[j + offset]] === Union{}

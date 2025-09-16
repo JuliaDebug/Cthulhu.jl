@@ -2,15 +2,15 @@
 
 using Test
 using Core.IR
-using Cthulhu: Cthulhu, descend, CTHULHU_MODULE
+using Cthulhu: Cthulhu, descend
 import Compiler # trigger the extension
-CthulhuCompilerExt = Base.get_extension(Cthulhu, :CthulhuCompilerExt)
-@assert CthulhuCompilerExt !== nothing
+using Cthulhu: CompilerExt
+@assert CompilerExt !== nothing
 
-@eval module Standard
-const Cthulhu = $Cthulhu
-using Cthulhu: descend
-using .Cthulhu: DefaultProvider
+module Standard
+using Cthulhu: Cthulhu, descend, get_module_for_compiler_integration
+const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = false)
+using .CompilerIntegration: DefaultProvider
 include("provider_utils.jl")
 include("providers/CountingProviderModule.jl")
 using .CountingProviderModule: CountingProvider
@@ -22,10 +22,10 @@ using .OverlayProviderModule: OverlayProvider
 end
 end
 
-@eval module Ext
-const Cthulhu = $CthulhuCompilerExt
-using Cthulhu: descend
-using .Cthulhu: DefaultProvider
+module Ext
+using Cthulhu: Cthulhu, descend, get_module_for_compiler_integration
+const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = true)
+using .CompilerIntegration: DefaultProvider
 include("provider_utils.jl")
 include("providers/CountingProviderModule.jl")
 using .CountingProviderModule: CountingProvider

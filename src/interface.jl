@@ -12,7 +12,7 @@ display and callsite introspection features.
 Cthulhu relies mainly on the following types from Base:
 - `MethodInstance`, representing a specialization of a method.
 - `CodeInstance`, the high-level result of the Julia compilation pipeline.
-- `CodeInfo`, representing Julia code as output by `@code_typed` etc.
+- `CodeInfo`, representing Julia code as output by `@code_typed` and similar macros.
 
 And a few from the compiler:
 - `Compiler.IRCode`, somewhat similar to `CodeInfo`, but in a different representation.
@@ -36,12 +36,15 @@ pick the correct provider just by doing `@descend interp=SomeInterpreter() f(x)`
 The interface for `AbstractProvider` requires a few methods to be defined. If it supports
 `Cthulhu.get_abstract_interpreter(provider::SomeProvider)::SomeInterpreter`,
 then only the following is required:
-- `run_type_inference(provider::SomeProvider, interp::SomeInterpreter, mi::MethodInstance)` to emit a `CodeInstance`
-  by invoking regular type inference, typically calling `typeinf_` methods from Compiler.
 - `OptimizedSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
 - `OptimizedSource(provider::SomeProvider, interp::SomeInterpreter, result::InferenceResult)`
   (for uncached inference results, e.g. when looking up callsites emanating from concrete evaluation)
 - `InferredSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
+
+With an optional method to specify how to run type inference:
+- `run_type_inference(provider::SomeProvider, interp::SomeInterpreter, mi::MethodInstance)` to emit a `CodeInstance`
+  by invoking regular type inference, typically calling `typeinf_` methods from Compiler. By default, this uses
+  `Compiler.typeinf_ext`.
 
 For an `AbstractProvider` that is not associated with any particular `Compiler.AbstractInterpreter`,
 the following methods are required:
@@ -102,7 +105,7 @@ abstract type AbstractProvider end
 
 get_abstract_interpreter(provider::AbstractProvider) = nothing
 
-function CC.get_inference_world(provider::AbstractProvider)
+function get_inference_world(provider::AbstractProvider)
     interp = get_abstract_interpreter(provider)
     interp !== nothing && return get_inference_world(interp)
     error(lazy"Not implemented for $provider")
@@ -131,6 +134,17 @@ end
 
 should_regenerate_code_instance(provider::AbstractProvider, ci::CodeInstance) = false
 
+get_override(provider::AbstractProvider, @nospecialize(info)) = nothing
+
+function lookup(provider::AbstractProvider, src, optimize::Bool)
+    interp = get_abstract_interpreter(provider)
+    interp !== nothing && return lookup(provider, interp, src, optimize)
+    error(lazy"""
+        missing `$AbstractProvider` API:
+        `$(typeof(provider))` is required to implement the `$LookupResult(provider::$(typeof(provider)), src, optimize::Bool)` interface.
+    """)
+end
+
 get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) =
     @warn "Remarks could not be retrieved for $ci for provider $(typeof(provider))"
 get_pc_effects(provider::AbstractProvider, ci::CodeInstance) =
@@ -144,7 +158,7 @@ function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance
     error(lazy"Not implemented for $provider")
 end
 
-function get_inlining_costs(provider::AbstractProvider, mi::MethodInstance, src::Union{CodeInfo, IRCode})
+function get_inlining_costs(provider::AbstractProvider, mi::MethodInstance, src#=::Union{CodeInfo, CC.IRCode}=#)
     interp = get_abstract_interpreter(provider)
     interp !== nothing && return get_inlining_costs(provider, interp, mi, src)
     return nothing
@@ -154,50 +168,4 @@ function show_parameters(io::IO, provider::AbstractProvider)
     interp = get_abstract_interpreter(provider)
     interp !== nothing && return show_parameters(io, provider, interp)
     error(lazy"Not implemented for $provider")
-end
-
-function get_override(provider::AbstractProvider, @nospecialize(info))
-    isa(info, ConstPropCallInfo) && return info.result
-    isa(info, SemiConcreteCallInfo) && return info
-    isa(info, OCCallInfo) && return get_override(provider, info.ci)
-    return nothing
-end
-
-struct LookupResult
-    ir::Union{IRCode, Nothing} # used over `src` for callsite detection and printing
-    src::Union{CodeInfo, Nothing} # may be required (e.g. for LLVM and native module dumps)
-    rt
-    exct
-    infos::Vector{Any}
-    slottypes::Vector{Any}
-    effects::Effects
-    optimized::Bool
-    function LookupResult(ir, src, @nospecialize(rt), @nospecialize(exct),
-                          infos, slottypes, effects, optimized)
-        ninfos = length(infos)
-        if src === nothing && ir === nothing
-            throw(ArgumentError("At least one of `src` or `ir` must have a value"))
-        end
-        if isa(ir, IRCode) && ninfos ≠ length(ir.stmts)
-            throw(ArgumentError("`ir` and `infos` are inconsistent with $(length(ir.stmts)) IR statements and $ninfos call infos"))
-        end
-        if isa(src, CodeInfo)
-            if !isa(src.ssavaluetypes, Vector{Any})
-                throw(ArgumentError("`src.ssavaluetypes::$(typeof(src.ssavaluetypes))` must be a Vector{Any}"))
-            end
-            if !isa(ir, IRCode) && ninfos ≠ length(src.code)
-                throw(ArgumentError("`src` and `infos` are inconsistent with $(length(src.code)) code statements and $ninfos call infos"))
-            end
-        end
-        return new(ir, src, rt, exct, infos, slottypes, effects, optimized)
-    end
-end
-
-function LookupResult(provider::AbstractProvider, src, optimize::Bool)
-    interp = get_abstract_interpreter(provider)
-    interp !== nothing && return LookupResult(provider, interp, src, optimize)
-    error(lazy"""
-        missing `$AbstractProvider` API:
-        `$(typeof(provider))` is required to implement the `$LookupResult(provider::$(typeof(provider)), src, optimize::Bool)` interface.
-    """)
 end
