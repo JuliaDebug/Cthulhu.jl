@@ -2,6 +2,7 @@ using JuliaSyntax: JuliaSyntax, SyntaxNode, children, is_leaf, sourcetext, kind,
 using TypedSyntax: TypedSyntax, TypedSyntaxNode
 using Dates, InteractiveUtils, Test
 using Core.Compiler: widenconst
+using Core: Const # avoid printing it as Const
 
 has_typ(node, @nospecialize(Ts::Tuple)) = any(has_typ(node, Ts[i]) for i in 1:length(Ts))
 has_typ(node, @nospecialize(T)) = node.typ === T || !isnothing(node.typ) && widenconst(node.typ) === T
@@ -52,20 +53,20 @@ include("test_module.jl")
     @test has_name_typ(body[1], :x, Int)
     @test has_name_typ(body[3][2][1], :x, Int)
     pi4 = body[3][2][3]
-    @test kind(pi4) == K"call" && pi4.typ === Core.Const(π / 4)
+    @test kind(pi4) == K"call" && pi4.typ === Const(π / 4)
     tsn = TypedSyntaxNode(TSN.has2xa, (Real,))
     @test tsn.typ === Any
     sig, body = children(tsn)
     @test has_name_typ(sig[2], :x, Real)
     @test has_name_notyp(body[1][3], :x)
-    @test kind(body[1][2]) == K"Identifier" && body[1][2].typ === Core.Const(&)
+    @test kind(body[1][2]) == K"Identifier" && body[1][2].typ === Const(&)
     @test has_name_typ(body[1][1], :x, Any)
     tsn = TypedSyntaxNode(TSN.has2xb, (Real,))
     @test tsn.typ === Any
     sig, body = children(tsn)
     @test has_name_typ(sig[2], :x, Real)
     @test has_name_notyp(body[1][3], :x)
-    @test kind(body[1][2]) == K"Identifier" && body[1][2].typ === Core.Const(-)
+    @test kind(body[1][2]) == K"Identifier" && body[1][2].typ === Const(-)
     @test has_name_typ(body[1][1], :x, Any)
 
     # Target duplication
@@ -291,7 +292,7 @@ include("test_module.jl")
     isz = body[2][1][1]
     @test kind(isz) == K"call" && isz[1].val == :iszero
     @test isz.typ === Bool
-    @test body[2][1][2].typ === Core.Const(NaN)
+    @test body[2][1][2].typ === Const(NaN)
 
     # default positional arguments
     tsn = TypedSyntaxNode(TSN.defaultarg, (Float32,))
@@ -309,7 +310,7 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, (Type{Float32},))
     sig, body = children(tsn)
     arg = sig[1][2][1]
-    @test kind(arg) == K"::" && arg.typ === Core.Const(Float32)
+    @test kind(arg) == K"::" && arg.typ === Const(Float32)
     tsn = TypedSyntaxNode(TSN.hasdefaulttypearg, ())
     sig, body = children(tsn)
     arg = sig[1][2][1]
@@ -334,7 +335,7 @@ include("test_module.jl")
     @test tsn.typ == Union{Int,Float64}
     sig, body = children(tsn)
     @test has_name_typ(sig[2], :list, Vector{Float64})
-    @test has_name_typ(body[1][1], :s, Core.Const(0))
+    @test has_name_typ(body[1][1], :s, Const(0))
     @test has_name_typ(body[2][1][1][1], :x, Float64)
     node = body[2][2][1]
     @test kind(node) == K"op="
@@ -352,8 +353,8 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
     sig, body = children(tsn)
     @test sig[1][2].typ === Vector{Int16}
-    @test body.typ === Core.Const(Int16(0))
-    @test has_name_typ(body[2], :T, (Core.Const(Int16), Type{Int16}))
+    @test body.typ === Const(Int16(0))
+    @test has_name_typ(body[2], :T, (Const(Int16), Type{Int16}))
     # tsn = TypedSyntaxNode(TSN.vaparam, (Matrix{Float32}, (String, Bool)))    # fails on `which`
     m = @which TSN.vaparam(rand(3,3), ("hello", false))
     mi = first(specializations(m))
@@ -373,8 +374,8 @@ include("test_module.jl")
     @test has_name_typ(body[2], :Bool, Type{Bool})
     tsn = TypedSyntaxNode(TSN.unnamedargs, (Type{Matrix{Float32}}, Type{Int}))
     sig, body = children(tsn)
-    @test sig[1][2].typ === Core.Const(Matrix{Float32})
-    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][2].typ === Const(Matrix{Float32})
+    @test sig[1][3].typ === Const(Int)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, Int)
     fbody = Base.bodyfunction(m)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int; a="hello")
@@ -390,8 +391,8 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test sig[1][2].typ === Core.Const(Matrix{Float32})
-    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][2].typ === Const(Matrix{Float32})
+    @test sig[1][3].typ === Const(Int)
     @test has_name_notyp(sig[1][4][1], :c)
     @test has_name_typ(sig[1][5][1][1], :a, String)
     m = @which TSN.unnamedargs(Matrix{Float32}, Int, :c; a="hello")
@@ -405,8 +406,8 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test sig[1][2].typ === Core.Const(Matrix{Float32})
-    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][2].typ === Const(Matrix{Float32})
+    @test sig[1][3].typ === Const(Int)
     @test sig[1][4][1].typ === Symbol
     @test sig[1][5][1][1].typ === String
     mbody = only(methods(fbody))
@@ -420,8 +421,8 @@ include("test_module.jl")
     end
     tsn = TypedSyntaxNode(mi)
     sig, body = children(tsn)
-    @test sig[1][2].typ === Core.Const(Matrix{Float32})
-    @test sig[1][3].typ === Core.Const(Int)
+    @test sig[1][2].typ === Const(Matrix{Float32})
+    @test sig[1][3].typ === Const(Int)
     @test sig[1][4][1].typ === Symbol
     @test sig[1][5][1][1].typ === String
     tsn = TypedSyntaxNode(TSN.unnamedargs2, (Type{Matrix}, Symbol))
@@ -433,7 +434,7 @@ include("test_module.jl")
     # Values as static_parameters
     tsn = TypedSyntaxNode(TSN.val, (Val{4},))
     sig, body = children(tsn)
-    @test body[1][1][1].typ == Core.Const(4)
+    @test body[1][1][1].typ == Const(4)
 
     # varargs
     tsn = TypedSyntaxNode(TSN.likevect, (Int, Int))
@@ -473,10 +474,10 @@ include("test_module.jl")
     sig, body = children(tsn)
     errnode = body[1][2]
     errf = errnode[1]
-    @test errnode.typ === nothing && errf.typ === Core.Const(Base.throw_boundserror)
+    @test errnode.typ === nothing && errf.typ === Const(Base.throw_boundserror)
     retnode = body[2]
     @test kind(retnode) == K"return"
-    @test retnode.typ === Core.Const(nothing) || retnode.typ === nothing  # julia 1.10 doesn't assign a type to the Core.ReturnNode
+    @test retnode.typ === Const(nothing) || retnode.typ === nothing  # julia 1.10 doesn't assign a type to the Core.ReturnNode
 
     # Globals & scoped assignment
     tsn = TypedSyntaxNode(TSN.setglobal, (Char,))
@@ -488,7 +489,7 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
     sig, body = children(tsn)
     node = body[1]
-    @test node.typ === Core.Const(Float64)
+    @test node.typ === Const(Float64)
     tsn = TypedSyntaxNode(TSN.DefaultArray{Float32}, (Vector{Int}, Int))
     sig, body = children(tsn)
     @test kind(sig) == K"where"
@@ -519,7 +520,7 @@ include("test_module.jl")
     tsn = TypedSyntaxNode(TSN.myoftype, (Float64, Int))
     sig, body = children(tsn)
     node = body[1]
-    @test node.typ === Core.Const(Float64)
+    @test node.typ === Const(Float64)
 
     # UnionAll in signature (issue #409)
     tsn = TypedSyntaxNode(Core.kwcall, (NamedTuple, typeof(issorted), Vector{Int}))
@@ -573,7 +574,7 @@ include("test_module.jl")
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test   occursin("s::$Int = 0::$Int", str) || occursin("s::Core.Const(0) = 0::Core.Const(0)", str)
+    @test   occursin("s::$Int = 0::$Int", str) || occursin("s::Const(0) = 0::Const(0)", str)
     @test !occursin("(s::$Int = 0::$Int)", str)
     @test occursin("(s::Float64 += x::Float64)::Float64", str) || occursin("(s::Union{Float64, $Int} += x::Float64)::Float64", str)
     tsn = TypedSyntaxNode(TSN.zerowhere, (Vector{Int16},))
@@ -625,22 +626,22 @@ include("test_module.jl")
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test occursin("::Core.Const(sin)", str) || occursin("::typeof(sin)", str)
+    @test occursin("::Const(sin)", str) || occursin("::typeof(sin)", str)
     tsn = TypedSyntaxNode(TSN.calls_helper, (Float32,))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test !occursin("Core.Const", str)
+    @test !occursin("Const", str)
     tsn = TypedSyntaxNode(TSN.calls_helper1, (Float32,))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test !occursin("Core.Const", str)
+    @test !occursin("Const", str)
     tsn = TypedSyntaxNode(TSN.calls_helper2, (Float32,))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
-    @test !occursin("Core.Const", str)
+    @test !occursin("Const", str)
     tsn = TypedSyntaxNode(TSN.allbutfirst, (Vector{Bool},))
     str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
@@ -655,7 +656,7 @@ include("test_module.jl")
     # artificial trigger for #414
     tsn = TypedSyntaxNode(TSN.unnamedargs, (Type{Matrix{Float32}}, Type{Int}))
     sig, body = children(tsn)
-    @test isa(TypedSyntax.map_signature!(sig, fill(Symbol(""), 3), Any[Any, Core.Const(2), Any]), TypedSyntaxNode)
+    @test isa(TypedSyntax.map_signature!(sig, fill(Symbol(""), 3), Any[Any, Const(2), Any]), TypedSyntaxNode)
 
     # issue #435
     tsnc = copy(tsn)
@@ -664,7 +665,7 @@ include("test_module.jl")
     # issue 487
     inferred_result = TypedSyntax.get_inferred_result(TSN.f487, (Int,))
     src, mi = inferred_result.src, inferred_result.mi
-    rt = Core.Const(1)
+    rt = Const(1)
     tsn, _ = TypedSyntax.tsn_and_mappings(mi, src, rt)
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
@@ -742,8 +743,8 @@ using TypedSyntax: InlayHint, Diagnostic, InlayHintKinds
     "("
     "::$Int"
     ")::Bool"
-    "::Core.Const(-1)"
-    "::Core.Const(1.0)"
+    "::Const(-1)"
+    "::Const(1.0)"
     ")::Union{Float64, $Int}"]
     @test length(io[:diagnostics]) == 2
 end
