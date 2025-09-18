@@ -350,7 +350,7 @@ end
 
 function is_function_def(node)  # this is not `Base.is_function_def`
     kind(node) == K"function" && return true
-    if kind(node) == K"=" && length(children(node)) >= 1
+    if kind(node) == K"=" && !is_leaf(node)
         sig = node[1]
         while(kind(sig) ∈ KSet"where ::")   # allow MyType{T}(args...) and return-type annotations
             sig = sig[1]

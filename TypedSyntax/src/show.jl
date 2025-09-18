@@ -70,7 +70,7 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
         position = catchup(io, first(children(node)), position, nd)
     end
     _print(io, pre, node.source, position)
-    for (i, child) in enumerate(children(node))
+    !is_leaf(node) && for (i, child) in enumerate(children(node))
         i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
