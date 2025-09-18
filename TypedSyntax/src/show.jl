@@ -103,14 +103,17 @@ function is_callfunc(node::MaybeTypedSyntaxNode, @nospecialize(T))
         thisnode = pnode
         pnode = pnode.parent
     end
-    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(thisnode)) || thisnode === pnode.children[1])
-        if isa(T, Core.Const)
-            T = T.val
-        end
-        if isa(T, Type) || isa(T, Function)
-            T === Colon() && sourcetext(node) == ":" && return true
-            return is_type_transparent(node, T)
-        end
+    pnode === nothing && return false
+    is_in_infix_context = kind(pnode) == K"op=" || kind(pnode) == K"call" && is_infix_op_call(pnode)
+    is_caller_function = kind(pnode) == K"call" && thisnode === pnode.children[1]
+    is_parametrized_type = kind(pnode) == K"curly" && thisnode === pnode.children[1]
+    is_in_infix_context || is_caller_function || is_parametrized_type || return false
+    if isa(T, Core.Const)
+        T = T.val
+    end
+    if isa(T, Type) || isa(T, Function)
+        T === Colon() && sourcetext(node) == ":" && return true
+        return is_type_transparent(node, T)
     end
     return false
 end
