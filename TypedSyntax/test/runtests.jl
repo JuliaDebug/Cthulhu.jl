@@ -2,7 +2,7 @@ using JuliaSyntax: JuliaSyntax, SyntaxNode, children, is_leaf, sourcetext, kind,
 using TypedSyntax: TypedSyntax, TypedSyntaxNode
 using Dates, InteractiveUtils, Test
 using Core.Compiler: widenconst
-using Core: Const # avoid printing it as Const
+using Core: Const # print it as Const, not Core.Const
 
 has_typ(node, @nospecialize(Ts::Tuple)) = any(has_typ(node, Ts[i]) for i in 1:length(Ts))
 has_typ(node, @nospecialize(T)) = node.typ === T || !isnothing(node.typ) && widenconst(node.typ) === T
