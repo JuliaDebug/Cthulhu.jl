@@ -5,7 +5,7 @@ using InteractiveUtils
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax
-using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, children
+using JuliaSyntax: SyntaxNode, AbstractSyntaxNode, children, is_leaf
 using TypedSyntax
 using WidthLimitedIO
 
@@ -479,9 +479,9 @@ function _descend(term::AbstractTerminal, interp::AbstractInterpreter, curs::Abs
                     show_sub_callsites = let callsite=callsite
                         map(info.callinfos) do ci
                             p = Base.unwrap_unionall(get_ci(ci).def.specTypes).parameters
-                            if isa(sourcenode, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(JuliaSyntax.children(sourcenode)) + 1
+                            if isa(sourcenode, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(children(sourcenode)) + 1
                                 newnode = copy(sourcenode)
-                                for (i, child) in enumerate(JuliaSyntax.children(newnode))
+                                for (i, child) in enumerate(children(newnode))
                                     child.typ = p[i+1]
                                 end
                                 newnode
