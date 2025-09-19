@@ -14,6 +14,7 @@ const goodmis = Core.MethodInstance[]
         m = mi.def::Method
         isdefined(m, :generator) && continue   # code_typed can't handle this
         m ∈ missingmethods && continue         # we tried before and couldn't find the source text
+        m.name === :kwcall && mi.specTypes.parameters[3] === Type{Union{}} && continue # skip kwcall definition in base/boot.jl
         cis = Base.code_typed_by_type(mi.specTypes; debuginfo=:source, optimize=false)
         if length(cis) == 1
             src, rt = cis[1]
