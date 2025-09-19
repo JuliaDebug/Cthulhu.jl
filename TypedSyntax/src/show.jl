@@ -36,7 +36,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
-    position = first_byte(rootnode) - 1
+    position = Int(first_byte(rootnode) - 1)
     with_linenumber && print_linenumber(io, rootnode, position + 1, nd)
     if is_function_def(rootnode)
         # We're printing a MethodInstance
@@ -173,7 +173,7 @@ print_linenumber(io::IO, ln::Int, nd::Int) = printstyled(io, lpad(ln, nd), " "; 
 
 # Do any "overdue" printing, generating a line number if needed. Mostly, this catches whitespace.
 # Printing occurs over indexes from `position:stop-1`.
-function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, stop = first_byte(node))
+function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, stop = Int(first_byte(node)))
     if position + 1 < stop
         for (i, c) in pairs(node.source[position+1:stop-1])
             print(io, c)
