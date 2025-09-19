@@ -96,7 +96,6 @@ include("interface.jl")
 include("reflection.jl")
 include("ui.jl")
 include("codeview.jl")
-include("backedges.jl")
 
 """
     @interp
@@ -692,13 +691,11 @@ descend_code_typed_impl(b::Bookmark; kw...) =
 descend_code_warntype_impl(b::Bookmark; kw...) =
     _descend_with_error_handling(b.interp, b.ci.def; iswarn=true, kw...)
 
-FoldingTrees.writeoption(buf::IO, data::Data, charsused::Int) = FoldingTrees.writeoption(buf, data.callstr, charsused)
-
 function ascend_impl(
         term, mi; interp::AbstractInterpreter=NativeInterpreter(),
         pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize, kwargs...
     )
-    root = treelist(mi)
+    root = Cthulhu.treelist(mi)
     root === nothing && return
     menu = TreeMenu(root; pagesize, dynamic, maxsize)
     choice = menu.current
@@ -708,10 +705,10 @@ function ascend_impl(
         browsecodetyped = true
         if choice !== nothing
             node = menu.current
-            mi = instance(node.data.nd)
+            mi = Cthulhu.instance(node.data.nd)
             if !isroot(node)
                 # Help user find the sites calling the parent
-                miparent = instance(node.parent.data.nd)
+                miparent = Cthulhu.instance(node.parent.data.nd)
                 ulocs = find_caller_of(interp, miparent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
                     ulocs = [(k[1], maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]
