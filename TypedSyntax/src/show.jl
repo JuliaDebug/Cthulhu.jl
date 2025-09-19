@@ -36,7 +36,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
-    position = first_byte(rootnode) - 1
+    position = Int(first_byte(rootnode)) - 1
     with_linenumber && print_linenumber(io, rootnode, position + 1, nd)
     if is_function_def(rootnode)
         # We're printing a MethodInstance
