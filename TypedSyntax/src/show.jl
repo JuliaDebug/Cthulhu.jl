@@ -36,7 +36,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
-    position = Int(first_byte(rootnode)) - 1
+    position = first_byte(rootnode) - 1
     with_linenumber && print_linenumber(io, rootnode, position + 1, nd)
     if is_function_def(rootnode)
         # We're printing a MethodInstance
@@ -77,7 +77,7 @@ function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::S
         position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
         ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
     end
-    return Int(catchup(io, node, position, nd, _lastidx+1))
+    return catchup(io, node, position, nd, _lastidx+1)
 end
 
 # should we print a type-annotation?
@@ -181,7 +181,7 @@ function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, sto
                 print_linenumber(io, node, position + i + 1, nd)
             end
         end
-        position = stop - 1
+        position = Int(stop - 1)
     end
     return position
 end
