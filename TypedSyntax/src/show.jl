@@ -12,14 +12,14 @@ function JuliaSyntax._show_syntax_node(io, current_filename, node::TypedSyntaxNo
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     end
     val = node.val
-    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
+    nodestr = !is_leaf(node) ? "[$(untokenize(head(node)))]" :
     isa(val, Symbol) ? string(val) : repr(val)
     treestr = string(indent, nodestr)
     if node.typ !== nothing
         treestr = string(rpad(treestr, 40), "│$(node.typ)")
     end
     println(io, posstr, treestr)
-    if haschildren(node)
+    if !is_leaf(node)
         new_indent = indent*"  "
         for n in children(node)
             JuliaSyntax._show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
@@ -36,7 +36,7 @@ function Base.printstyled(io::IO, rootnode::MaybeTypedSyntaxNode;
     rt = gettyp(rootnode)
     nd = with_linenumber ? ndigits_linenumbers(rootnode, idxend) : 0
     rootnode = get_function_def(rootnode)
-    position = first_byte(rootnode) - 1
+    position = Int(first_byte(rootnode) - 1)
     with_linenumber && print_linenumber(io, rootnode, position + 1, nd)
     if is_function_def(rootnode)
         # We're printing a MethodInstance
@@ -66,21 +66,18 @@ end
 function show_src_expr(io::IO, node::MaybeTypedSyntaxNode, position::Int, pre::String, pre2::String; type_annotations::Bool=true, iswarn::Bool=false, hide_type_stable::Bool=false, nd::Int)
     _lastidx = last_byte(node)
     position = catchup(io, node, position, nd)
-    if haschildren(node)
-        cs = children(node)
-        if !isempty(cs)   # `haschildren(node)` returns `true` as long as the node has the *capacity* to store children
-            position = catchup(io, first(children(node)), position, nd)
-        end
+    if !is_leaf(node)
+        position = catchup(io, first(children(node)), position, nd)
     end
     _print(io, pre, node.source, position)
-    for (i, child) in enumerate(children(node))
+    !is_leaf(node) && for (i, child) in enumerate(children(node))
         i == 2 && _print(io, pre2, node.source, position)
         cT = gettyp(child)
         ctype_annotate, cpre, cpre2, cpost = type_annotation_mode(child, cT; type_annotations, hide_type_stable)
         position = show_src_expr(io, child, position, cpre, cpre2; type_annotations, iswarn, hide_type_stable, nd)
         ctype_annotate && show_annotation(io, cT, cpost, node.source, position; iswarn)
     end
-    return Int(catchup(io, node, position, nd, _lastidx+1))
+    return catchup(io, node, position, nd, _lastidx+1)
 end
 
 # should we print a type-annotation?
@@ -106,14 +103,17 @@ function is_callfunc(node::MaybeTypedSyntaxNode, @nospecialize(T))
         thisnode = pnode
         pnode = pnode.parent
     end
-    if pnode !== nothing && kind(pnode) ∈ (K"call", K"curly") && ((is_infix_op_call(pnode) && is_operator(thisnode)) || thisnode === pnode.children[1])
-        if isa(T, Core.Const)
-            T = T.val
-        end
-        if isa(T, Type) || isa(T, Function)
-            T === Colon() && sourcetext(node) == ":" && return true
-            return is_type_transparent(node, T)
-        end
+    pnode === nothing && return false
+    is_in_infix_context = kind(pnode) == K"op=" || kind(pnode) == K"call" && is_infix_op_call(pnode)
+    is_caller_function = kind(pnode) == K"call" && thisnode === pnode.children[1]
+    is_parametrized_type = kind(pnode) == K"curly" && thisnode === pnode.children[1]
+    is_in_infix_context || is_caller_function || is_parametrized_type || return false
+    if isa(T, Core.Const)
+        T = T.val
+    end
+    if isa(T, Type) || isa(T, Function)
+        T === Colon() && sourcetext(node) == ":" && return true
+        return is_type_transparent(node, T)
     end
     return false
 end
@@ -173,7 +173,7 @@ print_linenumber(io::IO, ln::Int, nd::Int) = printstyled(io, lpad(ln, nd), " "; 
 
 # Do any "overdue" printing, generating a line number if needed. Mostly, this catches whitespace.
 # Printing occurs over indexes from `position:stop-1`.
-function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, stop = first_byte(node))
+function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, stop = Int(first_byte(node)))
     if position + 1 < stop
         for (i, c) in pairs(node.source[position+1:stop-1])
             print(io, c)
@@ -181,7 +181,7 @@ function catchup(io::IO, node::MaybeTypedSyntaxNode, position::Int, nd::Int, sto
                 print_linenumber(io, node, position + i + 1, nd)
             end
         end
-        position = stop - 1
+        position = Int(stop - 1)
     end
     return position
 end

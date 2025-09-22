@@ -121,7 +121,7 @@ function cthulhu_typed(io::IO, debuginfo::Symbol,
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
-            istruncated = isempty(children(body))
+            istruncated = is_leaf(body)
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
             if src.slottypes === nothing
                 @warn "Inference terminated in an incomplete state due to argument-type changes during recursion"
