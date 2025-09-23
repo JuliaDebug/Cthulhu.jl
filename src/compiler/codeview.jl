@@ -112,7 +112,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
         if tsn !== nothing
             sig, body = children(tsn)
             # We empty the body when filling kwargs
-            istruncated = isempty(children(body))
+            istruncated = is_leaf(body)
             idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
 
             vscode_io = IOContext(
@@ -242,7 +242,7 @@ function descend_into_callsite!(io::IO, tsn::TypedSyntaxNode;
     iswarn::Bool, hide_type_stable::Bool, type_annotations::Bool)
     sig, body = children(tsn)
     # We empty the body when filling kwargs
-    istruncated = isempty(children(body))
+    istruncated = is_leaf(body)
     idxend = istruncated ? JuliaSyntax.last_byte(sig) : lastindex(tsn.source)
     if !istruncated # If method only fills in default arguments
         printstyled(io, tsn; type_annotations, iswarn, hide_type_stable, idxend)

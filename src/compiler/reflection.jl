@@ -311,20 +311,18 @@ end
 # If we're filling in keyword args, just show the signature
 truncate_if_defaultargs!(::Nothing, mappings, meth) = nothing, mappings
 function truncate_if_defaultargs!(tsn, mappings, meth)
-    if (is_kw_dispatch(meth) || meth.nargs < TypedSyntax.num_positional_args(tsn))
-        _, body = children(tsn)
-        # eliminate the body node
-        raw, bodyraw = tsn.raw, body.raw
-        idx = findfirst(==(bodyraw), raw.args)
-        if idx !== nothing
-            rawargs = raw.args[1:idx-1]
-            tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, rawargs), rawargs)
-            body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), ())
-            cs = children(body)
-            cs !== () && empty!(cs)
-        end
-        empty!(mappings)
-    end
+    is_kw_dispatch(meth) || meth.nargs < TypedSyntax.num_positional_args(tsn) || return tsn, mappings
+    _, body = children(tsn)
+    # eliminate the body node
+    raw, bodyraw = tsn.raw, body.raw
+    is_leaf(raw) && return tsn, mappings
+    idx = findfirst(==(bodyraw), children(raw))
+    empty!(mappings)
+    idx === nothing && return tsn, mappings
+    rawargs = children(raw)[1:idx-1]
+    tsn.raw = typeof(raw)(raw.head, sum(nd -> nd.span, rawargs), rawargs)
+    body.raw = typeof(bodyraw)(bodyraw.head, UInt32(0), nothing)
+    body.children = nothing
     return tsn, mappings
 end
 

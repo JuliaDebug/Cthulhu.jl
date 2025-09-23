@@ -4,7 +4,7 @@ import .Cthulhu: AbstractProvider, get_abstract_interpreter, get_inference_world
 using .Cthulhu: CthulhuState, CthulhuConfig, CallInfo, Callsite, cached_exception_type, get_mi
 
 using Base: isvarargtype, unwrapva, unwrap_unionall, mapany, get_world_counter
-using JuliaSyntax: JuliaSyntax, children
+using JuliaSyntax: JuliaSyntax, children, is_leaf
 
 using .CC: AbstractInterpreter, CallMeta, ApplyCallInfo, CallInfo as CCCallInfo, ConstCallInfo,
     EFFECTS_TOTAL, Effects, IncrementalCompact, InferenceParams, InferenceResult,
