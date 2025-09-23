@@ -198,9 +198,9 @@ function menu_callsites_from_source_node(callsite::Callsite, source_node)
         ci = get_ci(info)
         mi = get_mi(ci)
         p = Base.unwrap_unionall(mi.specTypes).parameters
-        if isa(source_node, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(JuliaSyntax.children(source_node)) + 1
+        if isa(source_node, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(children(source_node)) + 1
             new_node = copy(source_node)
-            for (i, child) in enumerate(JuliaSyntax.children(new_node))
+            for (i, child) in enumerate(children(new_node))
                 child.typ = p[i+1]
             end
             push!(callsites, new_node)
