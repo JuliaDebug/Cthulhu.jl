@@ -143,7 +143,7 @@ julia> descend_code_typed() do
 ```
 """
 function descend_code_typed(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].descend_code_typed(args...; kwargs...)
+    CTHULHU_MODULE[].descend_code_typed_impl(args...; kwargs...)
 end
 
 """
