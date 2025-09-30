@@ -264,14 +264,14 @@ function lookup_constproped_unoptimized(interp::CthulhuInterpreter, override::In
     return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 
-function lookup_semiconcrete(interp::CthulhuInterpreter, override::SemiConcreteCallInfo, optimize::Bool)
+function lookup_semiconcrete(interp::CthulhuInterpreter, ci::CodeInstance, override::SemiConcreteCallInfo, optimize::Bool)
     src = CC.copy(override.ir)
     rt = get_rt(override)
     exct = Any # TODO
     infos = src.stmts.info
     slottypes = src.argtypes
     effects = get_effects(override)
-    codeinf = nothing # TODO try to find `CodeInfo` for the regular inference?
+    (; exct, codeinf) = lookup(interp, ci, optimize)
     return LookupResult(src, rt, exct, infos, slottypes, effects, codeinf)
 end
 

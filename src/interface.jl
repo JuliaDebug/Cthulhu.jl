@@ -31,8 +31,8 @@ lookup_semiconcrete(interp::AbstractInterpreter, curs::AbstractCursor, override:
 missing `$AbstractCursor` API:
 `$(typeof(curs))` is required to implement the `$lookup_semicocnrete(interp::$(typeof(interp)), curs::$(typeof(curs)), override::SemiConcreteCallInfo, optimize::Bool)` interface.
 """)
-lookup_semiconcrete(interp::CthulhuInterpreter, ::CthulhuCursor, override::SemiConcreteCallInfo, optimize::Bool) =
-    lookup_semiconcrete(interp, override, optimize)
+lookup_semiconcrete(interp::CthulhuInterpreter, curs::CthulhuCursor, override::SemiConcreteCallInfo, optimize::Bool) =
+    lookup_semiconcrete(interp, get_ci(curs), override, optimize)
 
 get_ci(curs::AbstractCursor) = error(lazy"""
 missing `$AbstractCursor` API:
