@@ -100,7 +100,12 @@ function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mapping
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
     if kind(tparent) == K"return"
-        tparent.typ = is_leaf(tparent) ? Nothing : only(children(tparent))
+        if !is_leaf(tparent)
+            value = only(children(tparent))
+            tparent.typ = value.typ
+        else
+            tparent.typ = Nothing
+        end
     end
     # Replace the entry in `mappings` to be the typed node
     i = get(node2ssa, parent, nothing)
