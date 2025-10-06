@@ -114,4 +114,10 @@ end
     end
 end
 
+@testset "Regressions" begin
+    # Issue #675
+    (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(NamedTuple; optimize=false)
+    Cthulhu.cthulhu_typed(IOBuffer(), :none, src, rt, exct, effects, codeinst; annotate_source=true)
+end
+
 end # module test_codeview
