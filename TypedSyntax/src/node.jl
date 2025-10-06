@@ -87,23 +87,20 @@ end
 # Recursive construction of the TypedSyntaxNode tree from the SyntaxNodeTree
 function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mappings)
     if !is_leaf(parent)
-        if tparent.children === nothing
-            tparent.children = TypedSyntaxNode[]
-        end
         for child in children(parent)
             typ = gettyp(node2ssa, child, src)
             tnode = TypedSyntaxNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, typ))
             if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
                 tnode.typ = get(symtyps, child, nothing)
             end
+            is_leaf(tparent) && (tparent.children = TypedSyntaxNode[])
             push!(tparent, tnode)
             addchildren!(tnode, child, src, node2ssa, symtyps, mappings)
         end
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
-    if kind(tparent) == K"return" && !is_leaf(tparent)
-        childs = children(tparent)
-        tparent.typ = isempty(childs) ? Nothing : only(childs).typ
+    if kind(tparent) == K"return"
+        tparent.typ = is_leaf(tparent) ? Nothing : only(children(tparent))
     end
     # Replace the entry in `mappings` to be the typed node
     i = get(node2ssa, parent, nothing)
