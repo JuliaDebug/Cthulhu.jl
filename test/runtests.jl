@@ -3,6 +3,7 @@ using Core: Const # allows correct printing as `Const` instead of `Core.Const`
 
 @testset "runtests.jl" begin
     @testset "Core functionality" include("test_Cthulhu.jl")
+    @testset "Provider functionality" include("test_provider.jl")
     @testset "Code view" include("test_codeview.jl")
     @testset "Terminal tests" include("test_terminal.jl")
     @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
