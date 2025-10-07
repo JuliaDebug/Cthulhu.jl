@@ -279,7 +279,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
     isnothing(tsn) && return nothing
     sig, body = children(tsn)
     # We empty the body when filling kwargs
-    istruncated = isempty(children(body))
+    istruncated = is_leaf(body)
     istruncated && return nothing
     # We add new callsites unless we would have multiple callsites for the same source definition,
     # e.g. if f(x) = x is called with different types we print nothing.
