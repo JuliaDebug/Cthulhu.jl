@@ -442,7 +442,7 @@ function Base.show(io::IO, c::Callsite)
             print(io, '%')
         end
         limiter.width += 1 # for the '%' character
-        c.id != -1 && print(limiter, c.id, " = ")
+        print(limiter, c.id, " = ")
     end
     if isa(info, EdgeCallInfo)
         optimize && print(limiter, c.head, ' ')

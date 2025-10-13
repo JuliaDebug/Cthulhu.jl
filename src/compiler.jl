@@ -74,17 +74,7 @@ function show_inference_cache(io::IO, interp::AbstractInterpreter)
 end
 
 function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance, optimize::Bool)
-    if optimize
-        result = lookup_optimized(provider, interp, ci)
-        if result === nothing
-            @info """
-            Inference discarded the source for this call because of recursion:
-            Cthulhu nevertheless is trying to retrieve the source for further inspection.
-            """
-            result = lookup_unoptimized(provider, interp, ci)
-        end
-        return result
-    end
+    optimize && return lookup_optimized(provider, interp, ci)
     return lookup_unoptimized(provider, interp, ci)
 end
 

@@ -59,13 +59,7 @@ function descend!(state::CthulhuState)
         mi::MethodInstance, ci::CodeInstance
 
         src = something(state.override, ci)
-        result = LookupResult(provider, src, config.optimize)
-        if result === nothing
-            if should_regenerate_code_instance(provider, src)
-                additional_descend(src)
-                break
-            end
-        end
+        result = LookupResult(provider, src, config.optimize)::LookupResult
 
         if config.jump_always
             def = state.mi.def
