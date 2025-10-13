@@ -130,7 +130,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
     end
 
     redisplay && (state.display_code = true)
-    state.config = set_config(config, Namedtuple(option => value,))
+    state.config = set_config(config, NamedTuple((option => value,)))
 end
 
 function edit_source_code(state::CthulhuState)

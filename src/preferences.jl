@@ -62,15 +62,15 @@ function read_config!()
 end
 
 """
+    set_config(config::CthulhuConfig = CONFIG; parameters...)
     set_config(config::CthulhuConfig, parameters::NamedTuple)
-    set_config(config::CthulhuConfig; parameters...)
 
 Create a new `CthulhuConfig` from the parameters provided as keyword arguments,
 with all other parameters identical to those of `config`.
 """
 function set_config end
 
-set_config(config::CthulhuConfig; parameters...) = set_config(config, NamedTuple(parameters))
+set_config(config::CthulhuConfig = CONFIG; parameters...) = set_config(config, NamedTuple(parameters))
 set_config(config::CthulhuConfig, parameters::NamedTuple) = setproperties(config, parameters)
 
 """

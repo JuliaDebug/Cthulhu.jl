@@ -5,7 +5,7 @@ using Logging: NullLogger, with_logger
 
 import Cthulhu as _Cthulhu
 const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
-using .Cthulhu: CthulhuState, view_function, CONFIG, cthulhu_typed
+using .Cthulhu: CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 
@@ -25,7 +25,8 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
                 state = CthulhuState(provider; config, ci, mi)
                 io = IOBuffer()
                 view_function(state)(io, provider, state, result)
-                @test !isempty(String(take!(io))) # just check it works
+                output = String(take!(io))
+                @test !isempty(output) # just check it works
             end
         end
     end
@@ -116,8 +117,13 @@ end;
 
 @testset "Regressions" begin
     # Issue #675
-    (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(NamedTuple; optimize=false)
-    Cthulhu.cthulhu_typed(IOBuffer(), :none, src, rt, exct, effects, codeinst; annotate_source=true)
+    provider, mi, ci, result = cthulhu_info(testf_revise; optimize=false)
+    config = set_config(; view = :source, debuginfo = :none)
+    state = CthulhuState(provider; config, ci, mi)
+    io = IOBuffer()
+    view_function(state)(io, provider, state, result)
+    output = String(take!(io))
+    @test isa(output, String)
 end
 
 end # module test_codeview

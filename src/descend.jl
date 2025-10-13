@@ -13,7 +13,7 @@ end
 
 function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::MethodInstance; kwargs...)
     ci = generate_code_instance(provider, mi)
-    config = set_config(CONFIG; kwargs)
+    config = set_config(CONFIG; kwargs...)
     state = CthulhuState(provider; terminal, config, mi, ci)
     descend!(state)
 end
