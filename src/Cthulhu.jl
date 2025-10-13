@@ -238,11 +238,10 @@ using PrecompileTools
 @setup_workload begin
     try
         @compile_workload begin
-            # terminal = Testing.VirtualTerminal()
-            # task = @async @descend terminal=terminal.tty gcd(1, 2)
-            # write(terminal, 'q')
-            # wait(task)
-            # finalize(terminal)
+            terminal = Testing.VirtualTerminal()
+            harness = Testing.@run terminal @descend terminal=terminal gcd(1, 2)
+            task = @async @descend terminal=terminal.tty gcd(1, 2)
+            @assert Testing.end_terminal_session(harness)
         end
     catch err
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
