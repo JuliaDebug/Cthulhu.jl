@@ -63,7 +63,7 @@ function descend!(state::CthulhuState)
 
         if config.jump_always
             def = state.mi.def
-            if isa(def, Method)
+            if !isa(def, Method)
                 @warn "Can't jump to source location because the definition is not a method."
             else
                 if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
