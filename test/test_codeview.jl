@@ -21,7 +21,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
         @testset "view: $view" for view in (:source, :ast, :typed, :llvm, :native)
             view === :ast && !isdefined(@__MODULE__(), :Revise) && continue
             @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
-                config = setproperties(CONFIG, (; view, debuginfo))
+                config = set_config(CONFIG; view, debuginfo)
                 state = CthulhuState(provider; config, ci, mi)
                 io = IOBuffer()
                 view_function(state)(io, provider, state, result)
@@ -36,7 +36,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                 @testset "inlining_costs: $inlining_costs" for inlining_costs in tf
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
-                        config = setproperties(CONFIG, (; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations))
+                        config = set_config(CONFIG; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations)
                         state = CthulhuState(provider; config, ci, mi)
                         io = IOBuffer()
                         view_function(state)(io, provider, state, result)
@@ -52,7 +52,7 @@ end
     function printer(provider, mi, ci, result)
         return function prints(; kwargs...)
             io = IOBuffer()
-            config = setproperties(CONFIG, (; debuginfo = :none, kwargs...))
+            config = set_config(CONFIG; debuginfo = :none, kwargs...)
             state = CthulhuState(provider; config, ci, mi)
             with_logger(NullLogger()) do
                 cthulhu_typed(io, provider, state, result)

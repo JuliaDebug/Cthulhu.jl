@@ -19,7 +19,7 @@ Bookmark(provider::AbstractProvider, ci::CodeInstance; config::CthulhuConfig = C
     Bookmark(provider, config, ci)
 
 function CthulhuState(bookmark::Bookmark; terminal=default_terminal(), kwargs...)
-    config = setproperties(bookmark.config, NamedTuple(kwargs))
+    config = set_config(bookmark.config; kwargs...)
     state = CthulhuState(bookmark.provider; terminal, config, bookmark.ci)
     return state
 end
