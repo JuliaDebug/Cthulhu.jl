@@ -99,6 +99,8 @@ function Cthulhu.LookupResult(provider::ExternalProvider, ci::CodeInstance, opti
     return LookupResult(ir, src, rt, exct, infos, src.slottypes, effects, true #= optimized =#)
 end
 
+Cthulhu.get_override(provider::ExternalProvider, @nospecialize(info)) = nothing
+
 function Cthulhu.menu_commands(provider::ExternalProvider)
     commands = default_menu_commands(provider)
     filter!(x -> !in(x.name, (:optimize, :dump_params)), commands)

@@ -24,7 +24,7 @@ function find_caller_of(provider::AbstractProvider, interp::AbstractInterpreter,
     @assert get_mi(ci) === mi
     locs = Tuple{Core.LineInfoNode,Int}[]
     for optimize in (true, false)
-        result = LookupResult(provider, interp, ci, optimize)
+        result = LookupResult(provider, interp, ci, optimize)::LookupResult
         callsites, _ = find_callsites(provider, result, ci)
         callsites = allow_unspecialized ? filter(cs -> maybe_callsite(cs, callee), callsites) :
         filter(cs -> is_callsite(cs, callee), callsites)

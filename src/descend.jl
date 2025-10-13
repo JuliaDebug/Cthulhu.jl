@@ -3,9 +3,10 @@ function descend_with_error_handling(args...; kwargs...)
     try
         return _descend(args...; kwargs...)
     catch x
-        TypedSyntax.clear_all_vscode()
         isa(x, InterruptException) && return :interrupted
         rethrow(x)
+    finally
+        TypedSyntax.clear_all_vscode()
     end
     return nothing
 end
@@ -27,10 +28,10 @@ function _descend(terminal::AbstractTerminal, @nospecialize(args...); interp=Nat
     _descend(terminal, provider, args...; kwargs...)
 end
 
-_descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =
+_descend(@nospecialize(args...); terminal::AbstractTerminal=default_terminal(), kwargs...) =
     _descend(terminal, args...; kwargs...)
 
-function _descend(bookmark::Bookmark; terminal=default_terminal(), kwargs...)
+function _descend(bookmark::Bookmark; terminal::AbstractTerminal=default_terminal(), kwargs...)
     state = CthulhuState(bookmark; terminal, kwargs...)
     descend!(state)
 end

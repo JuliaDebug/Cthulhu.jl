@@ -43,7 +43,8 @@ then only the following is required:
   (for uncached inference results, e.g. when looking up callsites emanating from concrete evaluation)
 - `InferredSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
 
-For an `AbstractProvider` that is not associated with any particular `Compiler.AbstractInterpreter`,
+By default, an `AbstractProvider` is not associated with any particular `Compiler.AbstractInterpreter`,
+with `Cthulhu.get_abstract_interpreter(provider::SomeProvider)` returning `nothing`. In this case,
 the following methods are required:
 - `get_inference_world(provider::SomeProvider)`, returning the world in which the provider operates.
 - `find_method_instance(provider::SomeProvider, tt::Type{<:Tuple}, world::UInt)`, to construct a

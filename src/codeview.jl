@@ -267,7 +267,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
         in(callsite_ci, visited_cis) && continue
 
         push!(visited_cis, callsite_ci)
-        result = LookupResult(provider, callsite_ci, optimized)
+        result = LookupResult(provider, callsite_ci, optimized)::LookupResult
         add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, result, source_ci)
     end
 
