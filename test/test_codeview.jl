@@ -9,10 +9,22 @@ using .Cthulhu: CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 
-# NOTE setup for `cthulhu_ast`
-include("TestCodeViewSandbox.jl")
+file = tempname() * ".jl"
+open(file, "w+") do io
+    println(io, """
+    module TestCodeViewSandbox
+
+    function testf_revise()
+        T = rand() > 0.5 ? Int64 : Float64
+        sum(rand(T, 100))
+    end
+
+    end
+    """)
+end
+include(file)
 (; testf_revise) = TestCodeViewSandbox
-Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
+Revise.track(TestCodeViewSandbox, file)
 
 @testset "printer test" begin
     tf = (true, false)

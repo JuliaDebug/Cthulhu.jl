@@ -1,12 +1,25 @@
 using Test, PerformanceTestTools
 using Core: Const # allows correct printing as `Const` instead of `Core.Const`
+using Cthulhu: Cthulhu, CTHULHU_MODULE
+using Revise
+Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
 
 @testset "runtests.jl" begin
     @testset "Core functionality" include("test_Cthulhu.jl")
-    @testset "Provider functionality" include("test_provider.jl")
     @testset "Code view" include("test_codeview.jl")
+    @testset "Provider functionality" include("test_provider.jl")
     @testset "Terminal tests" include("test_terminal.jl")
     @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
+    if CTHULHU_MODULE[] === Cthulhu
+        @eval import Compiler # trigger the extension
+        if CTHULHU_MODULE[] !== Cthulhu
+            @testset "Core functionality" include("test_Cthulhu.jl")
+            @testset "Code view" include("test_codeview.jl")
+            @testset "Provider functionality" include("test_provider.jl")
+            @testset "Terminal tests" include("test_terminal.jl")
+            @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
+        end
+    end
     # TODO enable these tests
     false || return @info "skipped test_irshow.jl"
     @testset "IRShow display tests" include("test_irshow.jl")

@@ -2,28 +2,10 @@ module test_provider
 
 using Test
 using Core.IR
-using Cthulhu: Cthulhu, descend, CTHULHU_MODULE
-import Compiler # trigger the extension
-CthulhuCompilerExt = Base.get_extension(Cthulhu, :CthulhuCompilerExt)
-@assert CthulhuCompilerExt !== nothing
+using Cthulhu: CTHULHU_MODULE
 
-@eval module Standard
-const Cthulhu = $Cthulhu
-using Cthulhu: descend
-using .Cthulhu: DefaultProvider
-include("provider_utils.jl")
-include("providers/CountingProviderModule.jl")
-using .CountingProviderModule: CountingProvider
-include("providers/OverlayProviderModule.jl")
-using .OverlayProviderModule: OverlayProvider
-@static if VERSION > v"1.13-"
-    include("providers/ExternalProviderModule.jl")
-    using .ExternalProviderModule: ExternalProvider
-end
-end
-
-@eval module Ext
-const Cthulhu = $CthulhuCompilerExt
+@eval module Impl
+const Cthulhu = $(CTHULHU_MODULE[])
 using Cthulhu: descend
 using .Cthulhu: DefaultProvider
 include("provider_utils.jl")
@@ -74,26 +56,17 @@ end
     args = (test_function, (Int,))
 
     @testset "Provider API" begin
-        @test Standard.DefaultProvider !== Ext.DefaultProvider
-        Standard.test_provider_api(Standard.DefaultProvider(), args...)
-        Standard.test_provider_api(Standard.CountingProvider(), args...)
-        Standard.test_provider_api(Standard.OverlayProvider(), args...)
-        VERSION > v"1.13-" && Standard.test_provider_api(Standard.ExternalProvider(), args...)
-        Ext.test_provider_api(Ext.DefaultProvider(), args...)
-        Ext.test_provider_api(Ext.CountingProvider(), args...)
-        Ext.test_provider_api(Ext.OverlayProvider(), args...)
-        VERSION > v"1.13-" && Ext.test_provider_api(Ext.ExternalProvider(), args...)
+        Impl.test_provider_api(Impl.DefaultProvider(), args...)
+        Impl.test_provider_api(Impl.CountingProvider(), args...)
+        Impl.test_provider_api(Impl.OverlayProvider(), args...)
+        VERSION > v"1.13-" && Impl.test_provider_api(Impl.ExternalProvider(), args...)
     end
 
     @testset "`descend`" begin
-        @test_logs normal_warnings... Standard.test_descend_for_provider(Standard.DefaultProvider(), args...)
-        @test_logs impl_warnings... Standard.test_descend_for_provider(Standard.CountingProvider(), args...)
-        @test_logs impl_warnings... Standard.test_descend_for_provider(Standard.OverlayProvider(), args...)
-        VERSION > v"1.13-" && @test_logs impl_warnings_noopt... Standard.test_descend_for_provider(Standard.ExternalProvider(), args...)
-        @test_logs normal_warnings... Ext.test_descend_for_provider(Ext.DefaultProvider(), args...)
-        @test_logs impl_warnings... Ext.test_descend_for_provider(Ext.CountingProvider(), args...)
-        @test_logs impl_warnings... Ext.test_descend_for_provider(Ext.OverlayProvider(), args...)
-        VERSION > v"1.13-" && @test_logs impl_warnings_noopt... Ext.test_descend_for_provider(Ext.ExternalProvider(), args...)
+        @test_logs normal_warnings... Impl.test_descend_for_provider(Impl.DefaultProvider(), args...)
+        @test_logs impl_warnings... Impl.test_descend_for_provider(Impl.CountingProvider(), args...)
+        @test_logs impl_warnings... Impl.test_descend_for_provider(Impl.OverlayProvider(), args...)
+        VERSION > v"1.13-" && @test_logs impl_warnings_noopt... Impl.test_descend_for_provider(Impl.ExternalProvider(), args...)
     end
 end;
 
