@@ -1,4 +1,4 @@
-# module test_provider
+module test_provider
 
 using Test
 using Core.IR
@@ -97,4 +97,4 @@ end
     end
 end;
 
-# end # module test_provider
+end # module test_provider
