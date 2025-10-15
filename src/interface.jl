@@ -82,9 +82,6 @@ evaluation, or a `Compiler.InferenceResult` for the results of constant propagat
 Optionally, `AbstractProvider`s may modify default behavior by extending the following:
 - `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)`: return a data structure that is
   more accurate than the `CodeInstance` associated with a given `Cthulhu.CallInfo`.
-- `should_regenerate_code_instance(provider::SomeProvider, ci::CodeInstance)`, in case we happened
-  to have a `CodeInstance` available, but we still need to process it to get the data we need to provide
-  a [`LookupResult`](@ref).
 
 If any of the relevant `CthulhuConfig` fields may be set, these should be implemented as well
 or will give a warning by default when called:
@@ -142,8 +139,6 @@ function generate_code_instance(provider::AbstractProvider, mi::MethodInstance)
     interp !== nothing && return generate_code_instance(provider, interp, mi)
     error(lazy"Not implemented for $provider")
 end
-
-should_regenerate_code_instance(provider::AbstractProvider, ci::CodeInstance) = false
 
 get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) =
     @warn "Remarks could not be retrieved for $ci with provider type $(typeof(provider))"
