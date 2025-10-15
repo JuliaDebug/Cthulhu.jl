@@ -1,6 +1,6 @@
 module test_codeview
 
-using Test, Revise, Accessors
+using Test, Revise
 using Logging: NullLogger, with_logger
 
 import Cthulhu as _Cthulhu

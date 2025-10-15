@@ -152,7 +152,11 @@ end
 
 function bookmark_method(state::CthulhuState)
     push!(BOOKMARKS, Bookmark(state.provider, state.ci; state.config))
-    @info "The current `descend` state was saved for later use. You may access it with `Cthulhu.BOOKMARKS[end]`."
+    mod = resolve_module(state.provider)
+    @info "The current `descend` state was saved for later use. You may access it with `$mod.BOOKMARKS[end]`."
+    if nameof(mod) === :CthulhuCompilerExt
+        @info "You can get the `CthulhuCompilerExt` module with `Base.get_extension(Cthulhu, :CthulhuCompilerExt)`"
+    end
 end
 
 function dump_parameters(state::CthulhuState)

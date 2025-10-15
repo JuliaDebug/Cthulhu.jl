@@ -143,7 +143,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
             TypedSyntax.display_inlay_hints_vscode(vscode_io)
 
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
-            config.view === :source && return
+            config.view === :source && return # nothing more to show
         end
     end
 

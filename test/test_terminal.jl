@@ -285,7 +285,7 @@ end
     # `ascend`
     @noinline inner3(x) = 3x
     @inline   inner2(x) = 2*inner3(x)
-                inner1(x) = -1*inner2(x)
+              inner1(x) = -1*inner2(x)
     inner1(0x0123)
     mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
     terminal = VirtualTerminal()
@@ -348,7 +348,7 @@ end
         bookmarks = _Cthulhu.BOOKMARKS
         n = length(bookmarks)
 
-        @test_logs (:info, r"`descend` state was saved for later use") begin
+        @test_logs (:info, r"`descend` state was saved for later use") match_mode=:any begin
             terminal = VirtualTerminal()
             harness = @run terminal descend(exp, (Int,); view=:typed, optimize=true, terminal)
             write(terminal, :enter)
@@ -366,7 +366,7 @@ end
         @test bookmark.config.optimize === true
 
         terminal = VirtualTerminal()
-        @test_logs (:info, r"`descend` state was saved for later use") begin
+        @test_logs (:info, r"`descend` state was saved for later use") match_mode=:any begin
             harness = @run terminal _Cthulhu.descend_with_error_handling(bookmark; view=:llvm, terminal)
             write(terminal, 'b') # should push a bookmark to `BOOKMARKS`
             write(terminal, 'q')

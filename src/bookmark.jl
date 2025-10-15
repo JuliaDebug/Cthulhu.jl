@@ -7,8 +7,8 @@ It can be used with the following functions:
 * `descend(::Bookmark)`, `descend_code_typed(::Bookmark)`,
   `descend_code_warntype(::Bookmark)`: continue the descent.
 * `code_typed(::Bookmark)`, `code_warntype([::IO,] ::Bookmark)`: show typed IR
-* `code_llvm([::IO,] ::Bookmark)`: pretty-print LLVM IR
-* `code_native([::IO,] ::Bookmark)`: pretty-print native code
+* `code_llvm([::IO,] ::Bookmark)`: show LLVM IR
+* `code_native([::IO,] ::Bookmark)`: show native code
 """
 struct Bookmark
     provider::AbstractProvider
@@ -29,7 +29,7 @@ end
 
 During a descent, state can be "bookmarked" by pressing `b`, which pushes a [`Cthulhu.Bookmark`](@ref) into `Cthulhu.BOOKMARKS`. This can be used to, e.g., continue descending with `descend(Cthulhu.BOOKMARKS[end])`.
 
-See [`Cthulhu.Bookmark`](@ref) for other usages.
+See [`Cthulhu.Bookmark`](@ref) for other uses.
 """
 const BOOKMARKS = Bookmark[]
 

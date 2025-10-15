@@ -1,6 +1,6 @@
 module test_Cthulhu
 
-using Test, StaticArrays, Random, Accessors
+using Test, StaticArrays, Random
 using Core: Const
 
 using Cthulhu: Cthulhu as _Cthulhu, callstring
@@ -622,7 +622,7 @@ end
     end
     function doprint(f)
         provider, mi, ci, result = cthulhu_info(f; optimize = false)
-        config = @set CONFIG.view = :typed
+        config = set_config(CONFIG; view = :typed)
         state = CthulhuState(provider; mi, ci, config)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, provider, state, result)

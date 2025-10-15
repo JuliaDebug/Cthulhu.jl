@@ -49,7 +49,7 @@ function descend!(state::CthulhuState)
     if !isa(commands, Vector{Command})
         error(lazy"""
         invalid `$AbstractProvider` API:
-        `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to return a `Vector{Command}` object.
+        `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to have `Vector{Command}` as return type.
         """)
     end
     while true
@@ -133,14 +133,15 @@ function descend!(state::CthulhuState)
             end
 
             ci = get_ci(callsite)
-            ci === nothing && continue
+            override = get_override(provider, info)
+            ci === nothing && override === nothing && continue
 
             # Recurse into the callsite.
 
             prev = save_descend_state(state)
             state.mi = get_mi(ci)
             state.ci = ci
-            state.override = get_override(provider, info)
+            state.override = override
             state.display_code = true
             status = descend!(state)
             status === :exited && break
@@ -168,9 +169,8 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
     sub_callsites = map(ci -> Callsite(callsite.id, ci, callsite.head), info.callinfos)
     if isempty(sub_callsites)
         @eval Main begin
-            provider = $provider
-            mi = $mi
-            info = $info
+            state = $state
+            callsite = $callsite
         end
         error("Expected multiple callsites, but found none. Please fill an issue with a reproducing example.")
     end
