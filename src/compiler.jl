@@ -120,7 +120,12 @@ function lookup_optimized(provider::AbstractProvider, interp::AbstractInterprete
     if ci.inferred === nothing
         if CC.use_const_api(ci)
             @assert isdefined(ci, :rettype_const)
-            src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
+            @static if VERSION > v"1.13-"
+                range = CC.WorldRange(1, typemax(UInt))
+                src = CC.codeinfo_for_const(interp, get_mi(ci), range, Core.svec(), ci.rettype_const)
+            else
+                src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
+            end
             src.ssavaluetypes = Any[Any]
             infos = Any[CC.NoCallInfo()]
             slottypes = Any[]

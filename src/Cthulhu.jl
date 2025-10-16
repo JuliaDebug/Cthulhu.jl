@@ -9,6 +9,12 @@ const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 
+function is_compiler_loaded()
+    pkgid = Base.PkgId(Base.UUID("807dbc54-b67e-4c79-8afb-eafe4df6f2e1"), "Compiler")
+    return haskey(Base.loaded_modules, pkgid)
+end
+is_compiler_extension_loaded() = CTHULHU_MODULE[] !== @__MODULE__
+
 function resolve_module(Compiler::Module)
     Compiler === Base.Compiler && return @__MODULE__
     Compiler === CTHULHU_MODULE[].Compiler && return CTHULHU_MODULE[]

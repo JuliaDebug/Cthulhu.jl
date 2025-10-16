@@ -1,30 +1,39 @@
 module test_codeview
 
-using Test, Revise
+using Test
 using Logging: NullLogger, with_logger
 
-import Cthulhu as _Cthulhu
+using Cthulhu: Cthulhu as _Cthulhu, is_compiler_loaded
 const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
 using .Cthulhu: CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 
-file = tempname() * ".jl"
-open(file, "w+") do io
-    println(io, """
-    module TestCodeViewSandbox
+if is_compiler_loaded()
+    @eval using Revise
+    Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
+    file = tempname() * ".jl"
+    open(file, "w+") do io
+        println(io, """
+        module Sandbox
 
+        function testf_revise()
+            T = rand() > 0.5 ? Int64 : Float64
+            sum(rand(T, 100))
+        end
+
+        end
+        """)
+    end
+    include(file)
+    (; testf_revise) = Sandbox
+    Revise.track(Sandbox, file)
+else
     function testf_revise()
         T = rand() > 0.5 ? Int64 : Float64
         sum(rand(T, 100))
     end
-
-    end
-    """)
 end
-include(file)
-(; testf_revise) = TestCodeViewSandbox
-Revise.track(TestCodeViewSandbox, file)
 
 @testset "printer test" begin
     tf = (true, false)

@@ -1,10 +1,11 @@
 module test_terminal
 
 using Core: Const
-using Test, REPL, Cthulhu, Revise, LinearAlgebra
+using Test, REPL, LinearAlgebra
 using Cthulhu.Testing
 using Cthulhu.Testing: @run
-global _Cthulhu::Module = Cthulhu.CTHULHU_MODULE[]
+using Cthulhu: Cthulhu as _Cthulhu, is_compiler_loaded, descend, descend_code_warntype, @descend, ascend
+const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
 
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
@@ -27,6 +28,30 @@ function reduce_tuple(ixs::Tuple)
 end
 end
 
+if is_compiler_loaded()
+    @eval using Revise
+    Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
+    revised_file = tempname() * ".jl"
+    open(revised_file, "w+") do io
+        println(io, """
+        module Sandbox
+        function simplef(a, b)
+            z = a * a
+            return z + b
+        end
+        end # module
+        """)
+    end
+    include(revised_file)
+    (; simplef) = Sandbox
+    Revise.track(Sandbox, revised_file)
+else
+    @eval function simplef(a, b)
+        z = a * a
+        return z + b
+    end
+end
+
 @testset "Terminal" begin
     @test Cthulhu.default_terminal() isa REPL.Terminals.TTYTerminal
     colorize(active_option::Bool, c::Char) = Cthulhu.stringify() do io
@@ -36,21 +61,8 @@ end
     colorize(s::AbstractString; color::Symbol = :cyan) = Cthulhu.stringify() do io
         printstyled(io, s; color)
     end
-    # Write a file that we track with Revise. Creating it programmatically allows us to rewrite it with
-    # different content
-    revisedfile = tempname()
-    open(revisedfile, "w") do io
-        println(io,
-        """
-        function simplef(a, b)
-            z = a * a
-            return z + b
-        end
-        """)
-    end
-    includet(@__MODULE__, revisedfile)
 
-    _Cthulhu.CONFIG = _Cthulhu.CthulhuConfig(; menu_options = (; pagesize = 10000))
+    Cthulhu.CONFIG = Cthulhu.CthulhuConfig(; menu_options = (; pagesize = 10000))
 
     terminal = VirtualTerminal()
     harness = @run terminal descend(simplef, Tuple{Float32, Int32}; view=:typed, optimize=true, iswarn=false, terminal)
@@ -65,7 +77,9 @@ end
     write(terminal, 'o') # switch to unoptimized
     displayed, text = read_next(harness)
     @test occursin("simplef(a, b)", text)
-    @test occursin("::Const(*)", text)
+    if @isdefined(Revise)
+        @test occursin("::Const(*)", text)
+    end
     @test occursin("(z = (%1)(a, a))", text)
     @test occursin('[' * colorize(false, 'o') * "]ptimize", displayed)
     @test occursin('\n' * colorize("Select a call to descend into or ↩ to ascend."; color = :blue), displayed) # beginning of the line
@@ -125,8 +139,10 @@ end
     # AST view
     write(terminal, 'A')
     displayed, text = read_next(harness)
-    @test occursin("Symbol simplef", text)
-    @test occursin("Symbol call", text)
+    if @isdefined(Revise)
+        @test occursin("Symbol simplef", text)
+        @test occursin("Symbol call", text)
+    end
     @test occursin('[' * colorize(true, 'A') * "]ST", displayed)
 
     # LLVM view
@@ -159,26 +175,31 @@ end
     write(terminal, 'P')
     displayed, text = read_next(harness)
 
-    # Revise
-    # Use delays to ensure unambiguous differences in time stamps
-    # (macOS is particularly sensitive) and execution of @async processes
-    sleep(0.1)
-    open(revisedfile, "w") do io
-        println(io,
-        """
-        function simplef(a, b)
-            z = a * b
-            return z + b
+    if @isdefined(Revise)
+        # Use delays to ensure unambiguous differences in time stamps
+        # (macOS is particularly sensitive) and execution of @async processes
+        sleep(0.1)
+        open(revised_file, "w") do io
+            println(io,
+            """
+            function simplef(a, b)
+                z = a * b
+                return z + b
+            end
+            """)
         end
-        """)
+        sleep(0.1)
+        write(terminal, 'R')
+        displayed, text = read_next(harness)
+        # FIXME: Sources are revised, but Cthulhu still displays the unrevised code.
+        @test_broken occursin("Base.mul_float(a, b)::Float32", text)
+        write(terminal, 'S')
+        displayed, text = read_next(harness)
+        @test_broken occursin("z::Float32 = (a::Float32 * b::Int32)", text)
+        # FIXME: Replace this test by the one marked as broken just above when fixed.
+        @test occursin("z::Float32 = (a::Float32 * b)", text)
+        @test end_terminal_session(harness)
     end
-    sleep(0.1)
-    write(terminal, 'R')
-    sleep(0.1)
-    write(terminal, 'T'); read_next(harness)
-    displayed, text = read_next(harness)
-    @test_broken occursin("z = a * b", displayed)
-    @test end_terminal_session(harness)
 
     # Multicall & iswarn=true
     terminal = VirtualTerminal()
@@ -215,7 +236,7 @@ end
     @test end_terminal_session(harness)
 
     # descend with MethodInstances
-    mi = Cthulhu.get_specialization(Definitions.callfmulti, Tuple{typeof(Ref{Any}(1))})
+    mi = _Cthulhu.get_specialization(Definitions.callfmulti, Tuple{typeof(Ref{Any}(1))})
     terminal = VirtualTerminal()
     harness = @run terminal descend(mi; view=:typed, optimize=false, terminal)
 
@@ -287,7 +308,7 @@ end
     @inline   inner2(x) = 2*inner3(x)
               inner1(x) = -1*inner2(x)
     inner1(0x0123)
-    mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
+    mi = _Cthulhu.get_specialization(inner3, Tuple{UInt16})
     terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, mi; pagesize=11)
 
@@ -345,7 +366,7 @@ end
     @test end_terminal_session(harness)
 
     @testset "Bookmarks" begin
-        bookmarks = _Cthulhu.BOOKMARKS
+        bookmarks = Cthulhu.BOOKMARKS
         n = length(bookmarks)
 
         @test_logs (:info, r"`descend` state was saved for later use") match_mode=:any begin
@@ -359,7 +380,7 @@ end
 
         @test length(bookmarks) == n + 1
         bookmark = pop!(bookmarks)
-        mi = _Cthulhu.get_mi(bookmark.ci)
+        mi = Cthulhu.get_mi(bookmark.ci)
         method = mi.def
         @test method === which(exp, (Float64,))
         @test bookmark.config.view === :typed
@@ -367,7 +388,7 @@ end
 
         terminal = VirtualTerminal()
         @test_logs (:info, r"`descend` state was saved for later use") match_mode=:any begin
-            harness = @run terminal _Cthulhu.descend_with_error_handling(bookmark; view=:llvm, terminal)
+            harness = @run terminal Cthulhu.descend_with_error_handling(bookmark; view=:llvm, terminal)
             write(terminal, 'b') # should push a bookmark to `BOOKMARKS`
             write(terminal, 'q')
             @test end_terminal_session(harness)

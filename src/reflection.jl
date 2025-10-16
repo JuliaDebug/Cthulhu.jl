@@ -85,6 +85,7 @@ function find_callsites(provider::AbstractProvider, result::LookupResult, ci::Co
                 # special handling of jl_new_task
                 length(args) > 0 || continue
                 arg1 = args[1]
+                isexpr(arg1, :tuple) && (arg1 = arg1.args[1])
                 if arg1 isa QuoteNode
                     cfunc = arg1.value
                     if cfunc === :jl_new_task
