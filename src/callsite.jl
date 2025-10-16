@@ -217,12 +217,12 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecia
     # If effects are explicitly turned on, make sure to print them, even
     # if there otherwise isn't space for them, since the effects are the
     # most important piece of information if turned on.
-    with_effects = get(limiter, :with_effects, false)::Bool
-    exception_type = get(limiter, :exception_type, false)::Bool && exct !== nothing
+    show_effects = get(limiter, :effects, false)::Bool
+    exception_types = get(limiter, :exception_types, false)::Bool && exct !== nothing
 
     if isa(limiter, TextWidthLimiter)
-        with_effects && (limiter.width += textwidth(repr(effects)) + 1)
-        exception_type && (limiter.width += textwidth(string(exct)) + 1)
+        show_effects && (limiter.width += textwidth(repr(effects)) + 1)
+        exception_types && (limiter.width += textwidth(string(exct)) + 1)
         limiter.limit = max(limiter.width, limiter.limit)
     end
 
@@ -263,11 +263,11 @@ function __show_limited(limiter, name, tt, @nospecialize(rt), effects, @nospecia
     end
 
     @label print_effects
-    if with_effects
+    if show_effects
         # Print effects unlimited
         print(limiter.io, " ", effects)
     end
-    if exception_type
+    if exception_types
         print(limiter.io, ' ', ExctWrapper(exct))
     end
 
@@ -429,24 +429,25 @@ function Base.show(io::IO, c::Callsite)
     iswarn = get(io, :iswarn, false)::Bool
     info = c.info
     rt = get_rt(info)
-    if iswarn && is_type_unstable(rt)
-        color = if rt isa Union && is_expected_union(rt)
-            Base.warn_color()
-        else
-            Base.error_color()
-        end
-        printstyled(io, '%'; color)
-    else
-        print(io, '%')
-    end
     limiter = TextWidthLimiter(io, cols)
-    limiter.width += 1   # for the '%' character
-    print(limiter, string(c.id))
+    if c.id != -1
+        if iswarn && is_type_unstable(rt)
+            color = if rt isa Union && is_expected_union(rt)
+                Base.warn_color()
+            else
+                Base.error_color()
+            end
+            printstyled(io, '%'; color)
+        else
+            print(io, '%')
+        end
+        limiter.width += 1 # for the '%' character
+        print(limiter, c.id, " = ")
+    end
     if isa(info, EdgeCallInfo)
-        print(limiter, optimize ? string(" = ", c.head, ' ') : " = ")
+        optimize && print(limiter, c.head, ' ')
         show_callinfo(limiter, info)
     else
-        print(limiter, " = ")
         print_callsite_info(limiter, info)
     end
     return nothing
