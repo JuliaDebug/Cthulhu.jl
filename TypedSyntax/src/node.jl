@@ -495,7 +495,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
     used = BitSet()
     for (i, stmt) in enumerate(src.code)
         Core.Compiler.scan_ssa_use!(push!, used, stmt)
-        if isa(stmt, Core.ReturnNode)
+        if isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)
             val = stmt.val
             if isa(val, SSAValue)
                 push!(used, val.id)
@@ -573,7 +573,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
         empty!(argmapping)
         if is_slot(stmt) || isa(stmt, SSAValue) || isa(stmt, GlobalRef)
             append_targets_for_arg!(mapped, i, stmt)
-        elseif isa(stmt, Core.ReturnNode)
+        elseif isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
             targets = get_targets(stmt)

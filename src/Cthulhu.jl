@@ -1,14 +1,33 @@
 module Cthulhu
 
 export @descend, @descend_code_typed, @descend_code_warntype,
-    descend, descend_code_typed, descend_code_warntype, ascend
+    descend, descend_code_typed, descend_code_warntype, ascend,
+    AbstractProvider
 
 const CC = Base.Compiler
 const IRShow = Base.IRShow
 
 const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
 
-__init__() = read_config!(CONFIG)
+function is_compiler_loaded()
+    pkgid = Base.PkgId(Base.UUID("807dbc54-b67e-4c79-8afb-eafe4df6f2e1"), "Compiler")
+    return haskey(Base.loaded_modules, pkgid)
+end
+is_compiler_extension_loaded() = CTHULHU_MODULE[] !== @__MODULE__
+
+function resolve_module(Compiler::Module)
+    Compiler === Base.Compiler && return @__MODULE__
+    Compiler === CTHULHU_MODULE[].Compiler && return CTHULHU_MODULE[]
+    return resolve_module()
+end
+resolve_module() = CTHULHU_MODULE[]
+function resolve_module(@nospecialize(::T)) where {T}
+    mod = parentmodule(T)
+    nameof(mod) === :Compiler && return resolve_module(mod)
+    return resolve_module()
+end
+
+__init__() = read_config!()
 
 include("CthulhuBase.jl")
 include("backedges.jl")
@@ -26,7 +45,16 @@ See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
 julia> @descend sin(1)
 [...]
 
-julia> @descend iswarn=false foo()
+julia> @descend view=:typed iswarn=true optimize=false foo() # equivalent to `@descend_warntype`
+[...]
+
+julia> @descend view=:typed iswarn=false foo() # equivalent to `@descend_code_typed`
+[...]
+
+julia> @descend interp=SomeInterpreter() foo() # use a custom `Compiler.AbstractInterpreter`
+[...]
+
+julia> @descend provider=SomeProvider() foo() # use a custom `AbstractProvider`, see the docs for more details
 [...]
 ```
 """
@@ -40,6 +68,10 @@ end
 Evaluates the arguments to the function or macro call, determines their
 types, and calls [`descend_code_typed`](@ref) on the resulting expression.
 See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+This macro is equivalent to `@descend` with the following options set (unless provided):
+- `view = :typed`
+- `iswarn = false`
 
 # Examples
 ```julia
@@ -60,6 +92,11 @@ end
 Evaluates the arguments to the function or macro call, determines their
 types, and calls [`descend_code_warntype`](@ref) on the resulting expression.
 See [`Cthulhu.CONFIG`](@ref) for options and their defaults.
+
+This macro is equivalent to `@descend` with the following options set (unless provided):
+- `view = :typed`
+- `iswarn = true`
+- `optimize = false`
 
 # Examples
 ```julia
@@ -83,12 +120,12 @@ end
 """
     descend(f, argtypes=Tuple{...}; kwargs...)
     descend(tt::Type{<:Tuple}; kwargs...)
-    descend(Cthulhu.BOOKMARKS[i])
+    descend(Cthulhu.BOOKMARKS[i]; kwargs...)
     descend(mi::MethodInstance; kwargs...)
 
 Given a function and a tuple-type, interactively explore the source code of functions
-annotated with inferred types by descending into `invoke` statements. Type enter to select an
-`invoke` to descend into, select `↩` to ascend, and press `q` or `control-c` to quit.
+annotated with inferred types by descending into `invoke` statements. Type enter to select a callsite
+to descend into, select `↩` or press backspace to ascend, and press `q` or `ctrl-c` to quit.
 See [`Cthulhu.CONFIG`](@ref) for `kwargs` and their defaults.
 
 # Usage:
@@ -109,8 +146,20 @@ julia> descend() do
 [...]
 ```
 """
-function descend(@nospecialize(args...); @nospecialize(kwargs...))
-    CTHULHU_MODULE[].descend_impl(args...; kwargs...)
+function descend(@nospecialize(args...); interp=nothing,
+                                         provider=nothing,
+                                         @nospecialize(kwargs...))
+    if provider !== nothing
+        mod = resolve_module(provider)
+        mod.descend_with_error_handling(args...; provider, kwargs...)
+    elseif interp !== nothing
+        mod = resolve_module(interp)
+        mod.descend_with_error_handling(args...; interp, kwargs...)
+    else
+        mod = resolve_module()
+        mod.descend_with_error_handling(args...; kwargs...)
+    end
+    return nothing
 end
 
 """
@@ -142,9 +191,8 @@ julia> descend_code_typed() do
 [...]
 ```
 """
-function descend_code_typed(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].descend_code_typed_impl(args...; kwargs...)
-end
+descend_code_typed(@nospecialize(args...); view = :typed, iswarn = false, kwargs...) =
+    descend(args...; view, iswarn, kwargs...)
 
 """
     descend_code_warntype(f, argtypes=Tuple{...}; kwargs...)
@@ -175,9 +223,8 @@ julia> descend_code_warntype() do
 [...]
 ```
 """
-function descend_code_warntype(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].descend_code_warntype_impl(args...; kwargs...)
-end
+descend_code_warntype(@nospecialize(args...); view = :typed, iswarn = true, optimize = false, kwargs...) =
+    descend(args...; view, iswarn, optimize, kwargs...)
 
 """
     ascend(mi::MethodInstance; kwargs...)
@@ -197,15 +244,19 @@ using PrecompileTools
 @setup_workload begin
     try
         @compile_workload begin
-            terminal = Testing.FakeTerminal()
+            terminal = Testing.VirtualTerminal()
+            harness = Testing.@run terminal @descend terminal=terminal gcd(1, 2)
             task = @async @descend terminal=terminal.tty gcd(1, 2)
-            write(terminal, 'q')
-            wait(task)
-            finalize(terminal)
+            @assert Testing.end_terminal_session(harness)
         end
     catch err
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
 end
+
+get_specialization(@nospecialize(f), @nospecialize(tt=default_tt(f))) =
+    get_specialization(Base.signature_type(f, tt))
+get_specialization(@nospecialize tt::Type{<:Tuple}) =
+    specialize_method(Base._which(tt))
 
 end # module Cthulhu

@@ -1,11 +1,33 @@
 using Test, PerformanceTestTools
 using Core: Const # allows correct printing as `Const` instead of `Core.Const`
+using Cthulhu: is_compiler_loaded, is_compiler_extension_loaded
 
-@testset "runtests.jl" begin
+if is_compiler_loaded() # don't load it otherwise, as that would load the Cthulhu extension
+    using Revise
+    Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
+end
+
+@testset "Cthulhu.jl" begin
+    before = is_compiler_extension_loaded()
     @testset "Core functionality" include("test_Cthulhu.jl")
     @testset "Code view" include("test_codeview.jl")
+    @testset "Provider functionality" include("test_provider.jl")
     @testset "Terminal tests" include("test_terminal.jl")
     @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
+    after = is_compiler_extension_loaded()
+    @assert before === after # make sure we don't mess up the test setup by loading Compiler durin tests
+    if !is_compiler_extension_loaded()
+        @eval import Compiler # trigger the extension
+        if is_compiler_extension_loaded() # allow extension to be disabled locally during development
+            @testset "Tests with Compiler extension loaded" begin
+                @testset "Core functionality" include("test_Cthulhu.jl")
+                @testset "Code view" include("test_codeview.jl")
+                @testset "Provider functionality" include("test_provider.jl")
+                @testset "Terminal tests" include("test_terminal.jl")
+                @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
+            end
+        end
+    end
     # TODO enable these tests
     false || return @info "skipped test_irshow.jl"
     @testset "IRShow display tests" include("test_irshow.jl")

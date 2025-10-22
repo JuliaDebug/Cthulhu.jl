@@ -1,43 +1,67 @@
 module test_codeview
 
-using Cthulhu, Test, Revise
+using Test
+using Logging: NullLogger, with_logger
+
+using Cthulhu: Cthulhu as _Cthulhu, is_compiler_loaded
+const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
+using .Cthulhu: CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 
-# NOTE setup for `cthulhu_ast`
-include("TestCodeViewSandbox.jl")
-using .TestCodeViewSandbox
-Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
+if is_compiler_loaded()
+    @eval using Revise
+    Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
+    file = tempname() * ".jl"
+    open(file, "w+") do io
+        println(io, """
+        module Sandbox
+
+        function testf_revise()
+            T = rand() > 0.5 ? Int64 : Float64
+            sum(rand(T, 100))
+        end
+
+        end
+        """)
+    end
+    include(file)
+    (; testf_revise) = Sandbox
+    Revise.track(Sandbox, file)
+else
+    function testf_revise()
+        T = rand() > 0.5 ? Int64 : Float64
+        sum(rand(T, 100))
+    end
+end
 
 @testset "printer test" begin
-    (; interp, src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(testf_revise);
     tf = (true, false)
-    mi = codeinst.def
-    @testset "codeview: $codeview" for codeview in Cthulhu.CODEVIEWS
-        if !isdefined(@__MODULE__(), :Revise)
-            codeview == Cthulhu.cthulhu_ast && continue
-        end
-        @testset "optimize: $optimize" for optimize in tf
-            @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
-                config = Cthulhu.CONFIG
-
+    @testset "optimize: $optimize" for optimize in tf
+        provider, mi, ci, result = cthulhu_info(testf_revise; optimize)
+        @testset "view: $view" for view in (:source, :ast, :typed, :llvm, :native)
+            view === :ast && !isdefined(@__MODULE__(), :Revise) && continue
+            @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
+                config = set_config(CONFIG; view, debuginfo)
+                state = CthulhuState(provider; config, ci, mi)
                 io = IOBuffer()
-                src = Cthulhu.CC.typeinf_code(interp, mi, true)
-                codeview(io, mi, src, optimize, debuginfo, Cthulhu.get_inference_world(interp), config)
-                @test !isempty(String(take!(io))) # just check it works
+                view_function(state)(io, provider, state, result)
+                output = String(take!(io))
+                @test !isempty(output) # just check it works
             end
         end
     end
 
-    @testset "debuginfo: $debuginfo" for debuginfo in instances(Cthulhu.DInfo.DebugInfo)
+    provider, mi, ci, result = cthulhu_info(testf_revise; optimize = true)
+    @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
         @testset "iswarn: $iswarn" for iswarn in tf
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
-                @testset "inline_cost: $inline_cost" for inline_cost in tf
+                @testset "inlining_costs: $inlining_costs" for inlining_costs in tf
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
+                        config = set_config(CONFIG; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations)
+                        state = CthulhuState(provider; config, ci, mi)
                         io = IOBuffer()
-                        Cthulhu.cthulhu_typed(io, debuginfo,
-                            src, rt, exct, effects, codeinst;
-                            iswarn, hide_type_stable, inline_cost, type_annotations)
+                        view_function(state)(io, provider, state, result)
                         @test !isempty(String(take!(io))) # just check it works
                     end
                 end
@@ -47,8 +71,20 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
 end
 
 @testset "hide type-stable statements" begin
-    let # optimize code
-        (; src, infos, codeinst, rt, exct, effects, slottypes) = @eval Module() begin
+    function printer(provider, mi, ci, result)
+        return function prints(; kwargs...)
+            io = IOBuffer()
+            config = set_config(CONFIG; debuginfo = :none, kwargs...)
+            state = CthulhuState(provider; config, ci, mi)
+            with_logger(NullLogger()) do
+                cthulhu_typed(io, provider, state, result)
+            end
+            return String(take!(io))
+        end
+    end
+
+    @testset "optimized" begin
+        provider, mi, ci, result = @eval Module() begin
             const globalvar = Ref(42)
             $cthulhu_info() do
                 a = sin(globalvar[])
@@ -56,26 +92,21 @@ end
                 return (a, b)
             end
         end
-        function prints(; kwargs...)
-            io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, codeinst; kwargs...)
-            return String(take!(io))
-        end
+        prints = printer(provider, mi, ci, result)
 
-        let # by default, should print every statement
-            s = prints()
-            @test occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
-        let # should omit type stable statements
-            s = prints(; hide_type_stable=true)
-            @test !occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
+        # by default, should print every statement
+        s = prints()
+        @test occursin("globalvar", s)
+        @test occursin("undefvar", s)
+
+        # should omit type stable statements
+        s = prints(; hide_type_stable=true)
+        @test !occursin("globalvar", s)
+        @test occursin("undefvar", s)
     end
 
-    let # unoptimize code
-        (; src, infos, codeinst, rt, exct, effects, slottypes) = @eval Module() begin
+    @testset "unoptimized" begin
+        provider, mi, ci, result = @eval Module() begin
             const globalvar = Ref(42)
             $cthulhu_info(; optimize=false) do
                 a = sin(globalvar[])
@@ -83,41 +114,37 @@ end
                 return (a, b)
             end
         end
-        function prints(; kwargs...)
-            io = IOBuffer()
-            Cthulhu.cthulhu_typed(io, :none, src, rt, exct, effects, codeinst; kwargs...)
-            return String(take!(io))
-        end
+        prints = printer(provider, mi, ci, result)
 
-        let # by default, should print every statement
-            s = prints()
-            @test occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
-        let # should omit type stable statements
-            s = prints(; hide_type_stable=true)
-            @test !occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
+        # by default, should print every statement
+        s = prints()
+        @test occursin("globalvar", s)
+        @test occursin("undefvar", s)
+
+        # should omit type stable statements
+        s = prints(; hide_type_stable=true)
+        @test !occursin("globalvar", s)
+        @test occursin("undefvar", s)
 
         # should work for warn mode
-        let
-            s = prints(; iswarn=true)
-            @test occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
-        let
-            s = prints(; iswarn=true, hide_type_stable=true)
-            @test !occursin("globalvar", s)
-            @test occursin("undefvar", s)
-        end
+        s = prints(; iswarn=true)
+        @test occursin("globalvar", s)
+        @test occursin("undefvar", s)
+        s = prints(; iswarn=true, hide_type_stable=true)
+        @test !occursin("globalvar", s)
+        @test occursin("undefvar", s)
     end
-end
+end;
 
 @testset "Regressions" begin
     # Issue #675
-    (; src, infos, codeinst, rt, exct, effects, slottypes) = cthulhu_info(NamedTuple; optimize=false)
-    Cthulhu.cthulhu_typed(IOBuffer(), :none, src, rt, exct, effects, codeinst; annotate_source=true)
+    provider, mi, ci, result = cthulhu_info(testf_revise; optimize=false)
+    config = set_config(; view = :source, debuginfo = :none)
+    state = CthulhuState(provider; config, ci, mi)
+    io = IOBuffer()
+    view_function(state)(io, provider, state, result)
+    output = String(take!(io))
+    @test isa(output, String)
 end
 
 end # module test_codeview

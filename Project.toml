@@ -1,24 +1,10 @@
-authors = ["Valentin Churavy <v.churavy@gmail.com> and contributors"]
 name = "Cthulhu"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-version = "2.17.10"
-
-[compat]
-CodeTracking = "0.5, 1, 2"
-Compiler = "0.1"
-FoldingTrees = "1"
-InteractiveUtils = "1.9"
-JuliaSyntax = "1"
-PrecompileTools = "1"
-Preferences = "1"
-REPL = "1.9"
-TypedSyntax = "1.3.0"
-UUIDs = "1.9"
-Unicode = "1.9"
-WidthLimitedIO = "1"
-julia = "1.12"
+version = "3.0.0"
+authors = ["Valentin Churavy <v.churavy@gmail.com> and contributors"]
 
 [deps]
+Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 CodeTracking = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 FoldingTrees = "1eca21be-9b9b-4ed8-839a-6d8ae26b1781"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -37,9 +23,27 @@ Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 [extensions]
 CthulhuCompilerExt = "Compiler"
 
+[compat]
+Accessors = "0.1.42"
+CodeTracking = "0.5, 1, 2"
+Compiler = "0.1"
+FoldingTrees = "1"
+InteractiveUtils = "1.9"
+JuliaSyntax = "1"
+PrecompileTools = "1"
+Preferences = "1"
+REPL = "1.9"
+TypedSyntax = "1.3.0"
+UUIDs = "1.9"
+Unicode = "1.9"
+WidthLimitedIO = "1"
+julia = "1.12"
+
 [extras]
 CthulhuCompilerExt = "a0401a94-d28a-5d0d-bd4d-a83640b62d95"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 PerformanceTestTools = "dc46b164-d16f-48ec-a853-60448fc869fe"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
@@ -47,4 +51,4 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "DeepDiffs", "PerformanceTestTools", "Random", "Revise", "StaticArrays"]
+test = ["Test", "Compiler", "DeepDiffs", "LinearAlgebra", "Logging", "PerformanceTestTools", "Random", "Revise", "StaticArrays"]

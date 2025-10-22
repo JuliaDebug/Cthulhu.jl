@@ -49,13 +49,18 @@ these interactive features; you can also see Cthulhu v2.8 in action in
 ## Usage: descend
 
 ```julia
-function foo()
+function foo(x)
     T = rand() > 0.5 ? Int64 : Float64
-    sum(rand(T, 100))
+    x + sum(rand(T, 100))
 end
 
-descend(foo, Tuple{})     # option 1: specify by function name and argument types
-@descend foo()            # option 2: apply `@descend` to a working execution of the function
+# option 1: use the function form to specify the signature
+descend(foo, (Int,))
+descend(foo, Tuple{Type{Int}})
+descend(Tuple{typeof(foo), Type{Int}})
+# option 2: use `@descend` with valid syntax to automatically extract the signature
+@descend foo(1)
+@descend foo(::Int) # 1.13+ only
 ```
 
 If you do this, you'll see quite a bit of text output. Let's break it down and
@@ -329,3 +334,8 @@ true
 
 julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next time you `using Cthulhu`
 ```
+
+## Development
+
+If you intend to Revise changes made to Cthulhu, it is strongly advised to disable the Compiler extension by uncommenting it from the `Project.toml` while iterating.
+Otherwise, the Compiler extension will be unconditionally loaded, and Revise seems to fail to revise the changes into `CthulhuCompilerExt`.
