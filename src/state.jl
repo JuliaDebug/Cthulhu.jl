@@ -136,7 +136,7 @@ function set_option!(state::CthulhuState, option::Symbol, value; redisplay = fal
     end
 
     redisplay && (state.display_code = true)
-    state.config = setproperties(config, NamedTuple((option => value,)))
+    state.config = set_config(config, NamedTuple((option => value,)))
 end
 
 function edit_source_code(state::CthulhuState)
@@ -149,9 +149,11 @@ function revise_and_redisplay!(state::CthulhuState)
     # Call Revise.revise() without introducing a dependency on Revise
     id = Base.PkgId(UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
     mod = get(Base.loaded_modules, id, nothing)
-    mod === nothing && return @warn "Failed to load Revise."
+    mod === nothing && return @warn "Revise must be loaded to revise changes"
     revise = getfield(mod, :revise)::Function
     revise()
+    world = Base.get_world_counter()
+    state.mi = find_method_instance(state.provider, state.mi.specTypes, world)
     state.ci = generate_code_instance(state.provider, state.mi)
     state.display_code = true
 end

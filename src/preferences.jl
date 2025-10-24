@@ -5,7 +5,9 @@ save_config!(config::CthulhuConfig=CONFIG)
 Save a Cthulhu.jl configuration `config` (by default, `Cthulhu.CONFIG`) to your
 `LocalPreferences.toml` file using Preferences.jl.
 
-The saved preferences will be automatically loaded next time you `using Cthulhu`
+The saved preferences will be automatically loaded next time you `using Cthulhu`.
+
+See also: [`set_config`](@ref), [`set_config!`](@ref)
 
 ## Examples
 ```julia
@@ -57,4 +59,26 @@ function read_config!()
     @reset CONFIG.diagnostics_vscode = load_preference(Cthulhu, "diagnostics_vscode", CONFIG.diagnostics_vscode)
     @reset CONFIG.jump_always = load_preference(Cthulhu, "jump_always", CONFIG.jump_always)
     return CONFIG
+end
+
+"""
+    set_config(config::CthulhuConfig = CONFIG; parameters...)
+    set_config(config::CthulhuConfig, parameters::NamedTuple)
+
+Create a new `CthulhuConfig` from the parameters provided as keyword arguments,
+with all other parameters identical to those of `config`.
+"""
+function set_config end
+
+set_config(config::CthulhuConfig = CONFIG; parameters...) = set_config(config, NamedTuple(parameters))
+set_config(config::CthulhuConfig, parameters::NamedTuple) = setproperties(config, parameters)
+
+"""
+    set_config!(; kwargs...)
+
+Create a new `CthulhuConfig` with [`set_config`](@ref), then update the binding `Cthulhu.CONFIG`
+to now refer to that object.
+"""
+function set_config!(; kwargs...)
+    global CONFIG = set_config(CONFIG; kwargs...)
 end

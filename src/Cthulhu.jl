@@ -24,9 +24,14 @@ using Base: default_tt, unwrap_unionall, mapany
 
 global CompilerExt::Union{Nothing, Module}
 
+is_compiler_extension_loaded() = isdefined(@__MODULE__, :CompilerExt)
+function is_compiler_loaded()
+    pkgid = Base.PkgId(Base.UUID("807dbc54-b67e-4c79-8afb-eafe4df6f2e1"), "Compiler")
+    return haskey(Base.loaded_modules, pkgid)
+end
 function get_module_for_compiler_integration(; use_compiler_stdlib::Bool = true)
     !use_compiler_stdlib && return @__MODULE__
-    isdefined(@__MODULE__, :CompilerExt) || error("The Cthulhu -> Compiler extension must be loaded first")
+    is_compiler_extension_loaded() || error("The Cthulhu -> Compiler extension must be loaded first if `use_compiler_stdlib` is set to `true`")
     return something(CompilerExt, @__MODULE__)
 end
 
@@ -250,11 +255,10 @@ using PrecompileTools
 @setup_workload begin
     try
         @compile_workload begin
-            # terminal = Testing.VirtualTerminal()
-            # task = @async @descend terminal=terminal.tty gcd(1, 2)
-            # write(terminal, 'q')
-            # wait(task)
-            # finalize(terminal)
+            terminal = Testing.VirtualTerminal()
+            harness = Testing.@run terminal @descend terminal=terminal gcd(1, 2)
+            task = @async @descend terminal=terminal.tty gcd(1, 2)
+            @assert Testing.end_terminal_session(harness)
         end
     catch err
         @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())

@@ -47,7 +47,7 @@ end
 - `exception_types::Bool` `Intial state of "exception types" toggle. Defaults to `false`.
 - `inlining_costs::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
 - `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
-- `view::Symbol` Initial state of the view. Defaults to `:source`.
+- `view::Symbol` Initial state of the view. Defaults to `:source`. Can be either of `:source`, `:ast`, `:typed`, `:llvm` and `:native`. Non-default `AbstractProvider`s may further customize available views.
 - `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
 - `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
 - `jump_always::Bool` Initial state of "jump to source always" toggle. Defaults to `false`.

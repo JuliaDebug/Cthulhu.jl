@@ -1,6 +1,6 @@
 using Core.IR
 using Test
-using Cthulhu: get_inference_world, find_method_instance, generate_code_instance, should_regenerate_code_instance, lookup, get_ci, get_override, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, get_pc_effects, get_pc_remarks, get_pc_excts, get_inlining_costs, show_parameters
+using Cthulhu: get_inference_world, find_method_instance, generate_code_instance, lookup, get_ci, get_override, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, get_pc_effects, get_pc_remarks, get_pc_excts, get_inlining_costs, show_parameters
 using .CompilerIntegration: DefaultProvider, PC2Effects, PC2Remarks, PC2Excts, LookupResult
 using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
 using Logging: with_logger, NullLogger
@@ -12,8 +12,6 @@ function test_provider_api(provider, args...)
     @test isa(mi, MethodInstance)
     ci = generate_code_instance(provider, mi)
     @test isa(ci, CodeInstance)
-    ret = should_regenerate_code_instance(provider, ci)
-    @test isa(ret, Bool)
     result = lookup(provider, ci, false)
     @test isa(result, LookupResult)
     result = lookup(provider, ci, true)

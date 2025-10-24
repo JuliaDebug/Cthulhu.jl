@@ -3,16 +3,17 @@ function descend_with_error_handling(args...; kwargs...)
     try
         return _descend(args...; kwargs...)
     catch x
-        TypedSyntax.clear_all_vscode()
         isa(x, InterruptException) && return :interrupted
         rethrow(x)
+    finally
+        TypedSyntax.clear_all_vscode()
     end
     return nothing
 end
 
 function _descend(terminal::AbstractTerminal, provider::AbstractProvider, mi::MethodInstance; kwargs...)
     ci = generate_code_instance(provider, mi)
-    config = setproperties(CONFIG, NamedTuple(kwargs))
+    config = set_config(CONFIG; kwargs...)
     state = CthulhuState(provider; terminal, config, mi, ci)
     descend!(state)
 end
@@ -27,8 +28,13 @@ function _descend(terminal::AbstractTerminal, @nospecialize(args...); interp=Nat
     _descend(terminal, provider, args...; kwargs...)
 end
 
-_descend(@nospecialize(args...); terminal=default_terminal(), kwargs...) =
+_descend(@nospecialize(args...); terminal::AbstractTerminal=default_terminal(), kwargs...) =
     _descend(terminal, args...; kwargs...)
+
+function _descend(bookmark::Bookmark; terminal::AbstractTerminal=default_terminal(), kwargs...)
+    state = CthulhuState(bookmark; terminal, kwargs...)
+    descend!(state)
+end
 
 ##
 # descend! is the main driver function.
@@ -43,7 +49,7 @@ function descend!(state::CthulhuState)
     if !isa(commands, Vector{Command})
         error(lazy"""
         invalid `$AbstractProvider` API:
-        `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to return a `Vector{Command}` object.
+        `$(Cthulhu.commands)(provider::$(typeof(provider))` is expected to have `Vector{Command}` as return type.
         """)
     end
     while true
@@ -55,16 +61,10 @@ function descend!(state::CthulhuState)
 
         src = something(state.override, ci)
         result = lookup(provider, src, config.optimize)
-        if result === nothing
-            if should_regenerate_code_instance(provider, src)
-                additional_descend(src)
-                break
-            end
-        end
 
         if config.jump_always
             def = state.mi.def
-            if isa(def, Method)
+            if !isa(def, Method)
                 @warn "Can't jump to source location because the definition is not a method."
             else
                 if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
@@ -133,14 +133,15 @@ function descend!(state::CthulhuState)
             end
 
             ci = get_ci(callsite)
-            ci === nothing && continue
+            override = get_override(provider, info)
+            ci === nothing && override === nothing && continue
 
             # Recurse into the callsite.
 
             prev = save_descend_state(state)
             state.mi = get_mi(ci)
             state.ci = ci
-            state.override = get_override(provider, info)
+            state.override = override
             state.display_code = true
             status = descend!(state)
             status === :exited && break
@@ -168,9 +169,8 @@ function select_callsite(state::CthulhuState, callsites::Vector{Callsite}, sourc
     sub_callsites = map(ci -> Callsite(callsite.id, ci, callsite.head), info.callinfos)
     if isempty(sub_callsites)
         @eval Main begin
-            provider = $provider
-            mi = $mi
-            info = $info
+            state = $state
+            callsite = $callsite
         end
         error("Expected multiple callsites, but found none. Please fill an issue with a reproducing example.")
     end

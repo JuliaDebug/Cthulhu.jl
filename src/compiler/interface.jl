@@ -21,6 +21,8 @@ function generate_code_instance(provider::AbstractProvider, interp::AbstractInte
     return ci
 end
 
+function run_type_inference end
+
 get_override(provider::AbstractProvider, info::ConstPropCallInfo) = info.result
 get_override(provider::AbstractProvider, info::SemiConcreteCallInfo) = info
 get_override(provider::AbstractProvider, info::OCCallInfo) = get_override(provider, info.ci)

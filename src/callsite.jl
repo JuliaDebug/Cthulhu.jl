@@ -40,7 +40,7 @@ function Base.show(@nospecialize(io::IO), c::Callsite)
             print(io, '%')
         end
         limiter.width += 1 # for the '%' character
-        c.id != -1 && print(limiter, c.id, " = ")
+        print(limiter, c.id, " = ")
     end
     show_callsite(limiter, c, info)
     return nothing

@@ -2,7 +2,7 @@ module ExternalProviderModule
 
 using Core.IR
 
-import ..CompilerIntegration as CompilerIntegration
+import ..CompilerIntegration
 using ..CompilerIntegration: CC, ir_to_src, LookupResult, get_effects
 using .CC: InferenceResult, AbstractInterpreter, NativeInterpreter
 
@@ -104,6 +104,10 @@ function Cthulhu.lookup(provider::ExternalProvider, ci::CodeInstance, optimize::
     infos = copy(ir.stmts.info)
     return LookupResult(ir, src, rt, exct, infos, src.slottypes, effects, true #= optimized =#)
 end
+
+get_override(provider::ExternalProvider, info::Cthulhu.ConstPropCallInfo) = nothing
+get_override(provider::ExternalProvider, info::Cthulhu.SemiConcreteCallInfo) = nothing
+get_override(provider::ExternalProvider, info::Cthulhu.OCCallInfo) = nothing
 
 function Cthulhu.menu_commands(provider::ExternalProvider)
     commands = default_menu_commands(provider)

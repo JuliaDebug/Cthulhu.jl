@@ -12,11 +12,11 @@ display and callsite introspection features.
 Cthulhu relies mainly on the following types from Base:
 - `MethodInstance`, representing a specialization of a method.
 - `CodeInstance`, the high-level result of the Julia compilation pipeline.
-- `CodeInfo`, representing Julia code as output by `@code_typed` and similar macros.
+- `CodeInfo`, representing Julia code, as output e.g. by `@code_typed`.
 
 And a few from the compiler:
 - `Compiler.IRCode`, somewhat similar to `CodeInfo`, but in a different representation.
-- `Compiler.Effects`, code metadata used to model part of their semantics and behavior.
+- `Compiler.Effects`, code metadata used to model part of its semantics and behavior.
 - `Compiler.InferenceResult`, holding the results of inference.
 
 Cthulhu is integrated with the Julia compiler, and allows reuse
@@ -26,56 +26,62 @@ a `Compiler.AbstractInterpreter` (the interface type for Compiler, analogous
 to `AbstractProvider` for Cthulhu). This allows to reuse some of the commonly
 used patterns that are expected with the majority of Compiler integrations.
 The association is made by returning an `AbstractInterpreter` with
-`Cthulhu.get_abstract_interpreter(provider::SomeProvider)`.
+`Cthulhu.get_abstract_interpreter(provider::SomeProvider)`, which by default
+returns `nothing` (no association).
 
 The reverse is implemented as well: sometimes, an `AbstractInterpreter` implemented
 by a package is central enough that it is part of its API. In this case, this package
 may define a constructor `Cthulhu.AbstractProvider(interp::SomeInterpreter)` to automatically
 pick the correct provider just by doing `@descend interp=SomeInterpreter() f(x)`.
 
-The interface for `AbstractProvider` requires a few methods to be defined. If it supports
-`Cthulhu.get_abstract_interpreter(provider::SomeProvider)::SomeInterpreter`,
-then only the following is required:
+The interface for `AbstractProvider` requires a few methods to be defined. If it is associated
+with an `AbstractInterpreter` (see two paragraphs above), then only the following is required:
+- `run_type_inference(provider::SomeProvider, interp::SomeInterpreter, mi::MethodInstance)` to emit a `CodeInstance`
+  by invoking regular type inference, typically calling `typeinf_` methods from Compiler.
 - `OptimizedSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
 - `OptimizedSource(provider::SomeProvider, interp::SomeInterpreter, result::InferenceResult)`
   (for uncached inference results, e.g. when looking up callsites emanating from concrete evaluation)
 - `InferredSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
 
-With an optional method to specify how to run type inference:
-- `run_type_inference(provider::SomeProvider, interp::SomeInterpreter, mi::MethodInstance)` to emit a `CodeInstance`
-  by invoking regular type inference, typically calling `typeinf_` methods from Compiler. By default, this uses
-  `Compiler.typeinf_ext`.
-
-For an `AbstractProvider` that is not associated with any particular `Compiler.AbstractInterpreter`,
+By default, an `AbstractProvider` is not associated with any particular `Compiler.AbstractInterpreter`,
+with `Cthulhu.get_abstract_interpreter(provider::SomeProvider)` returning `nothing`. In this case,
 the following methods are required:
-- `get_inference_world(provider::SomeProvider)`, returning the world in which the provider operates.
-- `find_method_instance(provider::SomeProvider, tt::Type{<:Tuple}, world::UInt)`, to construct a
-  `MethodInstance` from a tuple type.
+- `get_inference_world(provider::SomeProvider)`, returning the world in which the provider operates. Methods and bindings (including e.g. types and globals) defined after this world age should not be taken into account when providing the data Cthulhu needs.
+- `find_method_instance(provider::SomeProvider, tt::Type{<:Tuple}, world::UInt)`, to return the specialization of the matching method for `tt`, returning a `MethodInstance`.
 - `generate_code_instance(provider::SomeProvider, mi::MethodInstance)` to emit the `CodeInstance`
-  that will hold compilation results to be later retrieved with `LookupResult`.
+  that holds compilation results to be later retrieved with `LookupResult`.
 - `LookupResult(provider::SomeProvider, src, optimize::Bool)` to assemble most of the information
   that Cthulhu needs to display code and to provide callsites to select for further descent. `src`
-  is the generated `CodeInstance` or any override emanating from `get_override(provider::SomeProvider, info::Compiler.CallInfo)`.
+  is the generated `CodeInstance` or any override emanating from `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)` (more on that a few paragraphs below).
   which by default may return `InferenceResult` (constant propagation) or `SemiConcreteCallInfo` (semi-concrete evaluation). This "override" replaces a `CodeInstance` for callsites
-  that are semantically associated with one but which lost 
-- `find_caller_of(provider::SomeProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)` to find callers for [`ascend`](@ref).
+  that are semantically associated with one but which have further information available, or for which the compiler decides to not cache one. 
+- `find_caller_of(provider::SomeProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)` to find occurrences of calls to `callee` in the provided method instance. This is the backbone of [`ascend`](@ref), and is not used for `descend`.
 
-Callsites are retrieved by inspecting `Compiler.CallInfo` data structures, which are expression-level annotations relating an expression
-to the process that produced them. In most cases, expressions semantically related to a call to another function will have a `CallInfo`
-that maps to the relevant `CodeInstance`. However, there may be cases where a `CodeInstance` is not readily available: that is the case for
-constant propagation (the original `CodeInstance` is not kept if the result is inferred to a constant), and for semi-concrete evaluation
-which produces refined IR to look into instead.
+Callsites are retrieved by inspecting `Compiler.CallInfo` data structures (which are currently distinct from `Cthulhu.CallInfo`, see the warning below), which are metadata
+semantically attached to expressions, relating one to the process that produced them.
+In most cases, expressions semantically related to a call to another function will have a `Compiler.CallInfo` attached
+that maps to the relevant `CodeInstance`. However, it may be useful to note that there may be cases where a `CodeInstance` is not readily available: that is the case for
+constant propagation (the original `CodeInstance` is not kept if the result is
+inferred to a constant), and for semi-concrete evaluation which produces temporary refined IR
+that contains more accurate information than the `CodeInstance` it originates from.
 
-When selecting a callsite, a `LookupResult` is constructed from the data that originates from the corresponding `CallInfo` structure.
+When selecting a callsite, a `LookupResult` is constructed from the data that originates from the corresponding `Cthulhu.CallInfo` structure (which is derived from the `Compiler.CallInfo` metadata).
 Generally, this will be a `CodeInstance`, but it may be overriden with another source, depending on the implementation of
-`get_override(provider::SomeProvider, info::Compiler.CallInfo)` (which may be extended for custom providers).
-By default, the override will be either a `Compiler.SemiConcreteCallInfo` for semi-concrete evaluation, or a `Compiler.InferenceResult`
-for the results of constant propagation.
+`get_override(provider::SomeProvider, info::Cthulhu.CallInfo)` (which may be extended for custom providers).
+By default, the override will be either a `Compiler.SemiConcreteCallInfo` for semi-concrete
+evaluation, or a `Compiler.InferenceResult` for the results of constant propagation.
 
-Optionally, `AbstractProvider`s may extend the defaults by extending the following:
-- `should_regenerate_code_instance(provider::SomeProvider, ci::CodeInstance)`, in case we happened
-  to have a `CodeInstance` available, but we still need to process it to get the data we need to provide
-  a [`LookupResult`](@ref).
+!!! warn
+    `Compiler.CallInfo` and `Cthulhu.CallInfo` are currently distinct abstract types.
+    This part of Cthulhu will likely be subject to change, and is not yet publicly
+    available for customization by `AbstractProvider`s beyond its downstream use via `get_override`.
+    If feeling adventurous, you may extend the `Cthulhu.find_callsites` internal function,
+    however you are encouraged to file an issue and/or contribute to making this part more
+    accessible by breaking it into well-interfaced parts instead of duplicating its implementation.
+
+Optionally, `AbstractProvider`s may modify default behavior by extending the following:
+- `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)`: return a data structure that is
+  more accurate than the `CodeInstance` associated with a given `Cthulhu.CallInfo`.
 
 If any of the relevant `CthulhuConfig` fields may be set, these should be implemented as well
 or will give a warning by default when called:
@@ -99,7 +105,9 @@ or will give a warning by default when called:
 
 If you do not intend to provide a method that would be required for a specific UI component (for example,
 you do not want to support displaying remarks, effects or exception types), you should extend
-`Cthulhu.menu_commands(provider::SomeProvider)` and delete the corresponding command from `Cthulhu.default_menu_commands(provider)`.
+`Cthulhu.menu_commands(provider::SomeProvider)` and return a list of commands that excludes the
+corresponding command. To that effect, you can use `Cthulhu.default_menu_commands(provider)`
+and simply filter out the relevant command.
 """
 abstract type AbstractProvider end
 
@@ -132,8 +140,6 @@ function generate_code_instance(provider::AbstractProvider, mi::MethodInstance)
     error(lazy"Not implemented for $provider")
 end
 
-should_regenerate_code_instance(provider::AbstractProvider, ci::CodeInstance) = false
-
 get_override(provider::AbstractProvider, @nospecialize(info)) = nothing
 
 function lookup(provider::AbstractProvider, src, optimize::Bool)
@@ -146,11 +152,11 @@ function lookup(provider::AbstractProvider, src, optimize::Bool)
 end
 
 get_pc_remarks(provider::AbstractProvider, ci::CodeInstance) =
-    @warn "Remarks could not be retrieved for $ci for provider $(typeof(provider))"
+    @warn "Remarks could not be retrieved for $ci with provider type $(typeof(provider))"
 get_pc_effects(provider::AbstractProvider, ci::CodeInstance) =
-    @warn "Effects could not be retrieved for $ci for provider $(typeof(provider))"
+    @warn "Effects could not be retrieved for $ci with provider type $(typeof(provider))"
 get_pc_excts(provider::AbstractProvider, ci::CodeInstance) =
-    @warn "Exception types could not be retrieved for $ci for provider $(typeof(provider))"
+    @warn "Exception types could not be retrieved for $ci with provider type $(typeof(provider))"
 
 function find_caller_of(provider::AbstractProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)
     interp = get_abstract_interpreter(provider)
@@ -167,5 +173,5 @@ end
 function show_parameters(io::IO, provider::AbstractProvider)
     interp = get_abstract_interpreter(provider)
     interp !== nothing && return show_parameters(io, provider, interp)
-    error(lazy"Not implemented for $provider")
+    @warn "Not implemented for provider type $(typeof(provider))"
 end

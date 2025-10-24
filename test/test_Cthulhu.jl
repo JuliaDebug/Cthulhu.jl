@@ -1,11 +1,11 @@
 module test_Cthulhu
 
-using Test, StaticArrays, Random, Accessors
+using Test, StaticArrays, Random
 using Core: Const
 
 using Cthulhu: Cthulhu as _Cthulhu, callstring
 const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
-using .Cthulhu: CC, DefaultProvider, CthulhuConfig, CONFIG
+using .Cthulhu: CC, DefaultProvider, CthulhuConfig, CONFIG, set_config, set_config!
 
 include("setup.jl")
 include("irutils.jl")
@@ -622,7 +622,7 @@ end
     end
     function doprint(f)
         provider, mi, ci, result = cthulhu_info(f; optimize = false)
-        config = @set CONFIG.view = :typed
+        config = set_config(CONFIG; view = :typed)
         state = CthulhuState(provider; mi, ci, config)
         io = IOBuffer()
         Cthulhu.cthulhu_typed(io, provider, state, result)
@@ -826,7 +826,7 @@ end
 
 @testset "Bookmarks" begin
     provider, mi, ci, result = cthulhu_info(sqrt, (Float64,))
-    config = setproperties(CONFIG, (; view = :typed, optimize = true))
+    config = set_config(CONFIG; view = :typed, optimize = true)
     b = Cthulhu.Bookmark(provider, config, ci)
 
     @testset "code_typed(bookmark)" begin
@@ -864,9 +864,9 @@ end
 
 @testset "preferences" begin
     # Test that load and save are able to set state
-    Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = true, debuginfo = :none))
+    set_config!(; enable_highlighter = true, debuginfo = :none)
     Cthulhu.save_config!()
-    Cthulhu.CONFIG = setproperties(CONFIG, (; enable_highlighter = false, debuginfo = :compact))
+    set_config!(; enable_highlighter = false, debuginfo = :compact)
     @test Cthulhu.CONFIG.enable_highlighter === false
     @test Cthulhu.CONFIG.debuginfo === :compact
 

@@ -15,11 +15,11 @@ function transform(::Val{:CuFunction}, provider, callsite, callexpr, src, mi, sl
     return Callsite(callsite.id, CuCallInfo(callinfo(provider, sig, Nothing; world)), callsite.head)
 end
 
-function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::CodeInstance, annotate_source::Bool=false, pc2excts::Union{Nothing,PC2Excts}=nothing)
+function find_callsites(provider::AbstractProvider, result::resultResult, ci::CodeInstance, annotate_source::Bool=false, pc2excts::Union{Nothing,PC2Excts}=nothing)
     mi = get_mi(ci)
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]
-    src = something(lookup.ir, lookup.src)::Union{IRCode, CodeInfo}
+    src = something(result.ir, result.src)::Union{IRCode, CodeInfo}
     stmts = isa(src, IRCode) ? src.stmts.stmt : src.code
     nstmts = length(stmts)
     _, mappings = annotate_source ? get_typed_sourcetext(mi, src, nothing; warn=false) : (nothing, nothing)
@@ -28,9 +28,8 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
         stmt = stmts[id]
         isa(stmt, Expr) || continue
         callsite = nothing
-        # XXX: should we allow `result.infos === nothing`?
-        if lookup.infos !== nothing && is_call_expr(stmt, lookup.optimized)
-            info = lookup.infos[id]
+        if is_call_expr(stmt, result.optimized)
+            info = result.infos[id]
             if info !== nothing
                 if isa(info, CC.UnionSplitApplyCallInfo)
                     info = something(unpack_cthulhuinfo_from_unionsplit(info), info)
@@ -40,27 +39,27 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
                     (; info, rt, exct, effects) = info.meta
                     @assert !isa(info, CthulhuCallInfo)
                 else
-                    rt = ignorelimited(argextype(SSAValue(id), src, sptypes, lookup.slottypes))
+                    rt = ignorelimited(argextype(SSAValue(id), src, sptypes, result.slottypes))
                     exct = isnothing(pc2excts) ? nothing : get(pc2excts, id, nothing)
                     effects = nothing
                 end
                 # in unoptimized IR, there may be `slot = rhs` expressions, which `argextype` doesn't handle
                 # so extract rhs for such an case
                 local args = stmt.args
-                if !lookup.optimized
+                if !result.optimized
                     args = (ignorelhs(stmt)::Expr).args
                 end
                 argtypes = Vector{Any}(undef, length(args))
-                ft = ignorelimited(argextype(args[1], src, sptypes, lookup.slottypes))
+                ft = ignorelimited(argextype(args[1], src, sptypes, result.slottypes))
                 f = CC.singleton_type(ft)
                 f === Core.Intrinsics.llvmcall && continue
                 f === Core.Intrinsics.cglobal && continue
                 argtypes[1] = ft
                 for i = 2:length(args)
-                    t = argextype(args[i], src, sptypes, lookup.slottypes)
+                    t = argextype(args[i], src, sptypes, result.slottypes)
                     argtypes[i] = ignorelimited(t)
                 end
-                callinfos = process_info(provider, lookup, info, argtypes, rt, exct, effects)
+                callinfos = process_info(provider, result, info, argtypes, rt, exct, effects)
                 isempty(callinfos) && continue
                 callsite = let
                     if length(callinfos) == 1
@@ -78,7 +77,7 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
             (stmt isa Expr) || continue
             (; head, args) = stmt
             if head === :invoke
-                rt = argextype(SSAValue(id), src, sptypes, lookup.slottypes)
+                rt = argextype(SSAValue(id), src, sptypes, result.slottypes)
                 arg1 = args[1]::CodeInstance
                 effects = get_effects(arg1) # TODO
                 callsite = Callsite(id, EdgeCallInfo(arg1, rt, effects), head)
@@ -86,11 +85,12 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
                 # special handling of jl_new_task
                 length(args) > 0 || continue
                 arg1 = args[1]
+                isexpr(arg1, :tuple) && (arg1 = arg1.args[1])
                 if arg1 isa QuoteNode
                     cfunc = arg1.value
                     if cfunc === :jl_new_task
                         func = args[6]
-                        ftype = widenconst(argextype(func, src, sptypes, lookup.slottypes))
+                        ftype = widenconst(argextype(func, src, sptypes, result.slottypes))
                         sig = Tuple{ftype}
                         callsite = Callsite(id, TaskCallInfo(callinfo(provider, sig, nothing; world=get_inference_world(provider))), head)
                     end
@@ -104,7 +104,7 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
                 ci = get_ci(info)
                 meth = ci.def.def
                 if isa(meth, Method) && nameof(meth.module) === :CUDAnative && meth.name === :cufunction
-                    callsite = transform(Val(:CuFunction), provider, callsite, c, src, ci.def, lookup.slottypes; world=get_inference_world(provider))
+                    callsite = transform(Val(:CuFunction), provider, callsite, c, src, ci.def, result.slottypes; world=get_inference_world(provider))
                 end
             end
 
@@ -122,7 +122,7 @@ function find_callsites(provider::AbstractProvider, lookup::LookupResult, ci::Co
     return callsites, sourcenodes
 end
 
-function process_const_info(provider::AbstractProvider, lookup::LookupResult, @nospecialize(thisinfo),
+function process_const_info(provider::AbstractProvider, ::LookupResult, @nospecialize(thisinfo),
     argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result),
     @nospecialize(exct))
     if isnothing(result)
@@ -153,10 +153,10 @@ function process_const_info(provider::AbstractProvider, lookup::LookupResult, @n
     end
 end
 
-function process_info(provider::AbstractProvider, lookup::LookupResult, @nospecialize(info::CCCallInfo),
+function process_info(provider::AbstractProvider, result::LookupResult, @nospecialize(info::CCCallInfo),
                       argtypes::ArgTypes, @nospecialize(rt),
                       @nospecialize(exct), effects::Union{Effects, Nothing})
-    process_recursive(@nospecialize(newinfo)) = process_info(provider, lookup, newinfo, argtypes, rt, exct, effects)
+    process_recursive(@nospecialize(newinfo)) = process_info(provider, result, newinfo, argtypes, rt, exct, effects)
 
     if isa(info, CC.ModifyOpInfo)
         # Just ignore it.
@@ -192,14 +192,14 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return CallInfo[let
-            process_const_info(provider, lookup, infos[i], argtypes, rt, value, exct)
+            process_const_info(provider, result, infos[i], argtypes, rt, value, exct)
         end for (i, value) in enumerate(info.results)]
     elseif isa(info, CC.InvokeCallInfo)
         edge = info.edge
         if edge !== nothing
             effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
-            innerinfo = process_const_info(provider, lookup, thisinfo, argtypes, rt, info.result, exct)
+            innerinfo = process_const_info(provider, result, thisinfo, argtypes, rt, info.result, exct)
         else
             innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
         end
@@ -210,7 +210,7 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
         if edge !== nothing
             effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
-            innerinfo = process_const_info(provider, lookup, thisinfo, argtypes, rt, info.result, exct)
+            innerinfo = process_const_info(provider, result, thisinfo, argtypes, rt, info.result, exct)
         else
             innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
         end
@@ -226,7 +226,7 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
         return CallInfo[]
     elseif isa(info, CC.ReturnTypeCallInfo)
         newargtypes = argtypes[2:end]
-        callinfos = process_info(provider, lookup, info.info, newargtypes, unwrapType(widenconst(rt)), exct, effects)
+        callinfos = process_info(provider, result, info.info, newargtypes, unwrapType(widenconst(rt)), exct, effects)
         if length(callinfos) == 1
             vmi = only(callinfos)
         else
@@ -245,12 +245,12 @@ function process_info(provider::AbstractProvider, lookup::LookupResult, @nospeci
     else
         @eval Main begin
             provider = $provider
+            result = $result
             info = $info
             argtypes = $argtypes
             rt = $rt
-            optimized = $(lookup.optimized)
         end
-        error("inspect `Main.provider|info|argtypes|rt|optimized`")
+        error("unhandled `Compiler.CallInfo` of type $(typeof(info)); you may inspect `Main.provider|result|info|argtypes|rt`")
     end
 end
 

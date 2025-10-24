@@ -1,18 +1,37 @@
 module test_codeview
 
-using Test, Revise, Accessors
+using Test
 using Logging: NullLogger, with_logger
 
-import Cthulhu as _Cthulhu
-const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
-using .Cthulhu: CthulhuState, view_function, CONFIG, cthulhu_typed
+using Cthulhu: Cthulhu, is_compiler_loaded, CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 
-# NOTE setup for `cthulhu_ast`
-include("TestCodeViewSandbox.jl")
-(; testf_revise) = TestCodeViewSandbox
-Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
+if is_compiler_loaded()
+    @eval using Revise
+    Revise.track(Base) # get the `@info` log now, to avoid polluting test outputs later
+    file = tempname() * ".jl"
+    open(file, "w+") do io
+        println(io, """
+        module Sandbox
+
+        function testf_revise()
+            T = rand() > 0.5 ? Int64 : Float64
+            sum(rand(T, 100))
+        end
+
+        end
+        """)
+    end
+    include(file)
+    (; testf_revise) = Sandbox
+    Revise.track(Sandbox, file)
+else
+    function testf_revise()
+        T = rand() > 0.5 ? Int64 : Float64
+        sum(rand(T, 100))
+    end
+end
 
 @testset "printer test" begin
     tf = (true, false)
@@ -21,11 +40,12 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
         @testset "view: $view" for view in (:source, :ast, :typed, :llvm, :native)
             view === :ast && !isdefined(@__MODULE__(), :Revise) && continue
             @testset "debuginfo: $debuginfo" for debuginfo in (:none, :source, :compact)
-                config = setproperties(CONFIG, (; view, debuginfo))
+                config = set_config(CONFIG; view, debuginfo)
                 state = CthulhuState(provider; config, ci, mi)
                 io = IOBuffer()
                 view_function(state)(io, provider, state, result)
-                @test !isempty(String(take!(io))) # just check it works
+                output = String(take!(io))
+                @test !isempty(output) # just check it works
             end
         end
     end
@@ -36,7 +56,7 @@ Revise.track(TestCodeViewSandbox, normpath(@__DIR__, "TestCodeViewSandbox.jl"))
             @testset "hide_type_stable: $hide_type_stable" for hide_type_stable in tf
                 @testset "inlining_costs: $inlining_costs" for inlining_costs in tf
                     @testset "type_annotations: $type_annotations" for type_annotations in tf
-                        config = setproperties(CONFIG, (; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations))
+                        config = set_config(CONFIG; view = :typed, debuginfo, iswarn, hide_type_stable, inlining_costs, type_annotations)
                         state = CthulhuState(provider; config, ci, mi)
                         io = IOBuffer()
                         view_function(state)(io, provider, state, result)
@@ -52,7 +72,7 @@ end
     function printer(provider, mi, ci, result)
         return function prints(; kwargs...)
             io = IOBuffer()
-            config = setproperties(CONFIG, (; debuginfo = :none, kwargs...))
+            config = set_config(CONFIG; debuginfo = :none, kwargs...)
             state = CthulhuState(provider; config, ci, mi)
             with_logger(NullLogger()) do
                 cthulhu_typed(io, provider, state, result)
@@ -113,5 +133,16 @@ end
         @test occursin("undefvar", s)
     end
 end;
+
+@testset "Regressions" begin
+    # Issue #675
+    provider, mi, ci, result = cthulhu_info(testf_revise; optimize=false)
+    config = set_config(; view = :source, debuginfo = :none)
+    state = CthulhuState(provider; config, ci, mi)
+    io = IOBuffer()
+    view_function(state)(io, provider, state, result)
+    output = String(take!(io))
+    @test isa(output, String)
+end
 
 end # module test_codeview
