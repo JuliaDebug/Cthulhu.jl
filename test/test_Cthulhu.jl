@@ -3,12 +3,10 @@ module test_Cthulhu
 using Test, StaticArrays, Random
 using Core: Const
 
-using Cthulhu: Cthulhu as _Cthulhu, callstring
-const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
-using .Cthulhu: CC, DefaultProvider, CthulhuConfig, CONFIG, set_config, set_config!
-
 include("setup.jl")
 include("irutils.jl")
+
+using Cthulhu: callstring
 
 # NOTE: From Julia version `v"1.12.0-DEV.1581"` onwards, Cthulhu uses the Compiler.jl stdlib.
 # Therefore, for queries on its data structures, use the utilities from `Compiler === Cthulhu.CC`

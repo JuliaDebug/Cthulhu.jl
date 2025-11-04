@@ -1,6 +1,6 @@
 Base.Experimental.@compiler_options compile=min optimize=1
 
-import .Cthulhu: AbstractProvider, get_abstract_interpreter, get_inference_world, find_method_instance, generate_code_instance, run_type_inference, get_override, lookup, find_caller_of, get_inlining_costs, show_parameters, get_ci, get_rt, get_pc_remarks, get_pc_effects, get_pc_excts, show_callsite, show_callinfo, print_callsite_info, cthulhu_source, cthulhu_typed, cthulhu_ast, cthulhu_llvm, cthulhu_native, find_callsites
+import .Cthulhu: AbstractProvider, get_abstract_interpreter, get_inference_world, find_method_instance, generate_code_instance, get_override, lookup, find_caller_of, get_inlining_costs, show_parameters, get_ci, get_rt, get_pc_remarks, get_pc_effects, get_pc_excts, show_callsite, show_callinfo, print_callsite_info, cthulhu_source, cthulhu_typed, cthulhu_ast, cthulhu_llvm, cthulhu_native, find_callsites
 using .Cthulhu: CthulhuState, CthulhuConfig, CallInfo, Callsite, cached_exception_type, get_mi
 
 using Base: isvarargtype, unwrapva, unwrap_unionall, mapany, get_world_counter

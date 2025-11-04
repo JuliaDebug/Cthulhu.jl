@@ -15,7 +15,7 @@ function transform(::Val{:CuFunction}, provider, callsite, callexpr, src, mi, sl
     return Callsite(callsite.id, CuCallInfo(callinfo(provider, sig, Nothing; world)), callsite.head)
 end
 
-function find_callsites(provider::AbstractProvider, result::resultResult, ci::CodeInstance, annotate_source::Bool=false, pc2excts::Union{Nothing,PC2Excts}=nothing)
+function find_callsites(provider::AbstractProvider, result::LookupResult, ci::CodeInstance, annotate_source::Bool=false, pc2excts::Union{Nothing,PC2Excts}=nothing)
     mi = get_mi(ci)
     sptypes = sptypes_from_meth_instance(mi)
     callsites, sourcenodes = Callsite[], Union{TypedSyntax.MaybeTypedSyntaxNode,Callsite}[]

@@ -15,7 +15,7 @@ end
     @testset "Terminal tests" include("test_terminal.jl")
     @testset "AbstractInterpreter" include("test_AbstractInterpreter.jl")
     after = is_compiler_extension_loaded()
-    @assert before === after # make sure we don't mess up the test setup by loading Compiler durin tests
+    @assert before === after # make sure we don't mess up the test setup by loading Compiler during tests
     if !is_compiler_extension_loaded()
         @eval import Compiler # trigger the extension
         if is_compiler_extension_loaded() # allow extension to be disabled locally during development

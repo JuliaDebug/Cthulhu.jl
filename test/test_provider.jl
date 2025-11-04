@@ -4,8 +4,8 @@ using Test
 using Core.IR
 
 @eval module Impl
-using Cthulhu: Cthulhu, is_compiler_extension_loaded, get_module_for_compiler_integration
-const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = is_compiler_extension_loaded())
+using Cthulhu: Cthulhu, is_compiler_loaded, get_module_for_compiler_integration
+const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = is_compiler_loaded())
 using .CompilerIntegration: DefaultProvider
 include("provider_utils.jl")
 include("providers/CountingProviderModule.jl")

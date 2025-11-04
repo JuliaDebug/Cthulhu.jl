@@ -3,8 +3,8 @@ module OverlayProviderModule # inspired by the Cthulhu integration at serenity4/
 using Core.IR
 
 import ..CompilerIntegration
-using ..CompilerIntegration: CC, CthulhuInterpreter, OptimizedSource, InferredSource
-using .CC: InferenceResult, OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams, run_type_inference
+using ..CompilerIntegration: CC, CthulhuInterpreter, OptimizedSource, InferredSource, run_type_inference
+using .CC: InferenceResult, OverlayMethodTable, AbstractInterpreter, InferenceResult, InferenceParams, OptimizationParams
 
 using Cthulhu: Cthulhu, AbstractProvider
 

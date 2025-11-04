@@ -1,5 +1,7 @@
 using Test, InteractiveUtils
-using Cthulhu: AbstractProvider, CthulhuConfig, CthulhuState, find_method_instance, generate_code_instance, lookup, find_callsites, get_effects, Callsite, get_mi
+using Cthulhu: Cthulhu, AbstractProvider, CthulhuConfig, CONFIG, set_config, set_config!, CthulhuState, find_method_instance, generate_code_instance, lookup, find_callsites, get_effects, Callsite, get_mi, get_module_for_compiler_integration, is_compiler_loaded
+const CompilerIntegration = get_module_for_compiler_integration(use_compiler_stdlib = is_compiler_loaded())
+using .CompilerIntegration: CC, DefaultProvider, Effects
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
 end
@@ -7,7 +9,7 @@ end
 # InteractiveUtils.@activate Compiler # use the Compiler.jl stdlib for the Base reflections too
 
 function cthulhu_info(@nospecialize(f), @nospecialize(tt=());
-                      optimize=true, interp=Cthulhu.CC.NativeInterpreter())
+                      optimize=true, interp=CC.NativeInterpreter())
     provider = AbstractProvider(interp)
     mi = find_method_instance(provider, f, tt)
     ci = generate_code_instance(provider, mi)
@@ -18,7 +20,7 @@ end
 function find_callsites_by_ftt(@nospecialize(f), @nospecialize(TT=Tuple{}); optimize=true)
     provider, mi, ci, result = cthulhu_info(f, TT; optimize)
     callsites, _ = find_callsites(provider, result, ci)
-    @test all(c -> get_effects(c) isa Cthulhu.Effects, callsites)
+    @test all(c -> get_effects(c) isa Effects, callsites)
     return callsites
 end
 

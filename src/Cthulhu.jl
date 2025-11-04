@@ -47,9 +47,9 @@ include("interface.jl")
 include("callsite.jl")
 include("state.jl")
 include("ui.jl")
+include("bookmark.jl")
 include("descend.jl")
 include("ascend.jl")
-include("bookmark.jl")
 include("backedges.jl")
 include("testing.jl")
 
@@ -247,9 +247,7 @@ with the option to `descend` into intermediate calls.
 Keyword arguments `pagesize, dynamic, maxsize` are passed to `Cthulhu.FoldingTrees.TreeMenu`.
 Any remaining `kwargs` are passed to [`descend`](@ref).
 """
-function ascend(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].ascend_impl(args...; kwargs...)
-end
+ascend(@nospecialize(args...); kwargs...) = ascend_impl(args...; kwargs...)
 
 using PrecompileTools
 @setup_workload begin

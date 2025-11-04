@@ -4,8 +4,8 @@ using Core: Const
 using Test, REPL, LinearAlgebra
 using Cthulhu.Testing
 using Cthulhu.Testing: @run
-using Cthulhu: Cthulhu as _Cthulhu, is_compiler_loaded, descend, descend_code_warntype, @descend, ascend
-const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
+using Cthulhu: Cthulhu, get_module_for_compiler_integration, is_compiler_loaded, descend, descend_code_warntype, @descend, ascend
+const CompilerIntegration = get_module_for_compiler_integration(use_compiler_stdlib = is_compiler_loaded())
 
 if isdefined(parentmodule(@__MODULE__), :VSCodeServer)
     using ..VSCodeServer
@@ -236,7 +236,7 @@ end
     @test end_terminal_session(harness)
 
     # descend with MethodInstances
-    mi = _Cthulhu.get_specialization(Definitions.callfmulti, Tuple{typeof(Ref{Any}(1))})
+    mi = Cthulhu.get_specialization(Definitions.callfmulti, Tuple{typeof(Ref{Any}(1))})
     terminal = VirtualTerminal()
     harness = @run terminal descend(mi; view=:typed, optimize=false, terminal)
 
@@ -308,7 +308,7 @@ end
     @inline   inner2(x) = 2*inner3(x)
               inner1(x) = -1*inner2(x)
     inner1(0x0123)
-    mi = _Cthulhu.get_specialization(inner3, Tuple{UInt16})
+    mi = Cthulhu.get_specialization(inner3, Tuple{UInt16})
     terminal = VirtualTerminal()
     harness = @run terminal ascend(terminal, mi; pagesize=11)
 

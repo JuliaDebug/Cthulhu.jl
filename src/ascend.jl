@@ -1,5 +1,5 @@
 function ascend_impl(
-        term, mi::MethodInstance;
+        term, mi;
         interp=Base.Compiler.NativeInterpreter(),
         provider::AbstractProvider=AbstractProvider(interp),
         pagesize::Int=10, dynamic::Bool=false, maxsize::Int=pagesize,
