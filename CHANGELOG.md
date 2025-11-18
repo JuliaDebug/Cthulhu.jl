@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- The way that packages integrate with Cthulhu to customize the behavior of code introspection has been redesigned (see https://github.com/JuliaDebug/Cthulhu.jl/pull/662 and https://github.com/JuliaDebug/Cthulhu.jl/pull/677 for more details).
+- The way that packages integrate with Cthulhu to customize the behavior of code introspection has been redesigned (https://github.com/JuliaDebug/Cthulhu.jl/pull/662 and https://github.com/JuliaDebug/Cthulhu.jl/pull/677). See the docstring of `Cthulhu.AbstractProvider` for more details.
 - A new UI command mapped to `DEL` (backspace, `'\x7f'`) now allows to go back (ascend) with a single key press.
 
 ### Breaking changes
