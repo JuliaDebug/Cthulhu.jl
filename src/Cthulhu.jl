@@ -3,7 +3,7 @@ module Cthulhu
 export @descend, @descend_code_typed, @descend_code_warntype,
     descend, descend_code_typed, descend_code_warntype, ascend,
     AbstractProvider,
-    get_module_for_compiler_integration
+    is_compiler_loaded, is_compiler_extension_loaded, get_module_for_compiler_integration
 
 const CC = Base.Compiler
 const IRShow = Base.IRShow
@@ -52,6 +52,8 @@ include("descend.jl")
 include("ascend.jl")
 include("backedges.jl")
 include("testing.jl")
+
+function ir_to_src end
 
 include("CthulhuCompiler.jl")
 

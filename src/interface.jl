@@ -9,6 +9,8 @@ display and callsite introspection features.
     This interface is still considered experimental at this time; future changes are to
     be expected, in which case we will do our best to communicate them in CHANGELOG.md.
 
+# Extended help
+
 Cthulhu relies mainly on the following types from Base:
 - `MethodInstance`, representing a specialization of a method.
 - `CodeInstance`, the high-level result of the Julia compilation pipeline.
@@ -34,6 +36,8 @@ by a package is central enough that it is part of its API. In this case, this pa
 may define a constructor `Cthulhu.AbstractProvider(interp::SomeInterpreter)` to automatically
 pick the correct provider just by doing `@descend interp=SomeInterpreter() f(x)`.
 
+## Interface
+
 The interface for `AbstractProvider` requires a few methods to be defined. If it is associated
 with an `AbstractInterpreter` (see two paragraphs above), then only the following is required:
 - `run_type_inference(provider::SomeProvider, interp::SomeInterpreter, mi::MethodInstance)` to emit a `CodeInstance`
@@ -42,6 +46,8 @@ with an `AbstractInterpreter` (see two paragraphs above), then only the followin
 - `OptimizedSource(provider::SomeProvider, interp::SomeInterpreter, result::InferenceResult)`
   (for uncached inference results, e.g. when looking up callsites emanating from concrete evaluation)
 - `InferredSource(provider::SomeProvider, interp::SomeInterpreter, ci::CodeInstance)`
+If `Compiler` is used as a standard library, see the next section about the compiler integration to know
+from which module these symbols should be taken.
 
 By default, an `AbstractProvider` is not associated with any particular `Compiler.AbstractInterpreter`,
 with `Cthulhu.get_abstract_interpreter(provider::SomeProvider)` returning `nothing`. In this case,
@@ -49,47 +55,11 @@ the following methods are required:
 - `get_inference_world(provider::SomeProvider)`, returning the world in which the provider operates. Methods and bindings (including e.g. types and globals) defined after this world age should not be taken into account when providing the data Cthulhu needs.
 - `find_method_instance(provider::SomeProvider, tt::Type{<:Tuple}, world::UInt)`, to return the specialization of the matching method for `tt`, returning a `MethodInstance`.
 - `generate_code_instance(provider::SomeProvider, mi::MethodInstance)` to emit the `CodeInstance`
-  that holds compilation results to be later retrieved with `LookupResult`.
-- `LookupResult(provider::SomeProvider, src, optimize::Bool)` to assemble most of the information
+  that holds compilation results to be later retrieved with `lookup`.
+- `lookup(provider::SomeProvider, src, optimize::Bool)` to assemble most of the information
   that Cthulhu needs to display code and to provide callsites to select for further descent. `src`
   is the generated `CodeInstance` or any override emanating from `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)` (more on that a few paragraphs below).
-  which by default may return `InferenceResult` (constant propagation) or `SemiConcreteCallInfo` (semi-concrete evaluation). This "override" replaces a `CodeInstance` for callsites
-  that are semantically associated with one but which have further information available, or for which the compiler decides to not cache one. 
 - `find_caller_of(provider::SomeProvider, callee::Union{MethodInstance,Type}, mi::MethodInstance; allow_unspecialized::Bool=false)` to find occurrences of calls to `callee` in the provided method instance. This is the backbone of [`ascend`](@ref), and is not used for `descend`.
-
-Callsites are retrieved by inspecting `Compiler.CallInfo` data structures (which are currently distinct from `Cthulhu.CallInfo`, see the warning below), which are metadata
-semantically attached to expressions, relating one to the process that produced them.
-In most cases, expressions semantically related to a call to another function will have a `Compiler.CallInfo` attached
-that maps to the relevant `CodeInstance`. However, it may be useful to note that there may be cases where a `CodeInstance` is not readily available: that is the case for
-constant propagation (the original `CodeInstance` is not kept if the result is
-inferred to a constant), and for semi-concrete evaluation which produces temporary refined IR
-that contains more accurate information than the `CodeInstance` it originates from.
-
-When selecting a callsite, a `LookupResult` is constructed from the data that originates from the corresponding `Cthulhu.CallInfo` structure (which is derived from the `Compiler.CallInfo` metadata).
-Generally, this will be a `CodeInstance`, but it may be overriden with another source, depending on the implementation of
-`get_override(provider::SomeProvider, info::Cthulhu.CallInfo)` (which may be extended for custom providers).
-By default, the override will be either a `Compiler.SemiConcreteCallInfo` for semi-concrete
-evaluation, or a `Compiler.InferenceResult` for the results of constant propagation.
-
-!!! warn
-    `Compiler.CallInfo` and `Cthulhu.CallInfo` are currently distinct abstract types.
-    This part of Cthulhu will likely be subject to change, and is not yet publicly
-    available for customization by `AbstractProvider`s beyond its downstream use via `get_override`.
-    If feeling adventurous, you may extend the `Cthulhu.find_callsites` internal function,
-    however you are encouraged to file an issue and/or contribute to making this part more
-    accessible by breaking it into well-interfaced parts instead of duplicating its implementation.
-
-Optionally, `AbstractProvider`s may modify default behavior by extending the following:
-- `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)`: return a data structure that is
-  more accurate than the `CodeInstance` associated with a given `Cthulhu.CallInfo`.
-
-If any of the relevant `CthulhuConfig` fields may be set, these should be implemented as well
-or will give a warning by default when called:
-- `get_pc_remarks(provider::SomeProvider, ci::CodeInstance)` (required for the 'remarks' toggle)
-- `get_pc_effects(provider::SomeProvider, ci::CodeInstance)` (required for the 'effects' toggle)
-- `get_pc_excts(provider::SomeProvider, ci::CodeInstance)` (required for the 'exception types' toggle)
-- `get_inlining_costs(provider::SomeProvider, mi::MethodInstance, src::Union{CodeInfo, IRCode})`
-  (required for the 'inlining costs' toggle)
 
 `AbstractProvider`s may additionally extend the following UI-related methods:
 - `menu_commands(provider::SomeProvider)` to provide commands for the UI. You will most likely
@@ -108,6 +78,92 @@ you do not want to support displaying remarks, effects or exception types), you 
 `Cthulhu.menu_commands(provider::SomeProvider)` and return a list of commands that excludes the
 corresponding command. To that effect, you can use `Cthulhu.default_menu_commands(provider)`
 and simply filter out the relevant command.
+
+If any of the relevant `CthulhuConfig` fields can be set via a UI command (which is the default), these should be implemented as well:
+- `get_pc_remarks(provider::SomeProvider, ci::CodeInstance)` (required for the 'remarks' toggle)
+- `get_pc_effects(provider::SomeProvider, ci::CodeInstance)` (required for the 'effects' toggle)
+- `get_pc_excts(provider::SomeProvider, ci::CodeInstance)` (required for the 'exception types' toggle)
+- `get_inlining_costs(provider::SomeProvider, mi::MethodInstance, src::Union{CodeInfo, IRCode})`
+  (required for the 'inlining costs' toggle)
+or the corresponding fallbacks will give a warning by default when called.
+
+## Compiler integration
+
+Starting from Julia 1.12, the compiler is now defined as a standard library package.
+In particular, Base will always use the Compiler that it was built with, but a user may have a custom
+Compiler in their manifest that may be different than the one used in Base. By default (version 0.1.1),
+the Compiler stdlib simply reexports the contents of `Base.Compiler`; therefore, usually, even though
+`Compiler !== Base.Compiler`, `Compiler.AbstractInterpreter === Base.Compiler.AbstractInterpreter`.
+
+In the situation where `Compiler.AbstractInterpreter !== Base.Compiler.AbstractInterpreter` (which
+can be easily triggered by `dev`ing a local Compiler path that is not github.com/Julialang/BaseCompiler.jl,
+for instance), the Compiler integration in Cthulhu becomes a bit more complex. The Compiler extension (which
+is virtually a no-op if `Compiler.AbstractInterpreter === Base.Compiler.AbstractInterpreter`) reincludes
+`src/CthulhuCompiler.jl`, which in turn includes all compiler-related files under `src/compiler`.
+At this point:
+- `Cthulhu` contains the types and functions for its high-level interface (`AbstractProvider`, `descend`,
+  ...) as well as the integration with `Base.Compiler` (`DefaultProvider`,
+  `CthulhuInterpreter <: Base.Compiler.AbstractInterpreter`, ...).
+- The Cthulhu extension, `CthulhuCompilerExt`, imports the high-level interface types and functions from
+  Cthulhu, and defines another compiler integration, this time with `Compiler` (the stdlib),
+  defining its own `DefaultProvider`, `CthulhuInterpreter <: Compiler.AbstractInterpreter`, etc.
+
+High-level types and functions are therefore always defined in `Cthulhu`, but those related to the compiler
+integration (such as `InferredSource`, `OptimizedSource`, `run_type_inference`) will require either of `Cthulhu` or `CthulhuCompilerExt`, depending 1. on whether you want to use the Compiler stdlib, and 2.
+on whether a Compiler stdlib with different implementations than `Base.Compiler` is actually used. To
+automatically pick the correct one for your use case, you are advised to use
+`get_module_for_compiler_integration(; use_compiler_stdlib)` (exported by default), which will return the
+relevant module.
+
+For example, you may want to do the following:
+```julia
+using Cthulhu
+const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = true) # true or false
+import .CompilerIntegration: OptimizedSource, InferredSource, run_type_inference
+using .CompilerIntegration: CthulhuInterpreter, LookupResult, get_effects, ir_to_src
+```
+
+Usually, a package defining its own `AbstractProvider` based on a `Compiler` implementation will choose
+either of `Base.Compiler` or `Compiler`.
+However, if, for some reason, your package wants to integrate with both compiler implementations, there is
+nothing stopping you from duplicating your compiler integration, e.g. by having a single source file
+included twice but in one context with
+`const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = false)`
+and in another with
+`const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = true)`.
+Note that if the latter returns `Cthulhu`, the integration shouldn't be duplicated, since it is implied that
+`Compiler.AbstractInterpreter === Base.Compiler.AbstractInterpreter`.
+
+You may look at the tested implementations under `Cthulhu/test/providers` for inspiration.
+
+## Callsite information
+
+Callsites are retrieved by inspecting `Compiler.CallInfo` data structures (which are currently distinct from `Cthulhu.CallInfo`, see the warning below), which are metadata
+semantically attached to expressions, relating one to the process that produced them.
+In most cases, expressions semantically related to a call to another function will have a `Compiler.CallInfo` attached
+that maps to the relevant `CodeInstance`. However, it may be useful to note that there may be cases where a `CodeInstance` is not readily available: that is the case for
+constant propagation (the original `CodeInstance` is not kept if the result is
+inferred to a constant), and for semi-concrete evaluation which produces temporary refined IR
+that contains more accurate information than the `CodeInstance` it originates from.
+
+When selecting a callsite, a `LookupResult` is constructed from the data that originates from the corresponding `Cthulhu.CallInfo` structure (which is derived from the `Compiler.CallInfo` metadata).
+Generally, this will be a `CodeInstance`, but it may be overriden with another source, depending on the implementation of
+`get_override(provider::SomeProvider, info::Cthulhu.CallInfo)` (which may be extended for custom providers).
+By default, the override will be either a `Compiler.SemiConcreteCallInfo` for semi-concrete
+evaluation, or a `Compiler.InferenceResult` for the results of constant propagation.
+
+!!! warning
+    `Compiler.CallInfo` and `Cthulhu.CallInfo` are currently distinct abstract types.
+    This part of Cthulhu will likely be subject to change, and is not yet publicly
+    available for customization by `AbstractProvider`s beyond its downstream use via `get_override`.
+    If feeling adventurous, you may extend the `Cthulhu.find_callsites` internal function,
+    however you are encouraged to file an issue and/or contribute to making this part more
+    accessible by breaking it into well-interfaced parts instead of duplicating its implementation.
+
+Optionally, `AbstractProvider`s may modify default behavior by extending the following:
+- `get_override(provider::SomeProvider, info::Cthulhu.CallInfo)`: return a data structure that is
+  more accurate than the `CodeInstance` associated with a given `Cthulhu.CallInfo`.
+
 """
 abstract type AbstractProvider end
 

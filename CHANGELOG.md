@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- The way that packages integrate with Cthulhu to customize the behavior of code introspection has been redesigned (see https://github.com/JuliaDebug/Cthulhu.jl/pull/662 for more details).
+- The way that packages integrate with Cthulhu to customize the behavior of code introspection has been redesigned (see https://github.com/JuliaDebug/Cthulhu.jl/pull/662 and https://github.com/JuliaDebug/Cthulhu.jl/pull/677 for more details).
 - A new UI command mapped to `DEL` (backspace, `'\x7f'`) now allows to go back (ascend) with a single key press.
 
 ### Breaking changes
@@ -17,4 +17,3 @@
 - The `with_effects` configuration option was renamed to `effects` for consistency with `remarks` and `exception_types`.
 - The `inline_cost` configuration option was renamed to `inlining_costs`, also for consistency reasons.
 - The `interruptexc` configuration option was removed. It used to control whether `q` exited (by throwing an `InterruptException`) or ascended, but now that backspace was added as a shortcut to ascend, we can now unconditionally exit with `q` (which actually matches its action description).
-
