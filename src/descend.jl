@@ -60,7 +60,8 @@ function descend!(state::CthulhuState)
         mi::MethodInstance, ci::CodeInstance
 
         src = something(state.override, ci)
-        result = LookupResult(provider, src, config.optimize)::LookupResult
+        result = lookup(provider, src, config.optimize)
+        result === nothing && return @error "Descent into $mi failed"
 
         if config.jump_always
             def = state.mi.def
@@ -192,7 +193,7 @@ function menu_callsites_from_source_node(callsite::Callsite, source_node)
     for info in callsite.info.callinfos
         ci = get_ci(info)
         mi = get_mi(ci)
-        p = Base.unwrap_unionall(mi.specTypes).parameters
+        p = unwrap_unionall(mi.specTypes).parameters
         if isa(source_node, TypedSyntax.MaybeTypedSyntaxNode) && length(p) == length(children(source_node)) + 1
             new_node = copy(source_node)
             for (i, child) in enumerate(children(new_node))
@@ -206,7 +207,7 @@ function menu_callsites_from_source_node(callsite::Callsite, source_node)
     return callsites
 end
 
-function source_slotnames(result::LookupResult)
+function source_slotnames(result#=::LookupResult=#)
     result.src === nothing && return false
     return Base.sourceinfo_slotnames(result.src)
 end

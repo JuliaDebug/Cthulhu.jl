@@ -143,7 +143,7 @@ function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, 
             TypedSyntax.display_inlay_hints_vscode(vscode_io)
 
             istruncated && @info "This method only fills in default arguments; descend into the body method to see the full source."
-            config.view === :source && return # nothing more to show
+            config.view === :source && return
         end
     end
 
@@ -267,7 +267,7 @@ function add_callsites!(d::AbstractDict, visited_cis::AbstractSet, diagnostics::
         in(callsite_ci, visited_cis) && continue
 
         push!(visited_cis, callsite_ci)
-        result = LookupResult(provider, callsite_ci, optimized)::LookupResult
+        result = lookup(provider, callsite_ci, optimized)
         add_callsites!(d, visited_cis, diagnostics, provider, callsite_ci, result, source_ci)
     end
 

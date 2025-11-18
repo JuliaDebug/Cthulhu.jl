@@ -326,7 +326,7 @@ function truncate_if_defaultargs!(tsn, mappings, meth)
     return tsn, mappings
 end
 
-is_kw_dispatch(meth::Method) = meth.name == :kwcall || Base.unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
+is_kw_dispatch(meth::Method) = meth.name == :kwcall || unwrap_unionall(meth.sig).parameters[1] === typeof(Core.kwcall) || !isempty(Base.kwarg_decl(meth))
 
 function tag_runtime(node::TypedSyntaxNode, info)
     node.runtime = isa(info, RTCallInfo)

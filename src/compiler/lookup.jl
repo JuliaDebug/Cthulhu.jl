@@ -1,89 +1,54 @@
-AbstractProvider(interp::NativeInterpreter) = DefaultProvider(interp)
-
-function AbstractProvider(interp::AbstractInterpreter)
-    error(lazy"""missing `$AbstractInterpreter` API:
-    `$(typeof(interp))` is required to implement `$AbstractProvider(interp::$(typeof(interp)))) -> AbstractProvider`.
-    """)
-end
-
-function find_method_instance(provider::AbstractProvider, interp::AbstractInterpreter, @nospecialize(tt::Type{<:Tuple}), world::UInt)
-    mt = method_table(interp)
-    match, valid_worlds = findsup(tt, mt)
-    match === nothing && return nothing
-    mi = specialize_method(match)
-    return mi
-end
-
-function generate_code_instance(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance)
-    ci = run_type_inference(provider, interp, mi)
-    return ci
-end
-
-function find_caller_of(provider::AbstractProvider, interp::AbstractInterpreter, callee::Union{MethodInstance,Type}, mi::MethodInstance, allow_unspecialized::Bool)
-    ci = generate_code_instance(provider, interp, mi)
-    @assert get_mi(ci) === mi
-    locs = Tuple{Core.LineInfoNode,Int}[]
-    for optimize in (true, false)
-        result = LookupResult(provider, interp, ci, optimize)::LookupResult
-        callsites, _ = find_callsites(provider, result, ci)
-        callsites = allow_unspecialized ? filter(cs -> maybe_callsite(cs, callee), callsites) :
-        filter(cs -> is_callsite(cs, callee), callsites)
-        foreach(cs -> add_sourceline!(locs, result.src, cs.id, mi), callsites)
-    end
-    # Consolidate by method, but preserve the order
-    prlookup = Dict{Tuple{Symbol,Symbol},Int}()
-    ulocs = Pair{Tuple{Symbol,Symbol,Int},Vector{Int}}[]
-    if !isempty(locs)
-        for (loc, depth) in locs
-            locname = loc.method
-            if isa(locname, MethodInstance)
-                locname = locname.def.name
+struct LookupResult
+    ir::Union{IRCode, Nothing} # used over `src` for callsite detection and printing
+    src::Union{CodeInfo, Nothing} # may be required (e.g. for LLVM and native module dumps)
+    rt
+    exct
+    infos::Vector{Any}
+    slottypes::Vector{Any}
+    effects::Effects
+    optimized::Bool
+    function LookupResult(ir, src, @nospecialize(rt), @nospecialize(exct),
+                          infos, slottypes, effects, optimized)
+        ninfos = length(infos)
+        if src === nothing && ir === nothing
+            throw(ArgumentError("At least one of `src` or `ir` must have a value"))
+        end
+        if isa(ir, IRCode) && ninfos ≠ length(ir.stmts)
+            throw(ArgumentError("`ir` and `infos` are inconsistent with $(length(ir.stmts)) IR statements and $ninfos call infos"))
+        end
+        if isa(src, CodeInfo)
+            if !isa(src.ssavaluetypes, Vector{Any})
+                throw(ArgumentError("`src.ssavaluetypes::$(typeof(src.ssavaluetypes))` must be a Vector{Any}"))
             end
-            idx = get(prlookup, (locname, loc.file), nothing)
-            if idx === nothing
-                push!(ulocs, (locname, loc.file, depth) => Int[])
-                prlookup[(locname, loc.file)] = idx = length(ulocs)
-            end
-            lines = ulocs[idx][2]
-            line = loc.line
-            if line ∉ lines
-                push!(lines, line)
+            if !isa(ir, IRCode) && ninfos ≠ length(src.code)
+                throw(ArgumentError("`src` and `infos` are inconsistent with $(length(src.code)) code statements and $ninfos call infos"))
             end
         end
-    end
-    return ulocs
-end
-
-function get_inlining_costs(provider::AbstractProvider, interp::AbstractInterpreter, mi::MethodInstance, src::Union{CodeInfo, IRCode})
-    code = isa(src, IRCode) ? src.stmts.stmt : src.code
-    costs = zeros(Int, length(code))
-    params = CC.OptimizationParams(interp)
-    sparams = CC.VarState[CC.VarState(sparam, false) for sparam in mi.sparam_vals]
-    CC.statement_costs!(costs, code, src, sparams, params)
-    return costs
-end
-
-show_parameters(io::IO, provider::AbstractProvider, interp::AbstractInterpreter) = show_inference_cache(io, interp)
-
-function show_inference_cache(io::IO, interp::AbstractInterpreter)
-    @info "Dumping inference cache."
-    cache = CC.get_inference_cache(interp)
-    for (i, (; linfo, result)) in enumerate(cache)
-        println(io, i, ": ", linfo, "::", result)
+        return new(ir, src, rt, exct, infos, slottypes, effects, optimized)
     end
 end
 
-function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance, optimize::Bool)
-    optimize && return lookup_optimized(provider, interp, ci)
+function lookup(provider::AbstractProvider, interp::AbstractInterpreter, ci::CodeInstance, optimize::Bool)
+    if optimize
+        result = lookup_optimized(provider, interp, ci)
+        if result === nothing
+            @info """
+            Inference discarded the source for this call because of recursion:
+            Cthulhu nevertheless is trying to retrieve the source for further inspection.
+            """
+            result = lookup_unoptimized(provider, interp, ci)
+        end
+        return result
+    end
     return lookup_unoptimized(provider, interp, ci)
 end
 
-function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, result::InferenceResult, optimize::Bool)
+function lookup(provider::AbstractProvider, interp::AbstractInterpreter, result::InferenceResult, optimize::Bool)
     optimize && return lookup_constproped_optimized(provider, interp, result)
     return lookup_constproped_unoptimized(provider, interp, result)
 end
 
-function LookupResult(provider::AbstractProvider, interp::AbstractInterpreter, call::SemiConcreteCallInfo, optimize::Bool)
+function lookup(provider::AbstractProvider, interp::AbstractInterpreter, call::SemiConcreteCallInfo, optimize::Bool)
     return lookup_semiconcrete(provider, interp, call)
 end
 
@@ -121,10 +86,10 @@ function lookup_optimized(provider::AbstractProvider, interp::AbstractInterprete
         if CC.use_const_api(ci)
             @assert isdefined(ci, :rettype_const)
             @static if VERSION > v"1.13-"
-                range = CC.WorldRange(1, typemax(UInt))
-                src = CC.codeinfo_for_const(interp, get_mi(ci), range, Core.svec(), ci.rettype_const)
+                world_range = CC.WorldRange(ci.min_world, ci.max_world)
+                src = CC.codeinfo_for_const(interp, mi, world_range, Core.svec(), ci.rettype_const)
             else
-                src = CC.codeinfo_for_const(interp, get_mi(ci), ci.rettype_const)
+                src = CC.codeinfo_for_const(interp, mi, ci.rettype_const)
             end
             src.ssavaluetypes = Any[Any]
             infos = Any[CC.NoCallInfo()]

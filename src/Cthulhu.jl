@@ -2,36 +2,60 @@ module Cthulhu
 
 export @descend, @descend_code_typed, @descend_code_warntype,
     descend, descend_code_typed, descend_code_warntype, ascend,
-    AbstractProvider
+    AbstractProvider,
+    is_compiler_loaded, is_compiler_extension_loaded, get_module_for_compiler_integration
 
 const CC = Base.Compiler
 const IRShow = Base.IRShow
 
-const CTHULHU_MODULE = Ref{Module}(@__MODULE__)
+using Accessors
+using CodeTracking: CodeTracking, definition, whereis, maybe_fix_path
+using InteractiveUtils
+using InteractiveUtils: is_expected_union
+using UUIDs
+using REPL: REPL, AbstractTerminal
+using JuliaSyntax: JuliaSyntax, children
+using TypedSyntax
+import WidthLimitedIO: TextWidthLimiter
+using Preferences
 
+using Core.IR
+using Base: default_tt, unwrap_unionall, mapany
+
+global CompilerExt::Union{Nothing, Module}
+
+is_compiler_extension_loaded() = isdefined(@__MODULE__, :CompilerExt)
 function is_compiler_loaded()
     pkgid = Base.PkgId(Base.UUID("807dbc54-b67e-4c79-8afb-eafe4df6f2e1"), "Compiler")
     return haskey(Base.loaded_modules, pkgid)
 end
-is_compiler_extension_loaded() = CTHULHU_MODULE[] !== @__MODULE__
-
-function resolve_module(Compiler::Module)
-    Compiler === Base.Compiler && return @__MODULE__
-    Compiler === CTHULHU_MODULE[].Compiler && return CTHULHU_MODULE[]
-    return resolve_module()
-end
-resolve_module() = CTHULHU_MODULE[]
-function resolve_module(@nospecialize(::T)) where {T}
-    mod = parentmodule(T)
-    nameof(mod) === :Compiler && return resolve_module(mod)
-    return resolve_module()
+function get_module_for_compiler_integration(; use_compiler_stdlib::Bool = true)
+    !use_compiler_stdlib && return @__MODULE__
+    is_compiler_extension_loaded() || error("The Cthulhu -> Compiler extension must be loaded first if `use_compiler_stdlib` is set to `true`")
+    return something(CompilerExt, @__MODULE__)
 end
 
+cached_exception_type(code::CodeInstance) = code.exctype
+get_mi(ci::CodeInstance) = CC.get_ci_mi(ci)
+get_mi(mi::MethodInstance) = mi
+
+include("config.jl")
+include("preferences.jl")
 __init__() = read_config!()
 
-include("CthulhuBase.jl")
+include("interface.jl")
+include("callsite.jl")
+include("state.jl")
+include("ui.jl")
+include("bookmark.jl")
+include("descend.jl")
+include("ascend.jl")
 include("backedges.jl")
 include("testing.jl")
+
+function ir_to_src end
+
+include("CthulhuCompiler.jl")
 
 """
     @descend
@@ -146,19 +170,8 @@ julia> descend() do
 [...]
 ```
 """
-function descend(@nospecialize(args...); interp=nothing,
-                                         provider=nothing,
-                                         @nospecialize(kwargs...))
-    if provider !== nothing
-        mod = resolve_module(provider)
-        mod.descend_with_error_handling(args...; provider, kwargs...)
-    elseif interp !== nothing
-        mod = resolve_module(interp)
-        mod.descend_with_error_handling(args...; interp, kwargs...)
-    else
-        mod = resolve_module()
-        mod.descend_with_error_handling(args...; kwargs...)
-    end
+function descend(@nospecialize(args...); @nospecialize(kwargs...))
+    descend_with_error_handling(args...; kwargs...)
     return nothing
 end
 
@@ -236,9 +249,7 @@ with the option to `descend` into intermediate calls.
 Keyword arguments `pagesize, dynamic, maxsize` are passed to `Cthulhu.FoldingTrees.TreeMenu`.
 Any remaining `kwargs` are passed to [`descend`](@ref).
 """
-function ascend(@nospecialize(args...); kwargs...)
-    CTHULHU_MODULE[].ascend_impl(args...; kwargs...)
-end
+ascend(@nospecialize(args...); kwargs...) = ascend_impl(args...; kwargs...)
 
 using PrecompileTools
 @setup_workload begin

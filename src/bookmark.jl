@@ -36,7 +36,7 @@ const BOOKMARKS = Bookmark[]
 function Base.show(io::IO, ::MIME"text/plain", bookmark::Bookmark; kwargs...)
     (; provider, ci) = bookmark
     state = CthulhuState(bookmark; kwargs...)
-    result = LookupResult(provider, ci, state.config.optimize)
+    result = lookup(provider, ci, state.config.optimize)
     world = get_inference_world(provider)
     if get(io, :typeinfo, Any) === Bookmark  # a hack to check if in Vector etc.
         info = EdgeCallInfo(ci, result.rt, Effects())
@@ -52,7 +52,7 @@ end
 function Base.code_typed(bookmark::Bookmark; kwargs...)
     (; provider, ci) = bookmark
     state = CthulhuState(bookmark; kwargs...)
-    result = LookupResult(provider, ci, state.config.optimize)
+    result = lookup(provider, ci, state.config.optimize)
     src = something(result.src, result.ir)::Union{CodeInfo, IRCode}
     return src => result.rt
 end
@@ -67,20 +67,20 @@ InteractiveUtils.code_native(bookmark::Bookmark; kwargs...) =
 function InteractiveUtils.code_warntype(io::IO, bookmark::Bookmark; kwargs...)
     (; provider, ci) = bookmark
     state = CthulhuState(bookmark; kwargs...)
-    result = LookupResult(provider, ci, state.config.optimize)
+    result = lookup(provider, ci, state.config.optimize)
     cthulhu_warntype(io, provider, state, result)
 end
 
 function InteractiveUtils.code_llvm(io::IO, bookmark::Bookmark; dump_module = false, raw = false, kwargs...)
     (; provider, ci) = bookmark
     state = CthulhuState(bookmark; kwargs...)
-    result = LookupResult(provider, ci, state.config.optimize)
+    result = lookup(provider, ci, state.config.optimize)
     cthulhu_llvm(io, provider, state, result; dump_module, raw)
 end
 
 function InteractiveUtils.code_native(io::IO, bookmark::Bookmark; dump_module = false, raw = false, kwargs...)
     (; provider, ci) = bookmark
     state = CthulhuState(bookmark; kwargs...)
-    result = LookupResult(provider, ci, state.config.optimize)
+    result = lookup(provider, ci, state.config.optimize)
     cthulhu_native(io, provider, state, result; dump_module, raw)
 end

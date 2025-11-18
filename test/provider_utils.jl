@@ -1,7 +1,8 @@
 using Core.IR
 using Test
-using .Cthulhu: CC, DefaultProvider, get_inference_world, find_method_instance, generate_code_instance, get_ci, get_override, LookupResult, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, PC2Effects, get_pc_effects, PC2Remarks, get_pc_remarks, PC2Excts, get_pc_excts, get_inlining_costs, show_parameters
-using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
+using Cthulhu: descend, get_inference_world, find_method_instance, generate_code_instance, lookup, get_ci, get_override, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, get_pc_effects, get_pc_remarks, get_pc_excts, get_inlining_costs, show_parameters
+using .CompilerIntegration: DefaultProvider, PC2Effects, PC2Remarks, PC2Excts, LookupResult
+using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session
 using Logging: with_logger, NullLogger
 
 function test_provider_api(provider, args...)
@@ -11,9 +12,9 @@ function test_provider_api(provider, args...)
     @test isa(mi, MethodInstance)
     ci = generate_code_instance(provider, mi)
     @test isa(ci, CodeInstance)
-    result = LookupResult(provider, ci, false)
+    result = lookup(provider, ci, false)
     @test isa(result, LookupResult)
-    result = LookupResult(provider, ci, true)
+    result = lookup(provider, ci, true)
     @test isa(result, LookupResult)
 
     commands = menu_commands(provider)
@@ -43,7 +44,7 @@ function test_provider_api(provider, args...)
         @test inlining_costs === nothing || isa(inlining_costs, Vector{Int})
     end
 
-    result = LookupResult(provider, ci, false)
+    result = lookup(provider, ci, false)
     callsites, _ = find_callsites(provider, result, ci)
     @test length(callsites) ≥ ifelse(result.optimized, 1, 5)
     for callsite in callsites
@@ -51,9 +52,9 @@ function test_provider_api(provider, args...)
         ci === nothing && continue
         override = get_override(provider, callsite.info)
         src = something(override, ci)
-        result = LookupResult(provider, src, false)
+        result = lookup(provider, src, false)
         @test isa(result, LookupResult)
-        result = LookupResult(provider, src, true)
+        result = lookup(provider, src, true)
         @test isa(result, LookupResult)
     end
 end
@@ -75,10 +76,10 @@ function test_descend_for_provider(provider, args...; show = false)
     write(terminal, 'o') # optimize: on
     write(terminal, 'i') # inlining costs: on
     write(terminal, 'o') # optimize: off
-    write(terminal, KEYS[:enter])
+    write(terminal, :enter)
     write(terminal, 'S')
-    write(terminal, KEYS[:up])
-    write(terminal, KEYS[:enter])
+    write(terminal, :up)
+    write(terminal, :enter)
     write(terminal, 'q')
     if show
         wait_for(harness.task)

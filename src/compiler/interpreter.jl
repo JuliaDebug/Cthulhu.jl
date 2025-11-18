@@ -26,7 +26,7 @@ Base.show(io::IO, interp::CthulhuInterpreter) = print(io, typeof(interp), '(', i
 CC.InferenceParams(interp::CthulhuInterpreter) = InferenceParams(interp.native)
 CC.OptimizationParams(interp::CthulhuInterpreter) =
     OptimizationParams(OptimizationParams(interp.native); preserve_local_sources=true)
-CC.get_inference_world(interp::CthulhuInterpreter) = get_inference_world(interp.native)
+CC.get_inference_world(interp::CthulhuInterpreter) = CC.get_inference_world(interp.native)
 CC.get_inference_cache(interp::CthulhuInterpreter) = CC.get_inference_cache(interp.native)
 
 CC.may_optimize(::CthulhuInterpreter) = true

@@ -3,9 +3,7 @@ module test_codeview
 using Test
 using Logging: NullLogger, with_logger
 
-using Cthulhu: Cthulhu as _Cthulhu, is_compiler_loaded
-const Cthulhu = _Cthulhu.CTHULHU_MODULE[]
-using .Cthulhu: CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
+using Cthulhu: Cthulhu, is_compiler_loaded, CthulhuState, view_function, CONFIG, set_config, cthulhu_typed
 
 include("setup.jl")
 

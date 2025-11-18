@@ -2,12 +2,11 @@ module test_provider
 
 using Test
 using Core.IR
-using Cthulhu: CTHULHU_MODULE
 
 @eval module Impl
-const Cthulhu = $(CTHULHU_MODULE[])
-using Cthulhu: descend
-using .Cthulhu: DefaultProvider
+using Cthulhu: Cthulhu, is_compiler_loaded, get_module_for_compiler_integration
+const CompilerIntegration = get_module_for_compiler_integration(; use_compiler_stdlib = is_compiler_loaded())
+using .CompilerIntegration: DefaultProvider
 include("provider_utils.jl")
 include("providers/CountingProviderModule.jl")
 using .CountingProviderModule: CountingProvider
