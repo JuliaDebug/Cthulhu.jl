@@ -61,6 +61,7 @@ function descend!(state::CthulhuState)
 
         src = something(state.override, ci)
         result = lookup(provider, src, config.optimize)
+        result === nothing && return @error "Descent into $mi failed"
 
         if config.jump_always
             def = state.mi.def

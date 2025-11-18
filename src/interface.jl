@@ -203,7 +203,7 @@ function lookup(provider::AbstractProvider, src, optimize::Bool)
     interp !== nothing && return lookup(provider, interp, src, optimize)
     error(lazy"""
         missing `$AbstractProvider` API:
-        `$(typeof(provider))` is required to implement the `$LookupResult(provider::$(typeof(provider)), src, optimize::Bool)` interface.
+        `$(typeof(provider))` is required to implement the `$lookup(provider::$(typeof(provider)), src::$(typeof(src)), optimize::Bool)` interface.
     """)
 end
 

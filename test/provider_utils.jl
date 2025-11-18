@@ -2,7 +2,7 @@ using Core.IR
 using Test
 using Cthulhu: descend, get_inference_world, find_method_instance, generate_code_instance, lookup, get_ci, get_override, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, get_pc_effects, get_pc_remarks, get_pc_excts, get_inlining_costs, show_parameters
 using .CompilerIntegration: DefaultProvider, PC2Effects, PC2Remarks, PC2Excts, LookupResult
-using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session, KEYS
+using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session
 using Logging: with_logger, NullLogger
 
 function test_provider_api(provider, args...)
@@ -76,10 +76,10 @@ function test_descend_for_provider(provider, args...; show = false)
     write(terminal, 'o') # optimize: on
     write(terminal, 'i') # inlining costs: on
     write(terminal, 'o') # optimize: off
-    write(terminal, KEYS[:enter])
+    write(terminal, :enter)
     write(terminal, 'S')
-    write(terminal, KEYS[:up])
-    write(terminal, KEYS[:enter])
+    write(terminal, :up)
+    write(terminal, :enter)
     write(terminal, 'q')
     if show
         wait_for(harness.task)
