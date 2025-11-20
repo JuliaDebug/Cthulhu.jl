@@ -863,7 +863,7 @@ end
 @testset "preferences" begin
     # Test that load and save are able to set state
     set_config!(; enable_highlighter = true, debuginfo = :none)
-    Cthulhu.save_config!()
+    Cthulhu.save_config!(; force = true)
     set_config!(; enable_highlighter = false, debuginfo = :compact)
     @test Cthulhu.CONFIG.enable_highlighter === false
     @test Cthulhu.CONFIG.debuginfo === :compact
@@ -871,8 +871,10 @@ end
     Cthulhu.read_config!()
     @test Cthulhu.CONFIG.enable_highlighter === true
     @test Cthulhu.CONFIG.debuginfo === :none
+
+    set_config!(; debuginfo = :source)
     @test_throws "Cannot set preference" Cthulhu.save_config!()
-    Cthulhu.save_config(; force = true)
+    Cthulhu.save_config!(; force = true)
 end
 
 Base.@constprop :none sin_noconstprop(x) = sin(x)
