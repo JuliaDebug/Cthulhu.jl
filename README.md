@@ -333,6 +333,8 @@ julia> Cthulhu.CONFIG.enable_highlighter = true # Change default
 true
 
 julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next time you `using Cthulhu`
+
+julia> Cthulhu.save_config!(Cthulhu.CONFIG; force = true) # to overwrite any existing preferences
 ```
 
 ## Development

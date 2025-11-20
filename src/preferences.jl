@@ -1,9 +1,10 @@
 """
 ```julia
-save_config!(config::CthulhuConfig=CONFIG)
+save_config!(config::CthulhuConfig=CONFIG; kwargs...)
 ```
 Save a Cthulhu.jl configuration `config` (by default, `Cthulhu.CONFIG`) to your
-`LocalPreferences.toml` file using Preferences.jl.
+`LocalPreferences.toml` file using Preferences.jl. For more information about
+`kwargs`, refer to the documentation of `Preferences.set_preferences!`.
 
 The saved preferences will be automatically loaded next time you `using Cthulhu`.
 
@@ -20,9 +21,11 @@ julia> Cthulhu.CONFIG.debuginfo = :none     # Customize some defaults
 :none
 
 julia> Cthulhu.save_config!(Cthulhu.CONFIG) # Will be automatically read next time you `using Cthulhu`
+
+julia> Cthulhu.save_config!(Cthulhu.CONFIG; force = true) # to overwrite any existing preferences
 ```
 """
-function save_config!(config::CthulhuConfig=CONFIG)
+function save_config!(config::CthulhuConfig=CONFIG; kwargs...)
     set_preferences!(Cthulhu,
         "enable_highlighter" => config.enable_highlighter,
         "highlighter" => config.highlighter.exec,
@@ -38,7 +41,7 @@ function save_config!(config::CthulhuConfig=CONFIG)
         "view" => String(config.view),
         "inlay_types_vscode" => config.inlay_types_vscode,
         "diagnostics_vscode" => config.diagnostics_vscode,
-        "jump_always" => config.jump_always)
+        "jump_always" => config.jump_always; kwargs...)
 end
 
 function read_config!()

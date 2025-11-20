@@ -871,6 +871,8 @@ end
     Cthulhu.read_config!()
     @test Cthulhu.CONFIG.enable_highlighter === true
     @test Cthulhu.CONFIG.debuginfo === :none
+    @test_throws "Cannot set preference" Cthulhu.save_config!()
+    Cthulhu.save_config(; force = true)
 end
 
 Base.@constprop :none sin_noconstprop(x) = sin(x)
