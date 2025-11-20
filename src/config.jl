@@ -35,18 +35,18 @@ end
 - `highlighter::Cmd`: A command line program that receives "julia" as an argument and julia
    code as stdin. Defaults to `$(CthulhuConfig().highlighter)`.
 - `asm_syntax::Symbol`: Set the syntax of assembly code being used.
-  Defaults to `$(CthulhuConfig().asm_syntax)`.
+  Defaults to `:$(CthulhuConfig().asm_syntax)`.
 - `pretty_ast::Bool`: Use a pretty printer for the ast dump. Defaults to `false`.
 - `debuginfo::Symbol`: Initial state of "debuginfo" toggle. Defaults to `:compact`.
   Options:. `:none`, `:compact`, `:source`
 - `optimize::Bool`: Initial state of "optimize" toggle. Defaults to `true`.
-- `hide_type_stable::Bool`: Initial state of "hide_type_stable" toggle. Defaults to `false`.
+- `hide_type_stable::Bool`: Initial state of "hide\\_type\\_stable" toggle. Defaults to `false`.
 - `iswarn::Bool`: Initial state of "warn" toggle. Defaults to `false`.
 - `remarks::Bool` Initial state of "remarks" toggle. Defaults to `false`.
-- `effects::Bool` Intial state of "effects" toggle. Defaults to `false`.
-- `exception_types::Bool` `Intial state of "exception types" toggle. Defaults to `false`.
+- `effects::Bool` Initial state of "effects" toggle. Defaults to `false`.
+- `exception_types::Bool` Initial state of "exception types" toggle. Defaults to `false`.
 - `inlining_costs::Bool` Initial state of "inlining costs" toggle. Defaults to `false`.
-- `type_annotations::Bool` Initial state of "type annnotations" toggle. Defaults to `true`.
+- `type_annotations::Bool` Initial state of "type annotations" toggle. Defaults to `true`.
 - `view::Symbol` Initial state of the view. Defaults to `:source`. Can be either of `:source`, `:ast`, `:typed`, `:llvm` and `:native`. Non-default `AbstractProvider`s may further customize available views.
 - `inlay_types_vscode::Bool` Initial state of "vscode: inlay types" toggle. Defaults to `true`
 - `diagnostics_vscode::Bool` Initial state of "Vscode: diagnostics" toggle. Defaults to `true`
