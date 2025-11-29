@@ -69,9 +69,9 @@ function descend!(state::CthulhuState)
                 @warn "Can't jump to source location because the definition is not a method."
             else
                 if isdefined(Main, :VSCodeServer) && Main.VSCodeServer isa Module && isdefined(Main.VSCodeServer, :openfile)
-                    Main.VSCodeServer.openfile(whereis(def)...; preserve_focus=true)
+                    Main.VSCodeServer.openfile(CodeTracking.whereis(def)...; preserve_focus=true)
                 else
-                    edit(whereis(def)...)
+                    edit(CodeTracking.whereis(def)...)
                 end
             end
         end

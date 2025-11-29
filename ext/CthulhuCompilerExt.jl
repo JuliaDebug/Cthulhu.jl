@@ -7,7 +7,7 @@ using Cthulhu: Cthulhu
     using Compiler.IRShow: IRShow
 
     using Accessors
-    using CodeTracking: CodeTracking, definition, whereis, maybe_fix_path
+    using CodeTracking: CodeTracking
     using InteractiveUtils
     using UUIDs
     using REPL: REPL, AbstractTerminal

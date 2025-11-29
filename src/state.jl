@@ -142,7 +142,7 @@ end
 function edit_source_code(state::CthulhuState)
     def = state.mi.def
     isa(def, Method) || return @warn "Can't go to the source location because the definition is not a method."
-    edit(whereis(def)...)
+    edit(CodeTracking.whereis(def)...)
 end
 
 function revise_and_redisplay!(state::CthulhuState)

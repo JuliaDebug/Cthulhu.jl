@@ -27,7 +27,7 @@ end
 
 function tsn_and_mappings(mi::MethodInstance, src::CodeInfo, @nospecialize(rt); warn::Bool=true, strip_macros::Bool=false, kwargs...)
     m = mi.def::Method
-    def = definition(String, m)
+    def = CodeTracking.definition(String, m)
     if isnothing(def)
         warn && @warn "couldn't retrieve source of $m"
         return nothing, nothing

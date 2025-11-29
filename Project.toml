@@ -25,7 +25,7 @@ CthulhuCompilerExt = "Compiler"
 
 [compat]
 Accessors = "0.1.42"
-CodeTracking = "0.5, 1, 2"
+CodeTracking = "0.5, 1, 2, 3"
 Compiler = "0.1"
 FoldingTrees = "1"
 InteractiveUtils = "1.9"

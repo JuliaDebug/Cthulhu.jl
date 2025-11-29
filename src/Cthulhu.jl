@@ -9,7 +9,7 @@ const CC = Base.Compiler
 const IRShow = Base.IRShow
 
 using Accessors
-using CodeTracking: CodeTracking, definition, whereis, maybe_fix_path
+using CodeTracking: CodeTracking
 using InteractiveUtils
 using InteractiveUtils: is_expected_union
 using UUIDs
