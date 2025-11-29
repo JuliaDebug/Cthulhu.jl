@@ -20,7 +20,7 @@ function ascend_impl(
                 parent = Cthulhu.instance(node.parent.data.nd)
                 ulocs = find_caller_of(provider, parent, mi; allow_unspecialized=true)
                 if !isempty(ulocs)
-                    ulocs = [(k[1], maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]
+                    ulocs = [(k[1], CodeTracking.maybe_fix_path(String(k[2])), k[3]) => v for (k, v) in ulocs]
                     strlocs = [string(" "^k[3] * '"', k[2], "\", ", k[1], ": lines ", v) for (k, v) in ulocs]
                     explain_inlining = length(ulocs) > 1 ? "(including inlined callers represented by indentation) " : ""
                     push!(strlocs, "Browse typed code")

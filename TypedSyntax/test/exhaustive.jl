@@ -3,7 +3,7 @@ using MethodAnalysis
 using ProgressMeter
 using Test
 using Logging
-using CodeTracking
+using CodeTracking: CodeTracking
 
 const missingmethods = Set{Method}()
 const badmis = Core.MethodInstance[]
@@ -20,7 +20,7 @@ const goodmis = Core.MethodInstance[]
             src, rt = cis[1]
             # Can CodeTracking handle this?
             ret = with_logger(NullLogger()) do
-                definition(String, m)
+                CodeTracking.definition(String, m)
             end
             if ret === nothing
                 push!(missingmethods, m)
