@@ -252,16 +252,19 @@ Any remaining `kwargs` are passed to [`descend`](@ref).
 ascend(@nospecialize(args...); kwargs...) = ascend_impl(args...; kwargs...)
 
 using PrecompileTools
-@setup_workload begin
-    try
-        @compile_workload begin
-            terminal = Testing.VirtualTerminal()
-            harness = Testing.@run terminal @descend terminal=terminal gcd(1, 2)
-            task = @async @descend terminal=terminal.tty gcd(1, 2)
-            @assert Testing.end_terminal_session(harness)
+# Precompile workloads can cause segfaults on Julia 1.14+ due to nightly instability
+@static if VERSION < v"1.14-"
+    @setup_workload begin
+        try
+            @compile_workload begin
+                terminal = Testing.VirtualTerminal()
+                harness = Testing.@run terminal @descend terminal=terminal gcd(1, 2)
+                task = @async @descend terminal=terminal.tty gcd(1, 2)
+                @assert Testing.end_terminal_session(harness)
+            end
+        catch err
+            @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
         end
-    catch err
-        @error "Errorred while running the precompile workload, the package may or may not work but latency will be long" exeption=(err,catch_backtrace())
     end
 end
 

@@ -127,7 +127,7 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
     @nospecialize(exct))
     if isnothing(result)
         return thisinfo
-    elseif result isa CC.VolatileInferenceResult
+    elseif isdefined(CC, :VolatileInferenceResult) && result isa CC.VolatileInferenceResult
         # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
         #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
         return thisinfo
@@ -136,7 +136,7 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
         effects = get_effects(result)
         mici = EdgeCallInfo(edge, rt, effects, exct)
         return ConcreteCallInfo(mici, argtypes)
-    elseif isa(result, CC.ConstPropResult)
+    elseif isdefined(CC, :ConstPropResult) && isa(result, CC.ConstPropResult)
         effects = get_effects(result)
         result = result.result
         mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
@@ -145,11 +145,13 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
         effects = get_effects(result)
         mici = EdgeCallInfo(result.edge, rt, effects, exct)
         return SemiConcreteCallInfo(mici, result.ir)
-    else
-        @assert isa(result, CC.InferenceResult)
+    elseif isa(result, CC.InferenceResult)
+        # InferenceResult is used directly for const-prop on Julia 1.14+
         effects = get_effects(result)
         mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
         return ConstPropCallInfo(mici, result)
+    else
+        return thisinfo
     end
 end
 
@@ -172,14 +174,21 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         end
     end
     if isa(info, MethodMatchInfo)
-        return CallInfo[let
+        # In Julia 1.14+, call_results are stored directly in MethodMatchInfo
+        # In older Julia, they were wrapped in ConstCallInfo
+        callinfos = CallInfo[]
+        for (i, edge) in enumerate(info.edges)
             if edge === nothing
-                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+                push!(callinfos, RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct))
             else
-                effects = @something(effects, get_effects(edge))
-                EdgeCallInfo(edge, rt, effects, exct)
+                local_effects = @something(effects, get_effects(edge))
+                thisinfo = EdgeCallInfo(edge, rt, local_effects, exct)
+                # Check if there's a call_result for const-prop (Julia 1.14+)
+                call_result = isdefined(info, :call_results) ? info.call_results[i] : nothing
+                push!(callinfos, process_const_info(provider, result, thisinfo, argtypes, rt, call_result, exct))
             end
-        end for edge in info.edges if edge !== nothing]
+        end
+        return callinfos
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -188,7 +197,8 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         # XXX: This could probably use its own info. For now,
         # we ignore any implicit iterate calls.
         return process_recursive(info.call)
-    elseif isa(info, ConstCallInfo)
+    elseif isdefined(CC, :ConstCallInfo) && isa(info, ConstCallInfo)
+        # ConstCallInfo exists in Julia < 1.14
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return CallInfo[let
