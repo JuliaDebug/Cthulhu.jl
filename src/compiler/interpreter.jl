@@ -41,8 +41,16 @@ CC.method_table(interp::CthulhuInterpreter) = CC.method_table(interp.native)
 CC.cache_owner(interp::CthulhuInterpreter) = interp.cache_token
 
 function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter, override::InferenceResult)
-    isa(override.src, OptimizedSource) || error("couldn't find the source")
-    return override.src
+    if isa(override.src, OptimizedSource)
+        return override.src
+    end
+    # On Julia 1.14+, InferenceResult from MethodMatchInfo.call_results may not have
+    # been processed by our CC.finish! hook. Try to create the source if possible.
+    src = create_cthulhu_source(override, override.ipo_effects)
+    if isa(src, OptimizedSource)
+        return src
+    end
+    error("couldn't find the source")
 end
 
 function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter, ci::CodeInstance)
@@ -57,8 +65,33 @@ function OptimizedSource(provider::AbstractProvider, interp::CthulhuInterpreter,
 end
 
 function InferredSource(provider::AbstractProvider, interp::CthulhuInterpreter, src::Union{CodeInstance,InferenceResult})
-    unopt = interp.unopt[src]
-    return unopt
+    unopt = get(interp.unopt, src, nothing)
+    if unopt !== nothing
+        return unopt
+    end
+    # On Julia 1.14+, InferenceResult from MethodMatchInfo.call_results may not have
+    # been processed by our hooks. Try to construct InferredSource from the result.
+    if isa(src, InferenceResult)
+        result_src = src.src
+        if isa(result_src, CodeInfo)
+            # Create a minimal InferredSource from available data
+            return InferredSource(
+                copy(result_src),
+                Any[NoCallInfo() for _ in 1:length(result_src.code)],
+                src.ipo_effects,
+                src.result,
+                src.exc_result)
+        elseif isa(result_src, OptimizedSource)
+            # The source has already been optimized - extract CodeInfo from it
+            return InferredSource(
+                copy(result_src.src),
+                Any[NoCallInfo() for _ in 1:length(result_src.src.code)],
+                src.ipo_effects,
+                src.result,
+                src.exc_result)
+        end
+    end
+    error("couldn't find the unoptimized source for $src")
 end
 
 function get_inference_key(state::InferenceState)
@@ -208,8 +241,16 @@ CC.finishinfer!(state::InferenceState, interp::CthulhuInterpreter, cycleid::Int)
 end
 
 function CC.finish!(interp::CthulhuInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+    # On Julia 1.14+, transform_result_for_cache is called inside finish! which would
+    # overwrite result.src. We need to save our OptimizedSource and restore it after.
     set_cthulhu_source!(caller.result)
-    return @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+    our_src = caller.result.src
+    result = @invoke CC.finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
+    # Restore our OptimizedSource if it was overwritten
+    if isa(our_src, OptimizedSource)
+        caller.result.src = our_src
+    end
+    return result
 end
 
 function CC.src_inlining_policy(interp::CthulhuInterpreter,
