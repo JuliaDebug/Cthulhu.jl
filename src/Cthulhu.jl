@@ -252,7 +252,9 @@ Any remaining `kwargs` are passed to [`descend`](@ref).
 ascend(@nospecialize(args...); kwargs...) = ascend_impl(args...; kwargs...)
 
 using PrecompileTools
-# Precompile workloads can cause segfaults on Julia 1.14+ due to nightly instability
+# NOTE: Precompile workloads cause segfaults on Julia 1.14 nightly during precompilation.
+# This is likely due to GC/compilation instabilities in the nightly build.
+# The workload runs fine after the package is already loaded.
 @static if VERSION < v"1.14-"
     @setup_workload begin
         try
