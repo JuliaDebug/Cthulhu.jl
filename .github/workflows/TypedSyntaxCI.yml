@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-    tags: '*'
+
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
@@ -15,7 +15,7 @@ jobs:
         version:
           # - '1'
           # - '1.12.0'
-          - '1.12-nightly'
+          - '1.12'
           - 'nightly'
         os:
           - ubuntu-latest

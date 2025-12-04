@@ -163,7 +163,7 @@ end
     # Native code view
     write(terminal, 'N')
     displayed, text = read_next(harness)
-    @test occursin("retq", text)
+    @test occursin(r"\bret[lq]?\b", text)  # retq on x86-64, retl on x86, ret on ARM64
     @test occursin('[' * colorize(true, 'N') * "]ative", displayed)
     # Typed view (by selector)
     write(terminal, 'T')
@@ -209,12 +209,12 @@ end
     @test occursin("\nBody", text)
     @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", displayed)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
-    warncolor = if Cthulhu.is_expected_union(Union{Float32, Int64})
+    warncolor = if Cthulhu.is_expected_union(Union{Float32, Int})
         Base.text_colors[Base.warn_color()]
     else
         Base.text_colors[Base.error_color()]
     end
-    @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, Int64}", displayed)
+    @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, $Int}", displayed)
     write(terminal, :down)
     write(terminal, :enter)
     displayed, text = read_next(harness)
