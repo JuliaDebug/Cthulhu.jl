@@ -259,8 +259,7 @@ Base.@assume_effects :terminates_locally function issue41694(x)
     end
     return res
 end
-@testset "ConstResult" begin
-    # constant prop' on all the splits
+@testset "Concrete eval result" begin
     callsites = find_callsites_by_ftt(() -> issue41694(12); optimize = false)
     callinfo = only(callsites).info
     @test isa(callinfo, Cthulhu.ConcreteCallInfo)
