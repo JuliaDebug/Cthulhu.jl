@@ -163,7 +163,7 @@ end
     # Native code view
     write(terminal, 'N')
     displayed, text = read_next(harness)
-    @test occursin("retq", text)
+    @test occursin(r"\bret[lq]?\b", text)  # retq on x86-64, retl on x86, ret on ARM64
     @test occursin('[' * colorize(true, 'N') * "]ative", displayed)
     # Typed view (by selector)
     write(terminal, 'T')
