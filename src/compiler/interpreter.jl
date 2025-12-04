@@ -231,6 +231,21 @@ CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) =
 CC.retrieve_ir_for_inlining(mi::MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
     CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
 
+@static if VERSION ≥ v"1.14.0-DEV.60"
+function CC.ci_get_source(::CthulhuInterpreter, code::CodeInstance)
+    return code.inferred
+end
+function CC.IRInterpretationState(interp::CthulhuInterpreter,
+    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, @nospecialize(inferred))
+    inferred::OptimizedSource
+    ir = CC.copy(inferred.ir)
+    src = inferred.src
+    spec_info = CC.SpecInfo(src)
+    argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
+    return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes,
+                                    code.min_world, code.max_world)
+end
+else
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     inferred = code.inferred
@@ -242,4 +257,5 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
+end
 end
