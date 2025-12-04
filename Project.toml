@@ -20,6 +20,9 @@ WidthLimitedIO = "b8c1c048-cf81-46c6-9da0-18c1d99e41f2"
 [weakdeps]
 Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 
+[sources]
+TypedSyntax = {path = "TypedSyntax"}
+
 [extensions]
 CthulhuCompilerExt = "Compiler"
 
