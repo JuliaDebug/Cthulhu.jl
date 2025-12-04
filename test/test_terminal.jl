@@ -209,12 +209,12 @@ end
     @test occursin("\nBody", text)
     @test occursin("\e[1m::Union{Float32, $Int}\e[22m\e[39m", displayed)
     @test occursin("Base.getindex(c)\e[91m\e[1m::Any\e[22m\e[39m", displayed)
-    warncolor = if Cthulhu.is_expected_union(Union{Float32, Int64})
+    warncolor = if Cthulhu.is_expected_union(Union{Float32, Int})
         Base.text_colors[Base.warn_color()]
     else
         Base.text_colors[Base.error_color()]
     end
-    @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, Int64}", displayed)
+    @test occursin("$(warncolor)%\e[39m3 = call → fmulti(::Any)::Union{Float32, $Int}", displayed)
     write(terminal, :down)
     write(terminal, :enter)
     displayed, text = read_next(harness)
