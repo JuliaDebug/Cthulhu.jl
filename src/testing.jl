@@ -73,8 +73,12 @@ end
 AsyncIO(terminal::VirtualTerminal) = AsyncIO(terminal.output)
 
 function Base.peek(io::AsyncIO, ::Type{UInt8})
-    while bytesavailable(io) < 1 yield() end
-    return @lock io.lock io.buffer[1]
+    while true
+        @lock io.lock begin
+            isempty(io.buffer) || return io.buffer[1]
+        end
+        yield()
+    end
 end
 function Base.read(io::AsyncIO, ::Type{UInt8})
     ref = Ref(0x00)
@@ -97,17 +101,24 @@ function Base.readavailable(io::AsyncIO)
 end
 
 function Base.unsafe_read(io::AsyncIO, to::Ptr{UInt8}, nb::UInt)
-    written = 0
+    written = UInt(0)
     while written < nb
-        bytesavailable(io) > 0 || (yield(); continue)
-        @lock io.lock begin
+        n = @lock io.lock begin
             (; buffer) = io
-            n = min(length(buffer), nb)
-            GC.@preserve buffer begin
-                unsafe_copyto!(to, pointer(buffer), n)
+            n = min(UInt(length(buffer)), nb - written)
+            if n > 0
+                GC.@preserve buffer begin
+                    unsafe_copyto!(to + written, pointer(buffer), n)
+                end
+                splice!(buffer, 1:n)
             end
-            splice!(buffer, 1:n)
-            written += n
+            n
+        end
+        written += n
+        if written < nb
+            # Yield first to give the background task a chance to read more data
+            yield()
+            eof(io) && throw(EOFError())
         end
     end
 end
