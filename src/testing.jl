@@ -109,7 +109,7 @@ function Base.unsafe_read(io::AsyncIO, to::Ptr{UInt8}, nb::UInt)
             splice!(buffer, 1:n)
             written += n
         end
-        eof(io) && throw(EOFError())
+        istaskdone(io.task) && throw(EOFError())
     end
 end
 
