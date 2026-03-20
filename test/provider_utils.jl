@@ -1,9 +1,13 @@
 using Core.IR
 using Test
-using Cthulhu: descend, get_inference_world, find_method_instance, generate_code_instance, lookup, get_ci, get_override, find_callsites, Command, menu_commands, is_command_enabled, show_command, CthulhuState, get_pc_effects, get_pc_remarks, get_pc_excts, get_inlining_costs, show_parameters
-using .CompilerIntegration: DefaultProvider, PC2Effects, PC2Remarks, PC2Excts, LookupResult
-using Cthulhu.Testing: VirtualTerminal, TestHarness, @run, wait_for, read_next, end_terminal_session
-using Logging: with_logger, NullLogger
+using Cthulhu: Command, CthulhuConfig, CthulhuState, descend, find_callsites,
+    find_method_instance, generate_code_instance, get_ci, get_inference_world,
+    get_inlining_costs, get_override, get_pc_effects, get_pc_excts, get_pc_remarks,
+    is_command_enabled, lookup, menu_commands, show_command, show_parameters
+using .CompilerIntegration: DefaultProvider, LookupResult, PC2Effects, PC2Excts, PC2Remarks
+using Cthulhu.Testing: @run, TestHarness, VirtualTerminal, end_terminal_session, read_next,
+    wait_for
+using Logging: NullLogger, with_logger
 
 function test_provider_api(provider, args...)
     world = get_inference_world(provider)
@@ -59,9 +63,14 @@ function test_provider_api(provider, args...)
     end
 end
 
+function default_config_kwargs()
+    config = CthulhuConfig()
+    return NamedTuple(name => getfield(config, name) for name in propertynames(config))
+end
+
 function test_descend_for_provider(provider, args...; show = false)
     terminal = VirtualTerminal()
-    harness = @run terminal descend(args...; terminal, provider)
+    harness = @run terminal descend(args...; terminal, provider, default_config_kwargs()...)
     write(terminal, 'T')
     write(terminal, 'o') # optimize: on
     write(terminal, 'L')
