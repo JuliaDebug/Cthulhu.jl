@@ -122,7 +122,37 @@ function find_callsites(provider::AbstractProvider, result::LookupResult, ci::Co
     return callsites, sourcenodes
 end
 
-function process_const_info(provider::AbstractProvider, ::LookupResult, @nospecialize(thisinfo),
+@static if VERSION ≥ v"1.14.0-DEV.60"
+function process_result(
+        ::AbstractProvider, ::LookupResult, argtypes::ArgTypes,
+        @nospecialize(rt), @nospecialize(result), @nospecialize(exct)
+    )
+    if isnothing(result)
+        return nothing
+    elseif isa(result, CC.ConcreteResult)
+        edge = result.edge
+        effects = get_effects(result)
+        mici = EdgeCallInfo(edge, rt, effects, exct)
+        return ConcreteCallInfo(mici, argtypes)
+    elseif isa(result, CC.SemiConcreteResult)
+        effects = get_effects(result)
+        mici = EdgeCallInfo(result.edge, rt, effects, exct)
+        return SemiConcreteCallInfo(mici, result.ir)
+    else
+        @assert isa(result, CC.InferenceResult)
+        overridden_by_const = result.overridden_by_const
+        if overridden_by_const !== nothing && any(overridden_by_const)
+            effects = get_effects(result)
+            mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
+            return ConstPropCallInfo(mici, result)
+        else
+            effects = get_effects(result)
+            return EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
+        end
+    end
+end
+else
+function process_const_info(::AbstractProvider, ::LookupResult, @nospecialize(thisinfo),
     argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result),
     @nospecialize(exct))
     if isnothing(result)
@@ -152,6 +182,7 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
         return ConstPropCallInfo(mici, result)
     end
 end
+end
 
 function process_info(provider::AbstractProvider, result::LookupResult, @nospecialize(info::CCCallInfo),
                       argtypes::ArgTypes, @nospecialize(rt),
@@ -176,10 +207,16 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
             if edge === nothing
                 RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
             else
+                @static if VERSION ≥ v"1.14.0-DEV.60"
+                @something(
+                    process_result(provider, result, argtypes, rt, info.call_results[i], exct),
+                    RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct))
+                else
                 effects = @something(effects, get_effects(edge))
                 EdgeCallInfo(edge, rt, effects, exct)
+                end
             end
-        end for edge in info.edges if edge !== nothing]
+        end for (i, edge) in enumerate(info.edges) if edge !== nothing]
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -188,7 +225,7 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         # XXX: This could probably use its own info. For now,
         # we ignore any implicit iterate calls.
         return process_recursive(info.call)
-    elseif isa(info, ConstCallInfo)
+    elseif (@static VERSION < v"1.14.0-DEV.60" ? true : false) && isa(info, CC.ConstCallInfo)
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return CallInfo[let
@@ -197,9 +234,15 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
     elseif isa(info, CC.InvokeCallInfo)
         edge = info.edge
         if edge !== nothing
+            @static if VERSION ≥ v"1.14.0-DEV.60"
+            innerinfo = @something(
+                process_result(provider, result, argtypes, rt, info.result, exct),
+                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct))
+            else
             effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
             innerinfo = process_const_info(provider, result, thisinfo, argtypes, rt, info.result, exct)
+            end
         else
             innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
         end
@@ -208,9 +251,15 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
     elseif isa(info, CC.OpaqueClosureCallInfo)
         edge = info.edge
         if edge !== nothing
+            @static if VERSION ≥ v"1.14.0-DEV.60"
+            innerinfo = @something(
+                process_result(provider, result, argtypes, rt, info.result, exct),
+                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct))
+            else
             effects = @something(effects, get_effects(edge))
             thisinfo = EdgeCallInfo(edge, rt, effects)
             innerinfo = process_const_info(provider, result, thisinfo, argtypes, rt, info.result, exct)
+            end
         else
             innerinfo = RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
         end

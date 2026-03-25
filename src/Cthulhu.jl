@@ -11,7 +11,11 @@ const IRShow = Base.IRShow
 using Accessors
 using CodeTracking: CodeTracking
 using InteractiveUtils
+@static if VERSION ≥ v"1.14-"
+using .IRShow: is_expected_union
+else
 using InteractiveUtils: is_expected_union
+end
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax: JuliaSyntax, children
