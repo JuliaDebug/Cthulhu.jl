@@ -240,7 +240,7 @@ end
     @test taskidx !== nothing
     for _ in 1:(something(taskidx, 1) - 1)
         write(terminal, :down)
-        read_next(harness)
+        skip_delimiter(harness)
     end
     write(terminal, :enter)
     displayed, text = read_next(harness)
