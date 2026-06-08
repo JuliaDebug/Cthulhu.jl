@@ -173,8 +173,9 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
     else
         # Since #59413 `MethodMatchInfo.call_results` also carries the regular (non-const)
         # edge inference result; only genuine constant-prop results override argtypes.
-        if isa(result, CC.InferenceResult) && result.overridden_by_const === nothing
-            return thisinfo
+        if isa(result, CC.InferenceResult)
+            obc = result.overridden_by_const
+            (obc === nothing || !any(obc)) && return thisinfo
         end
     end
     @assert isa(result, CC.InferenceResult)

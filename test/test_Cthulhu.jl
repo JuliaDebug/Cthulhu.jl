@@ -715,7 +715,8 @@ end
     micallee_Int = find_method_instance(provider, callee, (Int,))
     micallee_Float64 = find_method_instance(provider, callee, (Float64,))
     info, lines = only(Cthulhu.find_caller_of(provider, micallee_Int, micaller))
-    @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line1, line3]
+    # Callsite discovery order isn't guaranteed (it flipped on Julia 1.14); compare order-independently.
+    @test info == (:caller, Symbol(@__FILE__), 0) && sort(lines) == sort([line1, line3])
     info, lines = only(Cthulhu.find_caller_of(provider, micallee_Float64, micaller))
     @test info == (:caller, Symbol(@__FILE__), 0) && lines == [line2]
 

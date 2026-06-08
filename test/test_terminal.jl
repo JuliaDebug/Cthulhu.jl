@@ -229,7 +229,19 @@ end
     harness = @run terminal @descend terminal=terminal view=:typed optimize=true task_function()
 
     displayed, text = read_next(harness)
-    @test occursin(r"• %\d\d = task", text)
+    @test occursin(r"%\d+ = task", text)
+    # On Julia 1.14 the `@sync`/`@async` machinery (ReentrantLock, Channel, …) is no longer
+    # inlined away, so the task callsite is no longer the first/selected menu entry. Compute its
+    # position among the menu options (listed after the "params cache." help line) and step down
+    # to it with an exact, bounded number of `:down` presses (over-pressing past the last option
+    # emits no redraw and would block `read_next`).
+    menu_options = [l for l in split(last(split(text, "params cache.")), '\n') if occursin(r"%\d+ = ", l)]
+    taskidx = findfirst(l -> occursin("= task", l), menu_options)
+    @test taskidx !== nothing
+    for _ in 1:(something(taskidx, 1) - 1)
+        write(terminal, :down)
+        read_next(harness)
+    end
     write(terminal, :enter)
     displayed, text = read_next(harness)
     @test occursin("call show(::IO,::String)", text)
