@@ -15,6 +15,25 @@ function transform(::Val{:CuFunction}, provider, callsite, callexpr, src, mi, sl
     return Callsite(callsite.id, CuCallInfo(callinfo(provider, sig, Nothing; world)), callsite.head)
 end
 
+# Returns the closure argument of a `Core._Task(closure, ...)` construction, else `nothing`.
+# Task creation shows up as an `:invoke`/`:call` to `Core._Task` when the constructor isn't
+# inlined to a `jl_new_task` foreigncall (the latter is handled separately in `find_callsites`).
+function task_constructor_closure(@nospecialize(stmt), src, sptypes, slottypes)
+    isa(stmt, Expr) || return nothing
+    stmt = ignorelhs(stmt)
+    isa(stmt, Expr) || return nothing
+    if stmt.head === :invoke
+        length(stmt.args) ≥ 3 || return nothing
+        CC.singleton_type(argextype(stmt.args[2], src, sptypes, slottypes)) === Core._Task || return nothing
+        return stmt.args[3]
+    elseif stmt.head === :call
+        length(stmt.args) ≥ 2 || return nothing
+        CC.singleton_type(argextype(stmt.args[1], src, sptypes, slottypes)) === Core._Task || return nothing
+        return stmt.args[2]
+    end
+    return nothing
+end
+
 function find_callsites(provider::AbstractProvider, result::LookupResult, ci::CodeInstance, annotate_source::Bool=false, pc2excts::Union{Nothing,PC2Excts}=nothing)
     mi = get_mi(ci)
     sptypes = sptypes_from_meth_instance(mi)
@@ -28,7 +47,13 @@ function find_callsites(provider::AbstractProvider, result::LookupResult, ci::Co
         stmt = stmts[id]
         isa(stmt, Expr) || continue
         callsite = nothing
-        if is_call_expr(stmt, result.optimized)
+        local taskclosure = task_constructor_closure(stmt, src, sptypes, result.slottypes)
+        if taskclosure !== nothing
+            ftype = widenconst(argextype(taskclosure, src, sptypes, result.slottypes))
+            sig = Tuple{ftype}
+            callsite = Callsite(id, TaskCallInfo(callinfo(provider, sig, nothing; world=get_inference_world(provider))), (ignorelhs(stmt)::Expr).head)
+        end
+        if callsite === nothing && is_call_expr(stmt, result.optimized)
             info = result.infos[id]
             if info !== nothing
                 if isa(info, CC.UnionSplitApplyCallInfo)
@@ -127,30 +152,35 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
     @nospecialize(exct))
     if isnothing(result)
         return thisinfo
-    elseif result isa CC.VolatileInferenceResult
-        # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
-        #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
-        return thisinfo
     elseif isa(result, CC.ConcreteResult)
         edge = result.edge
         effects = get_effects(result)
         mici = EdgeCallInfo(edge, rt, effects, exct)
         return ConcreteCallInfo(mici, argtypes)
-    elseif isa(result, CC.ConstPropResult)
-        effects = get_effects(result)
-        result = result.result
-        mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
-        return ConstPropCallInfo(mici, result)
     elseif isa(result, CC.SemiConcreteResult)
         effects = get_effects(result)
         mici = EdgeCallInfo(result.edge, rt, effects, exct)
         return SemiConcreteCallInfo(mici, result.ir)
-    else
-        @assert isa(result, CC.InferenceResult)
-        effects = get_effects(result)
-        mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
-        return ConstPropCallInfo(mici, result)
     end
+    @static if isdefined(CC, :ConstPropResult)
+        if isa(result, CC.VolatileInferenceResult)
+            # NOTE we would not hit this case since `finish!(::CthulhuInterpreter, frame::InferenceState)`
+            #      will always transform `frame.result.src` to `OptimizedSource` when frame is inferred
+            return thisinfo
+        elseif isa(result, CC.ConstPropResult)
+            result = result.result
+        end
+    else
+        # Since #59413 `MethodMatchInfo.call_results` also carries the regular (non-const)
+        # edge inference result; only genuine constant-prop results override argtypes.
+        if isa(result, CC.InferenceResult) && result.overridden_by_const === nothing
+            return thisinfo
+        end
+    end
+    @assert isa(result, CC.InferenceResult)
+    effects = get_effects(result)
+    mici = EdgeCallInfo(result.ci_as_edge, rt, effects, exct)
+    return ConstPropCallInfo(mici, result)
 end
 
 function process_info(provider::AbstractProvider, result::LookupResult, @nospecialize(info::CCCallInfo),
@@ -172,14 +202,28 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         end
     end
     if isa(info, MethodMatchInfo)
-        return CallInfo[let
-            if edge === nothing
-                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
-            else
-                effects = @something(effects, get_effects(edge))
-                EdgeCallInfo(edge, rt, effects, exct)
+        @static if isdefined(CC, :ConstCallInfo)
+            return CallInfo[let
+                if edge === nothing
+                    RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+                else
+                    effects = @something(effects, get_effects(edge))
+                    EdgeCallInfo(edge, rt, effects, exct)
+                end
+            end for edge in info.edges if edge !== nothing]
+        else
+            # Since #59413 const-prop results are attached per-edge in `info.call_results`.
+            infos = CallInfo[]
+            for i in eachindex(info.edges)
+                edge = info.edges[i]
+                edge === nothing && continue
+                eff = @something(effects, get_effects(edge))
+                thisinfo = EdgeCallInfo(edge, rt, eff, exct)
+                thisinfo = process_const_info(provider, result, thisinfo, argtypes, rt, info.call_results[i], exct)
+                push!(infos, thisinfo)
             end
-        end for edge in info.edges if edge !== nothing]
+            return infos
+        end
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -188,7 +232,7 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         # XXX: This could probably use its own info. For now,
         # we ignore any implicit iterate calls.
         return process_recursive(info.call)
-    elseif isa(info, ConstCallInfo)
+    elseif isa(info, ConstCallInfoT)
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return CallInfo[let

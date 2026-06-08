@@ -20,10 +20,20 @@ end
 
 mutable struct OverlayToken end
 
+# The local inference cache type changed from `Vector{InferenceResult}` to
+# `Compiler.InferenceCache` on Julia 1.14 (#59413).
+@static if isdefined(CC, :InferenceCache)
+    const LocalCache = CC.InferenceCache
+    new_local_cache() = CC.InferenceCache()
+else
+    const LocalCache = Vector{InferenceResult}
+    new_local_cache() = InferenceResult[]
+end
+
 struct OverlayInterpreter <: AbstractInterpreter
     token::OverlayToken
     method_table::OverlayMethodTable
-    local_cache::Vector{InferenceResult}
+    local_cache::LocalCache
     world::UInt
     inference_parameters::InferenceParams
     optimization_parameters::OptimizationParams
@@ -35,7 +45,7 @@ function OverlayInterpreter(world::UInt = Base.get_world_counter();
     return OverlayInterpreter(
         OverlayToken(),
         OverlayMethodTable(world, METHOD_TABLE),
-        InferenceResult[],
+        new_local_cache(),
         world,
         inference_parameters,
         optimization_parameters,
@@ -80,5 +90,7 @@ CompilerIntegration.OptimizedSource(provider::OverlayProvider, interp::OverlayIn
     OptimizedSource(provider, provider.cthulhu, result)
 CompilerIntegration.InferredSource(provider::OverlayProvider, interp::OverlayInterpreter, ci::CodeInstance) =
     InferredSource(provider, provider.cthulhu, ci)
+CompilerIntegration.InferredSource(provider::OverlayProvider, interp::OverlayInterpreter, result::InferenceResult) =
+    InferredSource(provider, provider.cthulhu, result)
 
 end

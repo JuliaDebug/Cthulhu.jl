@@ -25,6 +25,10 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
     InterpName = esc(InterpName)
     C = Core
     CC = Cthulhu.CC
+    # The local inference cache type changed from `Vector{InferenceResult}` to
+    # `Compiler.InferenceCache` on Julia 1.14 (#59413).
+    InfCacheType = isdefined(CC, :InferenceCache) ? :($CC.InferenceCache) : :(Vector{$CC.InferenceResult})
+    InfCacheInit = isdefined(CC, :InferenceCache) ? :($CC.InferenceCache()) : :($CC.InferenceResult[])
     quote
         $(ephemeral_cache && quote
         struct $InterpCacheName
@@ -37,13 +41,13 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
             world::UInt
             inf_params::$CC.InferenceParams
             opt_params::$CC.OptimizationParams
-            inf_cache::Vector{$CC.InferenceResult}
+            inf_cache::$InfCacheType
             $(ephemeral_cache && :(code_cache::$InterpCacheName))
             function $InterpName(meta = nothing;
                                     world::UInt = Base.get_world_counter(),
                                     inf_params::$CC.InferenceParams = $CC.InferenceParams(),
                                     opt_params::$CC.OptimizationParams = $CC.OptimizationParams(),
-                                    inf_cache::Vector{$CC.InferenceResult} = $CC.InferenceResult[],
+                                    inf_cache::$InfCacheType = $InfCacheInit,
                                     $(ephemeral_cache ?
                                     Expr(:kw, :(code_cache::$InterpCacheName), :($InterpCacheName())) :
                                     Expr(:kw, :_, :nothing)))
