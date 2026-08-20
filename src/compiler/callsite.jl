@@ -151,7 +151,7 @@ end
 get_ci(ceci::ConcreteCallInfo) = get_ci(ceci.ci)
 get_rt(ceci::ConcreteCallInfo) = get_rt(ceci.ci)
 get_effects(ceci::ConcreteCallInfo) = get_effects(ceci.ci)
-get_exct(cici::ConcreteCallInfo) = get_exct(ceci.ci)
+get_exct(ceci::ConcreteCallInfo) = get_exct(ceci.ci)
 
 struct SemiConcreteCallInfo <: CallInfo
     ci::CallInfo
