@@ -266,4 +266,7 @@ calls_helper2(x) = Internal.MoreInternal.helper2(x)
 
 allbutfirst(list) = list[2:end]
 
+# Issue #693: empty `parameters` node in source signature (trailing `;` with no kwargs)
+f693(x; ) = x + 1
+
 end

@@ -87,24 +87,29 @@ end
 # Recursive construction of the TypedSyntaxNode tree from the SyntaxNodeTree
 function addchildren!(tparent, parent, src::CodeInfo, node2ssa, symtyps, mappings)
     if !is_leaf(parent)
+        # Non-leaf parents must have a children vector even when empty (e.g. an
+        # empty `parameters` node from `f(x; ) = ...`), so consumers like
+        # `map_signature!` can treat `children` as iterable. See issue #693.
+        if tparent.children === nothing
+            tparent.children = TypedSyntaxNode[]
+        end
         for child in children(parent)
             typ = gettyp(node2ssa, child, src)
             tnode = TypedSyntaxNode(tparent, nothing, TypedSyntaxData(child.data::SyntaxData, src, typ))
             if tnode.typ === nothing && (#=is_literal(child) ||=# kind(child) == K"Identifier")
                 tnode.typ = get(symtyps, child, nothing)
             end
-            is_leaf(tparent) && (tparent.children = TypedSyntaxNode[])
             push!(tparent, tnode)
             addchildren!(tnode, child, src, node2ssa, symtyps, mappings)
         end
     end
     # In `return f(args..)`, copy any types assigned to `f(args...)` up to the `[return]` node
     if kind(tparent) == K"return"
-        if !is_leaf(tparent)
-            value = only(children(tparent))
-            tparent.typ = value.typ
-        else
+        childs = is_leaf(tparent) ? nothing : children(tparent)
+        if childs === nothing || isempty(childs)
             tparent.typ = Nothing
+        else
+            tparent.typ = only(childs).typ
         end
     end
     # Replace the entry in `mappings` to be the typed node
@@ -163,6 +168,7 @@ function map_signature!(sig::TypedSyntaxNode, slotnames::Vector{Symbol}, slottyp
         arg = argcontainer[j]
         if kind(arg) == K"parameters"
             argcontainer = children(arg)
+            isempty(argcontainer) && break   # e.g. `f(x; ) = ...` — no kwargs to match
             j = 1
             arg = argcontainer[j]
             havekws = true
