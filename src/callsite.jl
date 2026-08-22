@@ -8,6 +8,8 @@ end
 
 function find_callsites end
 function get_rt end
+function get_effects end
+function get_exct end
 get_ci(c::Callsite) = get_ci(c.info)
 get_mi(c::Callsite) = get_mi(get_ci(c))
 
