@@ -39,7 +39,9 @@ show_parameters(io::IO, provider::AbstractProvider, interp::AbstractInterpreter)
 function show_inference_cache(io::IO, interp::AbstractInterpreter)
     @info "Dumping inference cache."
     cache = CC.get_inference_cache(interp)
-    for (i, (; linfo, result)) in enumerate(cache)
+    # `get_inference_cache` returns a `Compiler.InferenceCache` on Julia 1.14+, a plain vector before.
+    results = cache isa AbstractVector ? cache : cache.results
+    for (i, (; linfo, result)) in enumerate(results)
         println(io, i, ": ", linfo, "::", result)
     end
 end

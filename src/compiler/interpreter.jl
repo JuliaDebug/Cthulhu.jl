@@ -231,6 +231,23 @@ CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) =
 CC.retrieve_ir_for_inlining(mi::MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
     CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
 
+# Since #59413 (Julia 1.14) the source is obtained via `ci_get_source` and passed as the
+# 5th argument to `IRInterpretationState` (replacing the old `world::UInt`); `va_process_argtypes`
+# also gained a trailing `mi`. Without these overrides the generic constructor rejects Cthulhu's
+# `OptimizedSource` (it isn't a `CodeInfo`) and semi-concrete eval silently degrades to const-prop.
+@static if isdefined(CC, :ci_get_source)
+CC.ci_get_source(::CthulhuInterpreter, code::CodeInstance) = code.inferred
+function CC.IRInterpretationState(interp::CthulhuInterpreter,
+    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, @nospecialize(inferred))
+    isa(inferred, OptimizedSource) || return nothing
+    ir = CC.copy(inferred.ir)
+    src = inferred.src
+    spec_info = CC.SpecInfo(src)
+    argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
+    return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes,
+                                    code.min_world, code.max_world)
+end
+else
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     inferred = code.inferred
@@ -242,4 +259,5 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
+end
 end

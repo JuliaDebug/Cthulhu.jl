@@ -11,7 +11,12 @@ const IRShow = Base.IRShow
 using Accessors
 using CodeTracking: CodeTracking
 using InteractiveUtils
-using InteractiveUtils: is_expected_union
+# `is_expected_union` moved from InteractiveUtils into `Compiler.IRShow` on Julia 1.14.
+@static if isdefined(Base.Compiler.IRShow, :is_expected_union)
+    using Base.Compiler.IRShow: is_expected_union
+else
+    using InteractiveUtils: is_expected_union
+end
 using UUIDs
 using REPL: REPL, AbstractTerminal
 using JuliaSyntax: JuliaSyntax, children
