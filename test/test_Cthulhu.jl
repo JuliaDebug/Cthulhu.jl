@@ -401,6 +401,9 @@ end
     @test occursin("< opaque closure call > $s", String(take!(buf)))
 end
 
+# an empty MultiCallInfo has no effects to merge; `mapreduce` without `init` threw
+@test Cthulhu.get_effects(Cthulhu.MultiCallInfo(Tuple{}, Any, Cthulhu.CallInfo[])) == Cthulhu.CC.EFFECTS_TOTAL
+
 # tasks
 ftask() = @sync @async show(io, "Hello")
 let callsites = find_callsites_by_ftt(ftask, Tuple{})
