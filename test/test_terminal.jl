@@ -365,6 +365,40 @@ end
     write(terminal, 'q')
     @test end_terminal_session(harness)
 
+    @testset "Descending into a task keeps `mi` and `ci` together" begin
+        # Entering a task frame set `state.ci` alone, so every view rendered the
+        # parent's method with the task's code, and nothing restored the parent
+        # after ascending.
+        ftaskt() = @sync @async show(devnull, "Hello")
+        terminal = VirtualTerminal()
+        harness = @run terminal descend(ftaskt, Tuple{}; view=:typed, optimize=true, iswarn=false, terminal)
+        displayed, text = read_next(harness)
+        @test occursin("ftaskt()", text)
+        lines = split(text, '\n')
+        menu = lines[something(findfirst(l -> occursin("Select a call to descend into", l), lines), 0)+1:end]
+        rows = filter(l -> occursin(r"%\d+ = ", l), menu)
+        i = findfirst(l -> occursin("task <", l), rows)
+        @test i !== nothing
+        for _ in 2:something(i, 1)
+            write(terminal, :down)
+            skip_delimiter(harness)
+        end
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        # the frame header is the task's own method
+        @test occursin(r"\(::(\w+\.)*var\"#ftaskt##", text)
+        @test !occursin("ftaskt()", text)
+        # ascend (the cursor wraps to "↩ to ascend"): the parent, with its own callsites
+        write(terminal, :up)
+        skip_delimiter(harness)
+        write(terminal, :enter)
+        displayed, text = read_next(harness)
+        @test occursin("ftaskt()", text)
+        @test any(l -> occursin("task <", l), split(text, '\n'))
+        write(terminal, 'q')
+        @test end_terminal_session(harness)
+    end
+
     @testset "Bookmarks" begin
         bookmarks = Cthulhu.BOOKMARKS
         n = length(bookmarks)
