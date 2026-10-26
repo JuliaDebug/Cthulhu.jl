@@ -147,6 +147,13 @@ function cthulhu_finish(result::Union{Nothing, InferenceResult}, frame::Inferenc
             # XXX: `UnionSplitApplyCallInfo` is specially handled in `CC.inline_apply!`,
             # so we can't shove it under a `CthulhuCallInfo`.
             frame.stmt_info[i] = pack_cthulhuinfo_in_unionsplit(call, info)
+        elseif isdefined(CC, :getedge_impl) && isa(info, CC.InvokeCallInfo)
+            # Since Julia 1.14, `CC.handle_invoke_call!` reads `info.edge` directly,
+            # so leave it unwrapped.
+            continue
+        elseif isdefined(CC, :TaskCallInfo) && isa(info, CC.TaskCallInfo)
+            # leave it visible to `CC.handle_task_call!` in the inliner
+            continue
         else
             frame.stmt_info[i] = CthulhuCallInfo(call)
         end
@@ -220,7 +227,7 @@ function CC.src_inlining_policy(interp::CthulhuInterpreter,
         end
         return false
     else
-        @assert src isa CC.IRCode || src === nothing "invalid Cthulhu code cache"
+        @assert src isa CC.IRCode || src isa CodeInfo || src === nothing "invalid Cthulhu code cache"
         # the default inlining policy may try additional effort to find the source in a local cache
         return @invoke CC.src_inlining_policy(interp::AbstractInterpreter,
             src::Any, info::CCCallInfo, stmt_flag::UInt32)
@@ -231,6 +238,22 @@ CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::OptimizedSource) =
 CC.retrieve_ir_for_inlining(mi::MethodInstance, src::OptimizedSource, preserve_local_sources::Bool) =
     CC.retrieve_ir_for_inlining(mi, src.ir, preserve_local_sources)
 
+@static if hasmethod(CC.va_process_argtypes, Tuple{CC.AbstractLattice, Vector{Any}, UInt, Bool, MethodInstance})
+# Julia 1.14+: the caller passes the source to interpret directly.
+function CC.IRInterpretationState(interp::CthulhuInterpreter,
+    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, inferred::OptimizedSource,
+    valid_worlds::WorldRange = WorldRange(code.min_world, code.max_world))
+    ir = CC.copy(inferred.ir)
+    src = inferred.src
+    spec_info = CC.SpecInfo(src)
+    argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
+    return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes,
+                                    first(valid_worlds), last(valid_worlds))
+end
+# Make cached `OptimizedSource`s visible to the 1.14 inliner and irinterp, which only handle `CodeInfo`/`String`.
+CC.is_inlineable(src::OptimizedSource) = src.isinlineable
+CC.ci_get_source(::CthulhuInterpreter, ::CodeInstance, src::OptimizedSource) = src.src
+else
 function CC.IRInterpretationState(interp::CthulhuInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     inferred = code.inferred
@@ -242,4 +265,5 @@ function CC.IRInterpretationState(interp::CthulhuInterpreter,
     argtypes = CC.va_process_argtypes(CC.optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return CC.IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                     code.min_world, code.max_world)
+end
 end

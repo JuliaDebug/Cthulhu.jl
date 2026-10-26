@@ -177,6 +177,9 @@ CC.add_edges_impl(edges::Vector{Any}, info::CthulhuCallInfo) = CC.add_edges!(edg
 CC.nsplit_impl(info::CthulhuCallInfo) = CC.nsplit(info.meta.info)
 CC.getsplit_impl(info::CthulhuCallInfo, idx::Int) = CC.getsplit(info.meta.info, idx)
 CC.getresult_impl(info::CthulhuCallInfo, idx::Int) = CC.getresult(info.meta.info, idx)
+@static if isdefined(CC, :getedge_impl)
+    CC.getedge_impl(info::CthulhuCallInfo, idx::Int) = CC.getedge(info.meta.info, idx)
+end
 
 get_effects(c::Callsite) = get_effects(c.info)
 

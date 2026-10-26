@@ -429,11 +429,14 @@ function collect_symbol_nodes!(symlocs::AbstractDict, node)
     return symlocs
 end
 
+# Moved from `IRShow` into the compiler proper in Julia 1.14.
+const getdebugidx = isdefined(Base.IRShow, :getdebugidx) ? Base.IRShow.getdebugidx : Base.Compiler.getdebugidx
+
 ## utility function to extract the line number at a particular program counter (ignoring inlining).
 ## return <= 0 if there is no line number change caused by this statement
 function getline(lt::Core.DebugInfo, i::Int)
     while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
+        codeloc = getdebugidx(lt, i)
         line::Int = codeloc[1]
         line < 0 && return 0 # broken or disabled debug info?
         line == 0 && return 0 # no line number update (though maybe inlining changed)
@@ -447,7 +450,7 @@ function getline(lt::Core.DebugInfo, i::Int)
 end
 function getnextline(lt::Core.DebugInfo, i::Int, Δline)
     while true
-        codeloc = Base.IRShow.getdebugidx(lt, i)
+        codeloc = getdebugidx(lt, i)
         line::Int = codeloc[1]
         line < 0 && return typemax(Int) # broken or disabled debug info?
         if line == 0
@@ -464,9 +467,9 @@ function getnextline(lt::Core.DebugInfo, i::Int, Δline)
     # now that we have line i and a list of all lines with code on them lt
     # find the next largest line number in this list greater than i, or return typemax(Int)
     j = i+1
-    currline = Base.IRShow.getdebugidx(lt, i)[1]
+    currline = getdebugidx(lt, i)[1]
     while j ≤ typemax(Int)
-        codeloc = Base.IRShow.getdebugidx(lt, j)
+        codeloc = getdebugidx(lt, j)
         line::Int = codeloc[1]
         line < 0 && break
         if line == 0 || currline == line

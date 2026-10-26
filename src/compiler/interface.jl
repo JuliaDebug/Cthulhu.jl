@@ -39,7 +39,9 @@ show_parameters(io::IO, provider::AbstractProvider, interp::AbstractInterpreter)
 function show_inference_cache(io::IO, interp::AbstractInterpreter)
     @info "Dumping inference cache."
     cache = CC.get_inference_cache(interp)
-    for (i, (; linfo, result)) in enumerate(cache)
+    for (i, entry) in enumerate(cache)
+        # Since Julia 1.14, completed entries are wrapped in `LocalInferenceResult`.
+        (; linfo, result) = isdefined(CC, :LocalInferenceResult) && entry isa CC.LocalInferenceResult ? entry.result : entry
         println(io, i, ": ", linfo, "::", result)
     end
 end
