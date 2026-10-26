@@ -921,6 +921,16 @@ end
     @test haskey(pc2effects, i2)
     @test haskey(pc2effects, i3)
     @test haskey(pc2effects, i4)
+
+    # optimized code shows the effects recorded in each statement's flags
+    provider, mi, ci, result = cthulhu_info(exp, (Float64,); optimize = true)
+    config = set_config(CONFIG; view = :typed, optimize = true, effects = true, debuginfo = :none)
+    io = IOBuffer()
+    Cthulhu.cthulhu_typed(io, provider, CthulhuState(provider; mi, ci, config), result)
+    lines = filter(l -> occursin(r"%[1-9]\d*\s+=", l) && !occursin("φ", l), split(String(take!(io)), '\n'))
+    @test length(lines) > 10
+    @test all(l -> occursin(r"\([+!]c,[+!]e,", l), lines)
+    @test any(l -> occursin("getfield", l) && occursin("!n", l), lines) # may throw a `BoundsError`
 end
 
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
