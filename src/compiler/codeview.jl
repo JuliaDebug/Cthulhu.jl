@@ -96,13 +96,35 @@ function cthulhu_source(io::IO, provider::AbstractProvider, state::CthulhuState,
     return cthulhu_typed(io, provider, state, result)
 end
 
+# The subset of `Effects` that the optimizer records in an IR statement's flags.
+struct StmtFlagEffects
+    flag::UInt32
+end
+const STMT_FLAG_EFFECTS = filter(((_, name),) -> isdefined(CC, name),
+    (("c", :IR_FLAG_CONSISTENT), ("e", :IR_FLAG_EFFECT_FREE), ("re", :IR_FLAG_RESET_SAFE),
+     ("n", :IR_FLAG_NOTHROW), ("t", :IR_FLAG_TERMINATES), ("u", :IR_FLAG_NOUB), ("r", :IR_FLAG_NORTCALL)))
+function Base.show(io::IO, e::StmtFlagEffects)
+    print(io, '(')
+    for (i, (letter, name)) in enumerate(STMT_FLAG_EFFECTS)
+        i > 1 && print(io, ',')
+        on = CC.has_flag(e.flag, getfield(CC, name)::UInt32)
+        printstyled(io, on ? '+' : '!', letter; color = on ? :green : :red)
+    end
+    print(io, ')')
+end
+
 function cthulhu_typed(io::IO, provider::AbstractProvider, state::CthulhuState, result::LookupResult)
     (; mi, ci, config) = state
     src = something(result.ir, result.src)::Union{IRCode, CodeInfo}
 
+    # Per-statement inference data is keyed by unoptimized statement index, so it doesn't apply
+    # to optimized IR; there, show the effects the optimizer recorded in the statement flags.
     pc2remarks = !result.optimized & config.remarks ? get_pc_remarks(provider, ci) : nothing
-    pc2effects = config.effects ? get_pc_effects(provider, ci) : nothing
-    pc2excts = config.exception_types ? get_pc_excts(provider, ci) : nothing
+    pc2effects = !config.effects ? nothing :
+        !result.optimized ? get_pc_effects(provider, ci) :
+        Union{Nothing,StmtFlagEffects}[isa(stmt, Expr) ? StmtFlagEffects(flag) : nothing for (stmt, flag) in
+            (isa(src, IRCode) ? zip(src.stmts.stmt, src.stmts.flag) : zip(src.code, src.ssaflags))]
+    pc2excts = !result.optimized & config.exception_types ? get_pc_excts(provider, ci) : nothing
     costs = result.optimized & config.inlining_costs ? get_inlining_costs(provider, mi, src) : nothing
 
     debuginfo = IRShow.debuginfo(config.debuginfo)

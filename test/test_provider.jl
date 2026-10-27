@@ -30,8 +30,6 @@ impl_warnings = logs([
     r"Remarks could not be retrieved",
     r"Effects could not be retrieved",
     normal_warnings[1][end],
-    r"Effects could not be retrieved",
-    r"Effects could not be retrieved",
     normal_warnings[2][end],
     r"Remarks could not be retrieved",
     r"Effects could not be retrieved",
@@ -43,7 +41,8 @@ impl_warnings = logs([
     r"Effects could not be retrieved",
 ])
 
-impl_warnings_noopt = impl_warnings[[3, 7, 9, 11, 13, 15]]
+# `ExternalProvider` always shows optimized IR, whose effects come from the statement flags
+impl_warnings_noopt = impl_warnings[[5]]
 
 function test_function(x)
     y = 1 + 1 # constant propgation (concrete evaluation)
