@@ -226,10 +226,19 @@ end
     # Tasks (see the special handling in `_descend`)
     task_function() = @sync @async show(io, "Hello")
     terminal = VirtualTerminal()
-    harness = @run terminal @descend terminal=terminal view=:typed optimize=true task_function()
+    # show all callsites so that the menu ends with the '↩' delimiter
+    harness = @run terminal @descend terminal=terminal view=:typed optimize=true menu_options=(; pagesize=-1) task_function()
 
     displayed, text = read_next(harness)
-    @test occursin(r"• %\d\d = task", text)
+    @test occursin(r"%\d\d = task", text)
+    # move the cursor to the task callsite, which need not be the first one
+    menu_lines = filter(l -> occursin(r"^ [• ] %\d+ = ", l), split(text, '\n'))
+    task_idx = findfirst(l -> occursin("= task", l), menu_lines)
+    @test task_idx isa Int
+    for _ in 2:something(task_idx, 1)
+        write(terminal, :down)
+        Cthulhu.Testing.skip_delimiter(harness) # consume the menu redraw
+    end
     write(terminal, :enter)
     displayed, text = read_next(harness)
     @test occursin("call show(::IO,::String)", text)
@@ -264,9 +273,13 @@ end
     end
 
     @testset "Source discarded because of LimitedAccuracy (#642)" begin
-        @test_logs (:warn, r"Inference decided not to cache") match_mode=:any begin
+        # Since Julia 1.14, the recursion-limited call has no `CodeInstance` edge, so Cthulhu infers
+        # it afresh and its source is not discarded
+        expected_logs = VERSION < v"1.14-" ? ((:warn, r"Inference decided not to cache"),) : ()
+        @test_logs expected_logs... match_mode=:any begin
             terminal = VirtualTerminal()
-            harness = @run terminal descend(Definitions.reduce_tuple, (typeof(((1, (1, 1)), 1)),); terminal)
+            # show all callsites so that the menu ends with the '↩' delimiter
+            harness = @run terminal descend(Definitions.reduce_tuple, (typeof(((1, (1, 1)), 1)),); terminal, menu_options=(; pagesize=-1))
             displayed, text = read_next(harness)
             write(terminal, 'T')
             displayed, text = read_next(harness)
@@ -334,7 +347,7 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin(r"reduce_empty\(::typeof\(\+\), ::(Core\.TypeEgal|Type)\{Any\}\)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
@@ -347,7 +360,7 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin(r"reduce_empty\(::typeof\(\+\), ::(Core\.TypeEgal|Type)\{Any\}\)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)
@@ -360,7 +373,7 @@ end
     displayed, text = read_next(harness)
     @test occursin("Choose a call for analysis (q to quit):", text)
     @test occursin("mapreduce_empty", text)
-    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin("reduce_empty(::typeof(+), ::Type{Any})", text)
+    @test occursin("reduce_empty(op::Function, T::Type)", text) || occursin(r"reduce_empty\(::typeof\(\+\), ::(Core\.TypeEgal|Type)\{Any\}\)", text)
     @test occursin("Select a call to descend into or ↩ to ascend.", text)
     write(terminal, 'q')
     @test end_terminal_session(harness)

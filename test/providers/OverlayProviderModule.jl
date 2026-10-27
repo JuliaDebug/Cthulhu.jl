@@ -23,7 +23,7 @@ mutable struct OverlayToken end
 struct OverlayInterpreter <: AbstractInterpreter
     token::OverlayToken
     method_table::OverlayMethodTable
-    local_cache::Vector{InferenceResult}
+    local_cache::(@static isdefined(CC, :InferenceCache) ? CC.InferenceCache : Vector{InferenceResult})
     world::UInt
     inference_parameters::InferenceParams
     optimization_parameters::OptimizationParams
@@ -35,7 +35,7 @@ function OverlayInterpreter(world::UInt = Base.get_world_counter();
     return OverlayInterpreter(
         OverlayToken(),
         OverlayMethodTable(world, METHOD_TABLE),
-        InferenceResult[],
+        (@static isdefined(CC, :InferenceCache) ? CC.InferenceCache() : InferenceResult[]),
         world,
         inference_parameters,
         optimization_parameters,

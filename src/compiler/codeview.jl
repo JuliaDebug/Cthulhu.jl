@@ -25,11 +25,14 @@ function cthulhu_llvm(io::IO, provider::AbstractProvider, state::CthulhuState, r
     (; config) = state
     (; optimize, debuginfo) = config
     world = get_inference_world(provider)
+    # Julia 1.14 added an `llvm_options::String` argument before `params`
+    llvm_options = @static hasmethod(InteractiveUtils._dump_function_llvm,
+        Tuple{MethodInstance, CodeInfo, Bool, Bool, Bool, Bool, Symbol, String, Base.CodegenParams}) ? ("",) : ()
     dump = InteractiveUtils._dump_function_llvm(
         state.mi, result.src,
         #=wrapper=# false, !raw,
         dump_module, optimize, debuginfo !== :none ? :source : :none,
-        Base.CodegenParams())
+        llvm_options..., Base.CodegenParams())
     highlight(io, dump, "llvm", config)
 end
 

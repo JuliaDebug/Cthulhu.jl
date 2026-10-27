@@ -122,6 +122,36 @@ function find_callsites(provider::AbstractProvider, result::LookupResult, ci::Co
     return callsites, sourcenodes
 end
 
+@static if !isdefined(CC, :ConstCallInfo)
+# Since Julia 1.14, call results need not carry a `CodeInstance` of their own,
+# so fall back to the inference proof or the call's dispatch edge.
+function call_result_edge(@nospecialize(result), @nospecialize(thisinfo))
+    edge = isa(result, CC.ConcreteResult) ? result.edge : nothing
+    edge === nothing || return edge
+    result.proof isa CodeInstance && return result.proof
+    inner = ignorewrappers(thisinfo)
+    return inner isa EdgeCallInfo ? inner.edge : nothing
+end
+
+function process_const_info(provider::AbstractProvider, ::LookupResult, @nospecialize(thisinfo),
+    argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result),
+    @nospecialize(exct))
+    isnothing(result) && return thisinfo
+    edge = isa(result, CC.SemiConcreteResult) ? result.edge : call_result_edge(result, thisinfo)
+    edge === nothing && return thisinfo
+    mici = EdgeCallInfo(edge, rt, get_effects(result), exct)
+    if isa(result, CC.ConcreteResult)
+        return ConcreteCallInfo(mici, argtypes)
+    elseif isa(result, CC.SemiConcreteResult)
+        return SemiConcreteCallInfo(mici, result.ir)
+    else
+        @assert isa(result, CC.LocalInferenceResult)
+        # Locally cached results of regular (non-const-prop) inference are also stored here.
+        result.result.overridden_by_const === nothing && return mici
+        return ConstPropCallInfo(mici, result.result)
+    end
+end
+else
 function process_const_info(provider::AbstractProvider, ::LookupResult, @nospecialize(thisinfo),
     argtypes::ArgTypes, @nospecialize(rt), @nospecialize(result),
     @nospecialize(exct))
@@ -152,6 +182,7 @@ function process_const_info(provider::AbstractProvider, ::LookupResult, @nospeci
         return ConstPropCallInfo(mici, result)
     end
 end
+end
 
 function process_info(provider::AbstractProvider, result::LookupResult, @nospecialize(info::CCCallInfo),
                       argtypes::ArgTypes, @nospecialize(rt),
@@ -172,6 +203,7 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         end
     end
     if isa(info, MethodMatchInfo)
+        @static if isdefined(CC, :ConstCallInfo)
         return CallInfo[let
             if edge === nothing
                 RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
@@ -180,6 +212,33 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
                 EdgeCallInfo(edge, rt, effects, exct)
             end
         end for edge in info.edges if edge !== nothing]
+        else
+        # Since Julia 1.14, const-prop/concrete-eval results are stored on `MethodMatchInfo` itself.
+        callinfos = CallInfo[]
+        for (i, (edge, call_result)) in enumerate(zip(info.edges, info.call_results))
+            if edge === nothing && call_result === nothing
+                # e.g. recursion-limited calls no longer get a `CodeInstance` edge; infer one so we can descend
+                match = info.results[i]
+                mi = specialize_method(match)
+                mi === nothing && continue
+                isdefined(mi.def, :generator) && !may_invoke_generator(mi.def, match.spec_types, match.sparams) && continue
+                edge = try
+                    generate_code_instance(provider, mi)
+                catch err
+                    # inference may fail outright (e.g. disabled for the module), failing `run_type_inference`'s typeassert
+                    err isa TypeError || rethrow()
+                    continue
+                end
+            end
+            thisinfo = if edge === nothing
+                RTCallInfo(unwrapconst(argtypes[1]), argtypes[2:end], rt, exct)
+            else
+                EdgeCallInfo(edge, rt, @something(effects, get_effects(edge)), exct)
+            end
+            push!(callinfos, process_const_info(provider, result, thisinfo, argtypes, rt, call_result, exct))
+        end
+        return callinfos
+        end
     elseif isa(info, UnionSplitInfo)
         return mapreduce(process_recursive, vcat, info.split; init=CallInfo[])::Vector{CallInfo}
     elseif isa(info, UnionSplitApplyCallInfo)
@@ -188,7 +247,7 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
         # XXX: This could probably use its own info. For now,
         # we ignore any implicit iterate calls.
         return process_recursive(info.call)
-    elseif isa(info, ConstCallInfo)
+    elseif isdefined(CC, :ConstCallInfo) && isa(info, CC.ConstCallInfo)
         infos = process_recursive(info.call)
         @assert length(infos) == length(info.results)
         return CallInfo[let
@@ -221,6 +280,12 @@ function process_info(provider::AbstractProvider, result::LookupResult, @nospeci
     elseif isa(info, CC.OpaqueClosureCreateInfo)
         # TODO: Add ability to descend into OCs at creation site
         return CallInfo[]
+    elseif isdefined(CC, :TaskCallInfo) && isa(info, CC.TaskCallInfo)
+        # `Core._task(f, size)`: describe the deferred `f()` call
+        task_rt = rt isa Core.PartialTask ? rt.fetch_type : Any
+        callinfos = process_info(provider, result, info.info, Any[argtypes[2]], task_rt, nothing, nothing)
+        # only calls we can descend into (`descend!` requires a `CodeInstance`)
+        return CallInfo[TaskCallInfo(ci) for ci in callinfos if !(ci isa RTCallInfo || ci isa PureCallInfo)]
     elseif isa(info, CC.FinalizerInfo)
         # TODO: Add ability to descend into finalizers at creation site
         return CallInfo[]

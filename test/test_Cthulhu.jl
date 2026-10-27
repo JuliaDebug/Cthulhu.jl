@@ -103,7 +103,7 @@ end
         callsite.head === :invoke || return false
         io = IOBuffer()
         print(io, callsite)
-        return occursin("invoke throw_boundserror", String(take!(io)))
+        return occursin(r"invoke _?throw_boundserror", String(take!(io)))
     end
 
     callsites = find_callsites_by_ftt(calltwice, Tuple{Vector{AbstractFloat}})
@@ -117,7 +117,7 @@ end
         callsite.head === :invoke || return false
         io = IOBuffer()
         print(io, callsite)
-        return occursin("invoke throw_boundserror", String(take!(io)))
+        return occursin(r"invoke _?throw_boundserror", String(take!(io)))
     end
 
     # Note the failure of `callinfo` to properly handle specialization
@@ -290,12 +290,14 @@ end
     # constant prop' on all the splits
     callsites = find_callsites_by_ftt(x -> semi_concrete_eval(42, x), (Int,); optimize = false)
     callinfo = only(callsites).info
-    @test isa(callinfo, Cthulhu.SemiConcreteCallInfo)
+    # Since Julia 1.14, semi-concrete eval needs the callee source, which isn't kept here, so it const-props instead
+    semiconcrete = VERSION < v"1.14-"
+    @test isa(callinfo, semiconcrete ? Cthulhu.SemiConcreteCallInfo : Cthulhu.ConstPropCallInfo)
     @test Cthulhu.get_rt(callinfo) == Const(semi_concrete_eval(42, 0))
     # @test Cthulhu.get_effects(callinfo) |> CC.is_semiconcrete_eligible
     io = IOBuffer()
     print(io, only(callsites))
-    @test occursin("= < semi-concrete eval > semi_concrete_eval(::Const(42),::$Int)", String(take!(io)))
+    @test occursin("= < $(semiconcrete ? "semi-concrete eval" : "constprop") > semi_concrete_eval(::Const(42),::$Int)", String(take!(io)))
 end
 
 function bar346(x::ComplexF64)
@@ -304,8 +306,13 @@ function bar346(x::ComplexF64)
 end
 @testset "issue #346" begin
     callsites = find_callsites_by_ftt(bar346, Tuple{ComplexF64}; optimize=false)
-    @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
-    @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Const(:re))::Float64", string(callsites[1]))
+    if VERSION < v"1.14-"
+        @test isa(callsites[1].info, Cthulhu.SemiConcreteCallInfo)
+        @test occursin("= < semi-concrete eval > getproperty(::ComplexF64,::Const(:re))::Float64", string(callsites[1]))
+    else # Julia 1.14 const-props `x.re` and semi-concrete evaluates the `ComplexF64` constructor instead
+        i = findfirst(c -> c.info isa Cthulhu.SemiConcreteCallInfo, callsites)
+        @test i isa Int && occursin("= < semi-concrete eval > Complex(::Float64,::Const(1.0))", string(callsites[i]))
+    end
     @test Cthulhu.get_rt(callsites[end].info) == Const(sin(1.0))
 end
 
@@ -628,7 +635,8 @@ end
     end
     @test occursin("invoke f1()::…\n", doprint(m.f1))
     str = doprint(m.f2)
-    @test occursin("y::Const([1, 2, 3", str)
+    # Since Julia 1.14 the slot type is widened, but the assignment to `y` keeps the `Const`
+    @test occursin("y::Const([1, 2, 3", str) || occursin(r"\(y = \S+\)::Const\(\[1, 2, 3", str)
     @test !occursin("500,", str)
 end
 
@@ -691,7 +699,7 @@ end
 @testset "ascend" begin
     # This tests only the non-interactive "look up the caller" portion
     local a::Int, b::Float64 = 3, 3.0 # avoid `callee(a)`/`callee(b)` to be constant-folded
-    callee(x) = 2x
+    @noinline callee(x) = 2x # keep all calls in the optimized code, so callers are found in source order
     function caller(x)
         val = 0.0
         val += callee(a); line1 = @__LINE__
