@@ -698,6 +698,10 @@ include("test_module.jl")
     @test_nowarn str = sprint(tsn; context=:color=>false) do io, obj
         printstyled(io, obj; hide_type_stable=false)
     end
+
+    # issue 693: empty `parameters` node (e.g. `f(x; ) = ...`) caused
+    # `MethodError: no method matching getindex(::Nothing, ::Int)` in `map_signature!`
+    @test (TypedSyntaxNode(TSN.f693, (Int,)); true)
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
