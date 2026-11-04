@@ -96,7 +96,7 @@ struct MultiCallInfo <: CallInfo
 end
 get_ci(ci::MultiCallInfo) = error("Can't extract MethodInstance from multiple call informations")
 get_rt(ci::MultiCallInfo) = ci.rt
-get_effects(mci::MultiCallInfo) = mapreduce(get_effects, CC.merge_effects, mci.callinfos)
+get_effects(mci::MultiCallInfo) = mapreduce(get_effects, CC.merge_effects, mci.callinfos; init=EFFECTS_TOTAL)
 get_exct(ci::MultiCallInfo) = ci.exct
 
 struct TaskCallInfo <: CallInfo
