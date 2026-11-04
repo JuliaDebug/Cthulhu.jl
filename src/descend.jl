@@ -123,8 +123,19 @@ function descend!(state::CthulhuState)
                 Inference didn't analyze this call because it is a dynamic call:
                 Cthulhu nevertheless is trying to descend into it for further inspection.
                 """
-                state.ci = get_ci(info)::CodeInstance
-                descend!(state)
+                # Same bookkeeping as the ordinary descent below: `mi` must
+                # follow `ci` -- every view reads `state.mi` -- and the
+                # parent's state must come back once the task's frame is left.
+                ci = get_ci(info)::CodeInstance
+                prev = save_descend_state(state)
+                state.mi = get_mi(ci)
+                state.ci = ci
+                state.override = nothing
+                state.display_code = true
+                status = descend!(state)
+                status === :exited && break
+                restore_descend_state!(state, prev)
+                state.display_code = true
                 continue
             elseif info isa RTCallInfo
                 @info """
