@@ -579,7 +579,7 @@ function map_ssas_to_source(src::CodeInfo, mi::MethodInstance, rootnode::SyntaxN
         elseif isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)
             append_targets_for_line!(mapped, i, append_targets_for_arg!(argmapping, i, stmt.val))
         elseif isa(stmt, Expr)
-            targets = get_targets(stmt)
+            targets = get_targets(stmt)::Union{Nothing,Vector{<:MaybeTypedSyntaxNode}}
             if targets !== nothing
                 append_targets_for_line!(mapped, i, targets)
             elseif stmt.head == :(=) && is_slot(stmt.args[1])
